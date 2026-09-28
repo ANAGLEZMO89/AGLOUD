@@ -44,6 +44,10 @@ def main(js=False, real=False):
         ext_id = sw.url.split("/")[2]
         wt = ctx.pages[0] if ctx.pages else ctx.new_page()
         wt.goto(base)
+        if "--ventana" in sys.argv:  # Wtransnet con una ventana «Aceptar» abierta antes de empezar
+            wt.on("dialog", lambda d: None)  # nadie la cierra
+            wt.evaluate("() => setTimeout(() => alert('Ventana abierta de antes'), 10)")
+            time.sleep(1)
         panel = ctx.new_page()
         errores_js = []
         panel.on("pageerror", lambda e: errores_js.append(str(e)))

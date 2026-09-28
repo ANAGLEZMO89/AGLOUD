@@ -40,7 +40,11 @@ class BotWT {
     // Los clics en enlaces «javascript:» de la propia web sólo funcionan desde el contexto de la página (MAIN).
     // Las barreras de seguridad se aplican igual, porque viajan dentro de la función.
     const world = ["clicFila", "volver", "paginar"].includes(orden) ? "MAIN" : "ISOLATED";
-    const res = await chrome.scripting.executeScript({ target, func: agenteWT, args: [orden, args || {}], world });
+    // Si una ventana de la página bloquea la pestaña, executeScript no respondería nunca: tiempo máximo
+    const res = await Promise.race([
+      chrome.scripting.executeScript({ target, func: agenteWT, args: [orden, args || {}], world }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("La pestaña de Wtransnet no responde (¿hay una ventana «Aceptar» abierta?). Pulsa Aceptar en Wtransnet o recárgala con F5 y vuelve a intentarlo.")), 25000)),
+    ]);
     return res.map((r) => ({ frameId: r.frameId, ...(r.result || { ok: false, e: "sin respuesta" }) }));
   }
   async uno(orden, args, frameId) {
@@ -94,8 +98,18 @@ class BotWT {
     try { await chrome.scripting.unregisterContentScripts({ ids: ["wt-sin-dialogos"] }); } catch (e) { /* no estaba */ }
     await chrome.scripting.registerContentScripts([{ id: "wt-sin-dialogos", matches: [this.origen + "/*"], js: ["lib/sin_dialogos.js"],
       runAt: "document_start", allFrames: true, world: "MAIN", persistAcrossSessions: false }]);
-    try { await chrome.scripting.executeScript({ target: { tabId: this.tabId, allFrames: true }, files: ["lib/sin_dialogos.js"], world: "MAIN" }); }
-    catch (e) { this.log("Aviso: si la pestaña de Wtransnet tiene una ventana «Aceptar» abierta, ciérrala tú una vez."); }
+    // Se recarga la pestaña de Wtransnet: cierra cualquier ventana «Aceptar» que hubiera quedado abierta
+    // y la página nueva ya carga con el supresor de ventanas activo.
+    this.log("Preparando la pestaña de Wtransnet (se recarga para cerrar ventanas abiertas)…");
+    await chrome.tabs.reload(this.tabId);
+    await new Promise((r) => setTimeout(r, 1000));
+    const fin = Date.now() + 45000;
+    while (Date.now() < fin) {
+      const t = await chrome.tabs.get(this.tabId);
+      if (t.status === "complete") return;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    this.log("Aviso: Wtransnet tarda en cargar; se continúa igualmente.");
   }
   async quitarSinDialogos() { try { await chrome.scripting.unregisterContentScripts({ ids: ["wt-sin-dialogos"] }); } catch (e) { /* nada */ } }
   async quitarBloqueo() { try { await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: FILTROS_BLOQUEO.map((_, i) => i + 1) }); } catch (e) { /* nada */ } }
