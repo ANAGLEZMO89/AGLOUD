@@ -52,6 +52,7 @@ class BotWT {
     const tab = await chrome.tabs.get(this.tabId);
     if (!tab.url || !tab.url.startsWith(this.origen)) throw new SesionInterrumpida(`La pestaña ha salido de Wtransnet (${(tab.url || "").slice(0, 80)}). Vuelve a abrir Wtransnet y pulsa Reanudar.`);
     const est = (await this.agente("estado")).filter((x) => x.ok).map((x) => ({ frameId: x.frameId, ...x.v }));
+    for (const e of est) for (const d of e.dialogos || []) this.log(`Wtransnet mostró una ventana (${d.tipo}): «${d.msg}»`);
     for (const e of est) {
       if (e.cap) throw new SesionInterrumpida("Aparece un CAPTCHA. Resuélvelo tú en la pestaña de Wtransnet y pulsa Reanudar.");
       if (e.pwd || e.cad) throw new SesionInterrumpida("Wtransnet pide iniciar sesión o la sesión ha caducado. Inicia sesión tú y pulsa Reanudar.");
@@ -89,6 +90,14 @@ class BotWT {
         action: { type: "block" }, condition: { urlFilter: f, isUrlFilterCaseSensitive: false, tabIds: [this.tabId] } })) });
     } catch (e) { this.log("Aviso: no se pudo activar el bloqueo de red adicional: " + e.message); }
   }
+  async activarSinDialogos() {
+    try { await chrome.scripting.unregisterContentScripts({ ids: ["wt-sin-dialogos"] }); } catch (e) { /* no estaba */ }
+    await chrome.scripting.registerContentScripts([{ id: "wt-sin-dialogos", matches: [this.origen + "/*"], js: ["lib/sin_dialogos.js"],
+      runAt: "document_start", allFrames: true, world: "MAIN", persistAcrossSessions: false }]);
+    try { await chrome.scripting.executeScript({ target: { tabId: this.tabId, allFrames: true }, files: ["lib/sin_dialogos.js"], world: "MAIN" }); }
+    catch (e) { this.log("Aviso: si la pestaña de Wtransnet tiene una ventana «Aceptar» abierta, ciérrala tú una vez."); }
+  }
+  async quitarSinDialogos() { try { await chrome.scripting.unregisterContentScripts({ ids: ["wt-sin-dialogos"] }); } catch (e) { /* nada */ } }
   async quitarBloqueo() { try { await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: FILTROS_BLOQUEO.map((_, i) => i + 1) }); } catch (e) { /* nada */ } }
 
   // ------------------------------------------------------------------ API
@@ -99,7 +108,7 @@ class BotWT {
     this.p = progresoPrevio || {
       inicio: new Date().toISOString(), estado: "en curso", empresa_sesion: "", filtros_aplicados: {},
       criterios: { filtros: this.conf.filtros, comprobaciones: this.conf.comprobaciones, camiones: this.conf.camiones,
-        limites: prueba ? { ...this.conf.limites, max_cargas: 1, max_camiones: 1 } : this.conf.limites, equivalencias: this.conf.equivalencias },
+        limites: prueba ? { ...this.conf.limites, max_cargas: 1, max_camiones: this.conf.limites.max_camiones ? 1 : 0 } : this.conf.limites, equivalencias: this.conf.equivalencias },
       cargas: {}, orden_cargas: [], camiones: {}, relaciones: {}, incidencias: [], cargas_completadas: [], descartadas_carga: [], filas_vistas: [],
     };
     if (progresoPrevio) {
@@ -109,12 +118,14 @@ class BotWT {
     const lim = this.p.criterios.limites;
     this.p.estado = "en curso";
     await this.activarBloqueo();
+    await this.activarSinDialogos();
     try {
       this.log(`Trabajando en la pestaña de Wtransnet: ${Ficha.urlLimpia(tabs[0].url).slice(0, 90)}`);
       await this.verificarCuenta();
       if (this.p.orden_cargas.length < lim.max_cargas) await this.buscarCargas(lim.max_cargas);
       for (const cid of this.p.orden_cargas.slice()) {
         if (this.p.cargas_completadas.includes(cid)) continue;
+        if (!lim.max_camiones) { this.p.cargas_completadas.push(cid); continue; }
         await this.camionesPara(cid, lim);
         this.p.cargas_completadas.push(cid);
         await this.guardar();
@@ -127,6 +138,7 @@ class BotWT {
       else { this.p.estado = "error"; this.incidencia("Error", e.message || String(e)); console.error(e); }
     } finally {
       await this.quitarBloqueo();
+      await this.quitarSinDialogos();
       await this.guardar();
     }
     return this.p;
@@ -308,7 +320,24 @@ class BotWT {
 
   // ------------------------------------------------------------------ cargas
   async buscarCargas(maximo) {
-    this.p.filtros_aplicados.carga = await this.buscar("carga", this.conf.filtros);
+    // Una búsqueda por cada zona indicada (más fiable que «Anotar» varias)
+    const zonas = (this.conf.filtros.origenes || []).length ? this.conf.filtros.origenes : [null];
+    this.p.zonas_hechas = this.p.zonas_hechas || [];
+    for (const zona of zonas) {
+      if (this.p.orden_cargas.length >= maximo) break;
+      const clave = JSON.stringify(zona);
+      if (this.p.zonas_hechas.includes(clave)) continue;
+      const filtros = { ...this.conf.filtros, origenes: zona ? [zona] : [] };
+      if (zona) this.log(`Buscando cargas en: ${[zona.provincia, zona.codigo_postal, zona.localidad].filter(Boolean).join(" ") || zona.pais}`);
+      this.p.filtros_aplicados.carga = (this.p.filtros_aplicados.carga || []).concat(await this.buscar("carga", filtros));
+      await this.leerListadoCargas(maximo);
+      this.p.zonas_hechas.push(clave);
+      await this.guardar();
+    }
+    if (this.p.orden_cargas.length < maximo)
+      this.incidencia("Menos cargas de las pedidas", `Se han obtenido ${this.p.orden_cargas.length} cargas válidas de ${maximo}: el listado no ofrecía más ofertas que cumplieran los filtros y comprobaciones dentro del límite de páginas.`);
+  }
+  async leerListadoCargas(maximo) {
     const vistos = new Set(this.p.filas_vistas);
     for await (const { fila, frameId } of this.recorrer(this.p.criterios.limites.max_paginas)) {
       if (this.p.orden_cargas.length >= maximo) break;
@@ -331,8 +360,6 @@ class BotWT {
       }
       await this.guardar();
     }
-    if (this.p.orden_cargas.length < maximo)
-      this.incidencia("Menos cargas de las pedidas", `Se han obtenido ${this.p.orden_cargas.length} cargas válidas de ${maximo}: el listado no ofrecía más ofertas que cumplieran los filtros y comprobaciones dentro del límite de páginas.`);
   }
   comprobarCarga(r) {
     const cb = this.conf.comprobaciones, f = this.conf.filtros;
@@ -427,6 +454,10 @@ class BotWT {
     if (!tabs.length) throw new SesionInterrumpida("No encuentro ninguna pestaña de Wtransnet abierta. Abre Wtransnet e inicia sesión.");
     this.tabId = tabs[0].id;
     this.p = { incidencias: [] };
+    await this.activarSinDialogos();
+    try { return await this._inspeccionar(); } finally { await this.quitarSinDialogos(); }
+  }
+  async _inspeccionar() {
     const informe = { fecha: new Date().toISOString(), paginas: {} };
     for (const nombre of ["buscar_carga", "buscar_camion"]) {
       this.log(`Inspeccionando formulario ${nombre}`);

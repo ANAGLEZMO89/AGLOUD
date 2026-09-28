@@ -15,48 +15,50 @@ function log(m) {
 function estado(m, clase = "") { const e = $("#estado"); e.textContent = m; e.className = "estado " + clase; }
 
 // ------------------------------------------------------------------ criterios
-const lineasUbic = (t) => t.split("\n").map((l) => l.split(";").map((x) => x.trim())).filter((p) => p.some(Boolean))
-  .map((p) => ({ pais: p[0] || "", provincia: p[1] || "", codigo_postal: p[2] || "", localidad: p[3] || "" }));
-const marcados = (n) => [...form.querySelectorAll(`input[name=${n}]:checked`)].map((i) => i.value);
-const v = (n) => (form.elements[n].value || "").trim();
+// «Valencia, 46001, Alicante» -> una zona por elemento. 5 cifras = código postal; si no, provincia.
+const zonas = (t) => t.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean)
+  .map((x) => (/^\d{5}$/.test(x) ? { pais: "España", provincia: "", codigo_postal: x, localidad: "" } : { pais: "España", provincia: x, codigo_postal: "", localidad: "" }));
+const v = (n) => (form.elements[n] ? form.elements[n].value || "" : "").trim();
+const chk = (n) => !!(form.elements[n] && form.elements[n].checked);
+const aCorta = (iso) => (iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(2, 4) : "");
+const isoDe = (f) => new Date(f.getTime() - f.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 function leerFormulario() {
+  const desde = v("desde") || isoDe(new Date());
+  const hasta = v("hasta") || desde;
+  const camiones = chk("buscar_camiones");
   return {
     filtros: {
-      origenes: lineasUbic(v("origenes")), destinos: lineasUbic(v("destinos")), ambito_origen: v("ambito_origen"), ambito_destino: v("ambito_destino"),
-      fecha_inicial: v("fecha_inicial"), fecha_final: v("fecha_final"), tipo_bolsa: marcados("tipo_bolsa"), redes: marcados("redes"),
-      ida_y_vuelta: v("ida_y_vuelta"), tipo_vehiculo: v("tipo_vehiculo"), especialidad: v("especialidad"), misma_especialidad: v("misma_especialidad"),
-      forma_carga: marcados("forma_carga"), adr: v("adr"), doble_conductor: v("doble_conductor"), plataforma_elevadora: v("plataforma_elevadora"),
-      cargas_urgentes: form.elements.cargas_urgentes.checked,
+      origenes: zonas(v("zonas")), destinos: zonas(v("destinos_simple")), ambito_origen: v("ambito_origen"), ambito_destino: v("ambito_destino"),
+      fecha_inicial: aCorta(desde), fecha_final: aCorta(hasta),
+      // Fijos por decisión de la empresa: cargas completas, Trailers Completos, todas las bolsas
+      tipo_bolsa: ["Trailers Completos"], redes: ["Wtransnet", "Teleroute", "123Cargo"],
+      ida_y_vuelta: "", tipo_vehiculo: v("tipo_vehiculo"), especialidad: v("especialidad"), misma_especialidad: "",
+      forma_carga: [], adr: v("adr"), doble_conductor: "", plataforma_elevadora: "", cargas_urgentes: false,
     },
-    comprobaciones: { peso_minimo_kg: v("peso_minimo_kg"), peso_maximo_kg: v("peso_maximo_kg"), largo_maximo_m: v("largo_maximo_m"),
-      volumen_maximo_m3: v("volumen_maximo_m3"), descartar_no_vigentes: true, ficha_empresa_si_falta_contacto: form.elements.ficha_empresa.checked },
-    camiones: { dias_antes: Number(v("dias_antes") || 1), filtrar_destino: form.elements.filtrar_destino.checked, max_fichas: Number(v("max_fichas") || 20) },
-    limites: { max_cargas: Math.min(10, Math.max(1, Number(v("max_cargas") || 10))), max_camiones: Math.min(10, Math.max(1, Number(v("max_camiones") || 10))),
-      empresas_distintas: form.elements.empresas_distintas.checked, max_paginas: Math.min(5, Math.max(1, Number(v("max_paginas") || 3))) },
-    equivalencias: v("equivalencias").split("\n").map((l) => l.split("=").map((x) => x.trim())).filter((p) => p[0] && p[1])
-      .map(([carga, camion]) => ({ carga, camion, resultado: "compatible" })),
-    empresa_esperada: v("empresa_esperada"),
-    ritmo: { min: Math.max(2, Number(v("pausa_min") || 3)), max: Math.max(Number(v("pausa_min") || 3) + 1, Number(v("pausa_max") || 6)) },
-    _form: Object.fromEntries([...form.elements].filter((e) => e.name).map((e) => [e.name + "|" + (e.type === "checkbox" ? e.value : ""),
-      e.type === "checkbox" ? e.checked : e.value])),
+    comprobaciones: { peso_maximo_kg: v("peso_maximo_kg"), descartar_no_vigentes: true, ficha_empresa_si_falta_contacto: chk("ficha_empresa") },
+    camiones: { dias_antes: 1, filtrar_destino: true, max_fichas: 20 },
+    limites: { max_cargas: Math.min(10, Math.max(1, Number(v("max_cargas") || 10))),
+      max_camiones: camiones ? Math.min(10, Math.max(1, Number(v("max_camiones") || 10))) : 0,
+      empresas_distintas: chk("empresas_distintas"), max_paginas: Math.min(5, Math.max(1, Number(v("max_paginas") || 3))) },
+    equivalencias: [], empresa_esperada: v("empresa_esperada"),
+    ritmo: { min: Math.max(2, Number(v("pausa_min") || 3)), max: Math.max(Number(v("pausa_min") || 3) + 1, Number(v("pausa_max") || 5)) },
+    _form: Object.fromEntries([...form.elements].filter((e) => e.name).map((e) => [e.name, e.type === "checkbox" ? e.checked : e.value])),
   };
 }
-function volcarFormulario(guardado) {
-  if (!guardado) return;
+function volcarFormulario(g) {
+  if (!g) return;
   for (const e of form.elements) {
-    if (!e.name) continue;
-    const k = e.name + "|" + (e.type === "checkbox" ? e.value : "");
-    if (!(k in guardado)) continue;
-    if (e.type === "checkbox") e.checked = guardado[k]; else e.value = guardado[k];
+    if (!e.name || !(e.name in g) || typeof g[e.name] === "undefined") continue;
+    if (e.type === "checkbox") e.checked = !!g[e.name]; else e.value = g[e.name];
   }
 }
 function validar(c) {
   const err = [];
-  if (!c.filtros.origenes.length) err.push("Falta al menos un ORIGEN (país y provincia). No elijo rutas por ti.");
-  if (!c.filtros.fecha_inicial) err.push("Falta la FECHA INICIAL.");
-  for (const k of ["fecha_inicial", "fecha_final"]) { try { N.fechaFormulario(c.filtros[k]); } catch (e) { err.push(e.message); } }
-  if (!c.filtros.tipo_bolsa.length) err.push("Marca al menos un TIPO DE BOLSA.");
+  if (!c.filtros.origenes.length) err.push("Escribe dónde cargar (provincia o código postal).");
+  for (const z of c.filtros.origenes.concat(c.filtros.destinos))
+    if (z.provincia && !N.codProvincia(z.provincia)) err.push(`No reconozco la provincia «${z.provincia}». Escríbela como en Wtransnet (p. ej. Valencia, Alicante, A Coruña) o pon un código postal.`);
+  if (c.filtros.fecha_final && N.fecha(c.filtros.fecha_final) < N.fecha(c.filtros.fecha_inicial)) err.push("La fecha «Hasta» es anterior a «Desde».");
   return err;
 }
 
@@ -157,4 +159,11 @@ $("#btnCopiar").onclick = async () => { await navigator.clipboard.writeText($("#
 form.addEventListener("change", () => escribir("criterios", leerFormulario()._form));
 window.addEventListener("beforeunload", (e) => { if (enMarcha) { e.preventDefault(); e.returnValue = ""; } });
 
-(async () => { volcarFormulario(await leer("criterios")); refrescarBotones(); })();
+(async () => {
+  const g = await leer("criterios");
+  if (g && "zonas" in g) volcarFormulario(g); // criterios guardados con el formato actual
+  const hoy = new Date();
+  if (!v("desde") || v("desde") < isoDe(hoy)) form.elements.desde.value = isoDe(hoy);
+  if (!v("hasta") || v("hasta") < v("desde")) form.elements.hasta.value = isoDe(new Date(hoy.getTime() + 2 * 86400000));
+  refrescarBotones();
+})();

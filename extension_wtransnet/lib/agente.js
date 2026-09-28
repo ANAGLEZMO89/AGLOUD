@@ -273,6 +273,11 @@ function agenteWT(orden, args) {
     if (b.length > 1) throw new Error(`Hay ${b.length} botones «${texto}».`);
     const e = els[b[0].indice];
     comprobarClic(e, accion);
+    if (accion === "buscar") {
+      // una posible confirmación de la propia búsqueda puede aceptarse (nunca si habla de ofertar, contratar…)
+      document.documentElement.setAttribute("data-wt-permitir-confirm", "1");
+      setTimeout(() => document.documentElement.removeAttribute("data-wt-permitir-confirm"), 8000);
+    }
     setTimeout(() => e.click(), 50); // se devuelve el control antes de que el marco navegue
     return `Clic permitido [${accion}]: ${texto}`;
   }
@@ -319,7 +324,9 @@ function agenteWT(orden, args) {
       const buscar = [...document.querySelectorAll("input[type=submit],input[type=button],button,a")].some((e) => vis(e) && clave(e.value || e.innerText) === "buscar");
       const nctr = document.querySelectorAll("select,input:not([type=hidden])").length;
       const l = listado();
-      return { url: location.href, pwd, cap, cad, buscar, nctr, filas: l.filas.length, sin_resultados: l.sin_resultados,
+      let dialogos = [];
+      try { dialogos = JSON.parse(document.documentElement.getAttribute("data-wt-dialogos") || "[]"); document.documentElement.removeAttribute("data-wt-dialogos"); } catch (e) { /* nada */ }
+      return { url: location.href, dialogos, pwd, cap, cad, buscar, nctr, filas: l.filas.length, sin_resultados: l.sin_resultados,
         primera: l.filas.length ? l.filas[0].texto_fila : "", texto: txt.slice(0, 700), listo: document.readyState };
     }
     case "controles": return listarControles().ctr;

@@ -175,13 +175,16 @@ def formulario_real(cgcm):
       <tr><td colspan=2>Puede añadir varios {'orígenes' if lado == 'from' else 'destinos'}:</td></tr>
       <tr><td><input type=button value='Anotar'> <select name=anotaciones_{lado}></select> <input type=button value='Borrar anotación'></td></tr>"""
     cuerpo = f"""<script>
+      window.addEventListener('beforeunload', function (e) {{ e.preventDefault(); e.returnValue = ''; }});
+      window.onload = function () {{ alert('Bienvenido: recuerde revisar sus ofertas'); }};
       function cargarProv(sel, lado) {{
+        alert('Cargando provincias');
         var p = document.forms.OfertasForm.elements['province_' + lado];
         p.innerHTML = "<option value=''>- Seleccione provincia -</option>";
         if (sel.options[sel.selectedIndex].text !== 'España') return;
         setTimeout(function () {{ {''.join(f'p.add(new Option("{x}", "{i}"));' for i, x in enumerate(PROV_REAL) if i)} }}, 700);
       }}</script>
-    <form name=OfertasForm method=get action='/WTNWEB/servlet/fhoOfertas'>
+    <form name=OfertasForm method=get action='/WTNWEB/servlet/fhoOfertas' onsubmit="return confirm('¿Desea realizar la búsqueda?')">
     <input type=hidden name=accion value=listar><input type=hidden name=cgcm value={cgcm}>
     <table><tr><td colspan=2>Buscar {'carga' if cgcm == 'CG' else 'camión'}</td></tr>
       <tr><td>Fecha inicial disponibilidad (dd/mm/aa)*:</td><td><input type=text name=FechaDisp></td>

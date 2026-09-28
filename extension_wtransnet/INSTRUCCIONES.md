@@ -15,16 +15,16 @@ Edge puede mostrar de vez en cuando el aviso «Deshabilitar extensiones en modo 
 ## Usar
 
 1. Abre Wtransnet en una pestaña de Edge e **inicia sesión como siempre**.
-2. Pulsa el **camioncito**. Se abre el panel del buscador en otra pestaña.
-3. La primera vez, pulsa **«Revisar la página de Wtransnet»**. No busca nada: sólo comprueba que encuentra los campos. Después pulsa **«Copiar informe»** y pégalo en el chat.
-4. Rellena los criterios: como mínimo origen, fecha inicial y tipo de bolsa.
-5. Pulsa **«Prueba (1 + 1)»**. Al terminar se descarga el Excel en tu carpeta **Descargas**.
-6. Si está bien, pulsa **«Buscar cargas y camiones»** para hacer hasta 10 cargas × 10 camiones.
+2. Pulsa el **camioncito**: se abre el buscador.
+3. Escribe **dónde cargar** (provincia o código postal; varias separadas por comas), si quieres el **destino**, y las **fechas**.
+4. Pulsa **BUSCAR**. Siempre busca cargas completas, Trailers Completos, en todas las bolsas.
+5. Al terminar se descarga el Excel en tu carpeta **Descargas**.
 
-Mientras trabaja verás cómo cambia la pestaña de Wtransnet. No la cierres. Puedes usar otras pestañas.
+Mientras trabaja verás moverse la pestaña de Wtransnet: no la toques ni la cierres. Las ventanas «Aceptar» de Wtransnet se atienden solas y quedan anotadas en el registro.
 
-- **DETENER**: para la búsqueda y descarga el Excel con lo que ya había leído.
-- **Si caduca la sesión o sale un CAPTCHA**: la extensión se para sola. Entra de nuevo en Wtransnet y pulsa **Reanudar**.
+- **DETENER**: para y descarga el Excel con lo leído.
+- **Si caduca la sesión o sale un CAPTCHA**: se para sola. Entra de nuevo en Wtransnet y pulsa **Reanudar**.
+- **Si algo falla**: pulsa **Copiar registro** y pégalo en el chat.
 
 ## Qué no hace nunca
 

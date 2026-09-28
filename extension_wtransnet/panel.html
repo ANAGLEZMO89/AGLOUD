@@ -10,101 +10,65 @@
   <h1>🚚 Buscador Wtransnet <small>sólo lectura: no publica, no contacta, no contrata</small></h1>
 </header>
 
-<section class="pasos">
-  <div class="paso"><b>1</b> Ten abierta otra pestaña con <b>Wtransnet</b> y la sesión iniciada.</div>
-  <div class="paso"><b>2</b> Rellena los criterios de abajo.</div>
-  <div class="paso"><b>3</b> Pulsa <b>Prueba</b> (1 carga + 1 camión) y, si está bien, <b>Buscar</b>.</div>
-</section>
-
-<section class="botones">
-  <button id="btnPrueba" class="sec">Prueba (1 + 1)</button>
-  <button id="btnEjecutar" class="pri">Buscar cargas y camiones</button>
-  <button id="btnDetener" class="stop" disabled>DETENER</button>
-  <button id="btnReanudar" class="sec" disabled>Reanudar</button>
-  <button id="btnExcel" class="sec" disabled>Descargar Excel otra vez</button>
-  <button id="btnInspeccionar" class="ter">Revisar la página de Wtransnet</button>
-</section>
-
-<div id="estado" class="estado">Listo.</div>
-
-<form id="criterios" autocomplete="off">
-  <fieldset>
-    <legend>Filtros que se escriben en Wtransnet</legend>
-    <label>Orígenes <span class="ayuda">uno por línea: País; Provincia; CP; Localidad</span>
-      <textarea name="origenes" rows="2" placeholder="España; Valencia"></textarea></label>
-    <label>Destinos <span class="ayuda">uno por línea (vacío = cualquier destino)</span>
-      <textarea name="destinos" rows="2" placeholder="España; Madrid"></textarea></label>
-    <div class="fila">
-      <label>Fecha inicial <input name="fecha_inicial" placeholder="dd/mm/aa"></label>
-      <label>Fecha final <input name="fecha_final" placeholder="dd/mm/aa"></label>
-    </div>
-    <div class="fila">
-      <label>Ámbito origen <select name="ambito_origen"><option></option><option>Comunidad Autónoma</option><option>Provincia y colindantes</option><option>Misma provincia</option></select></label>
-      <label>Ámbito destino <select name="ambito_destino"><option></option><option>Comunidad Autónoma</option><option>Provincia y colindantes</option><option>Misma provincia</option></select></label>
-    </div>
-    <div class="grupo">Tipo de bolsa:
-      <label><input type="checkbox" name="tipo_bolsa" value="Trailers Completos"> Trailers Completos</label>
-      <label><input type="checkbox" name="tipo_bolsa" value="Grupajes"> Grupajes</label>
-      <label><input type="checkbox" name="tipo_bolsa" value="Rígidos Completos"> Rígidos Completos</label>
-    </div>
-    <div class="grupo">Redes:
-      <label><input type="checkbox" name="redes" value="Wtransnet"> Wtransnet</label>
-      <label><input type="checkbox" name="redes" value="Teleroute"> Teleroute</label>
-      <label><input type="checkbox" name="redes" value="123Cargo"> 123Cargo/Bursa</label>
-    </div>
-    <div class="fila">
-      <label>Tipo de vehículo <input name="tipo_vehiculo" placeholder="texto exacto del desplegable"></label>
-      <label>Especialidad / carrocería <input name="especialidad" placeholder="texto exacto del desplegable"></label>
-      <label>Misma especialidad <select name="misma_especialidad"><option value="">(no tocar)</option><option value="si">Sí</option><option value="no">No</option></select></label>
-    </div>
-    <div class="grupo">Forma de carga:
-      <label><input type="checkbox" name="forma_carga" value="Arriba"> Arriba</label>
-      <label><input type="checkbox" name="forma_carga" value="Lateral"> Lateral</label>
-      <label><input type="checkbox" name="forma_carga" value="Detrás"> Detrás</label>
-    </div>
-    <div class="fila">
-      <label>ADR <select name="adr"><option value="">(no tocar)</option><option>Sólo cargas ADR</option><option>No</option><option>Indiferente</option></select></label>
-      <label>Doble conductor <select name="doble_conductor"><option value="">(no tocar)</option><option>Sólo cargas doble conductor</option><option>No</option><option>Indiferente</option></select></label>
-      <label>Plataforma elevadora <select name="plataforma_elevadora"><option value="">(no tocar)</option><option>Sí</option><option>No</option></select></label>
-      <label>Ida y vuelta <select name="ida_y_vuelta"><option value="">(no tocar)</option><option>Sí</option><option>No</option><option>Indiferente</option></select></label>
-    </div>
-    <label class="linea"><input type="checkbox" name="cargas_urgentes"> Sólo cargas urgentes</label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Comprobaciones que hace la extensión al abrir cada ficha</legend>
-    <div class="fila">
-      <label>Peso mínimo carga (kg) <input name="peso_minimo_kg" inputmode="decimal"></label>
-      <label>Peso máximo carga (kg) <input name="peso_maximo_kg" inputmode="decimal"></label>
-      <label>Largo máximo (m) <input name="largo_maximo_m" inputmode="decimal"></label>
-      <label>Volumen máximo (m³) <input name="volumen_maximo_m3" inputmode="decimal"></label>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Límites y ajustes</legend>
-    <div class="fila">
-      <label>Máximo de cargas <input name="max_cargas" type="number" min="1" max="10" value="10"></label>
-      <label>Máximo camiones por carga <input name="max_camiones" type="number" min="1" max="10" value="10"></label>
-      <label>Empresa con la que entras en Wtransnet <input name="empresa_esperada" placeholder="p. ej. TRANSRUTER LOGISTICA"></label>
-    </div>
-    <label class="linea"><input type="checkbox" name="empresas_distintas"> Exigir empresas distintas por carga</label>
-    <details>
-      <summary>Ajustes avanzados</summary>
+<section class="simple">
+  <p class="intro">Ten Wtransnet abierto en otra pestaña con tu sesión iniciada. Busca siempre <b>cargas completas · Trailers Completos · en todas las bolsas</b>.</p>
+  <form id="criterios" autocomplete="off">
+    <div class="grande">
+      <label>¿Dónde cargar? <span class="ayuda">provincia o código postal; varias separadas por comas</span>
+        <input name="zonas" placeholder="Valencia, 46001, Alicante"></label>
+      <label>¿Destino? <span class="ayuda">opcional</span>
+        <input name="destinos_simple" placeholder="Madrid (vacío = cualquier destino)"></label>
       <div class="fila">
-        <label>Días antes de la carga para buscar camión <input name="dias_antes" type="number" min="0" max="7" value="1"></label>
-        <label>Páginas máximas de listado <input name="max_paginas" type="number" min="1" max="5" value="3"></label>
-        <label>Fichas de camión máximas por carga <input name="max_fichas" type="number" min="1" max="30" value="20"></label>
-        <label>Pausa mínima (s) <input name="pausa_min" type="number" min="2" max="30" value="3"></label>
-        <label>Pausa máxima (s) <input name="pausa_max" type="number" min="3" max="60" value="6"></label>
+        <label>Desde <input type="date" name="desde"></label>
+        <label>Hasta <input type="date" name="hasta"></label>
       </div>
-      <label class="linea"><input type="checkbox" name="filtrar_destino" checked> Buscar camiones con el destino de la carga</label>
-      <label class="linea"><input type="checkbox" name="ficha_empresa" checked> Si la oferta no muestra contacto, leer la ficha de la empresa</label>
-      <label>Equivalencias de carrocería que tú decides <span class="ayuda">una por línea: carrocería carga = carrocería camión</span>
-        <textarea name="equivalencias" rows="2" placeholder="Tautliner = Tautliner-Portab."></textarea></label>
+    </div>
+    <div class="botones">
+      <button id="btnEjecutar" type="button" class="pri enorme">🔎 BUSCAR</button>
+      <button id="btnDetener" type="button" class="stop" disabled>DETENER</button>
+      <button id="btnReanudar" type="button" class="sec" disabled>Reanudar</button>
+      <button id="btnExcel" type="button" class="sec" disabled>Descargar Excel otra vez</button>
+    </div>
+    <div id="estado" class="estado">Listo.</div>
+
+    <details>
+      <summary>Más opciones (normalmente no hace falta tocarlas)</summary>
+      <fieldset>
+        <legend>Filtros opcionales de Wtransnet</legend>
+        <div class="fila">
+          <label>Ámbito origen <select name="ambito_origen"><option></option><option>Comunidad Autónoma</option><option>Provincia y colindantes</option><option>Misma provincia</option></select></label>
+          <label>Ámbito destino <select name="ambito_destino"><option></option><option>Comunidad Autónoma</option><option>Provincia y colindantes</option><option>Misma provincia</option></select></label>
+        </div>
+        <div class="fila">
+          <label>Tipo de vehículo <input name="tipo_vehiculo" placeholder="texto exacto del desplegable"></label>
+          <label>Especialidad <input name="especialidad" placeholder="p. ej. Tautliner"></label>
+          <label>ADR <select name="adr"><option value="">(no tocar)</option><option>Sólo cargas ADR</option><option>No</option><option>Indiferente</option></select></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Comprobaciones y límites</legend>
+        <div class="fila">
+          <label>Peso máximo carga (kg) <input name="peso_maximo_kg" inputmode="decimal"></label>
+          <label>Máximo de cargas <input name="max_cargas" type="number" min="1" max="10" value="10"></label>
+          <label>Máximo camiones por carga <input name="max_camiones" type="number" min="1" max="10" value="10"></label>
+          <label>Empresa con la que entras <input name="empresa_esperada" placeholder="p. ej. FEMABEL"></label>
+        </div>
+        <label class="linea"><input type="checkbox" name="buscar_camiones" checked> Buscar también camiones para cada carga</label>
+        <label class="linea"><input type="checkbox" name="empresas_distintas"> Empresas distintas por carga</label>
+        <label class="linea"><input type="checkbox" name="ficha_empresa" checked> Si la oferta no trae teléfono, mirar la ficha de la empresa</label>
+        <div class="fila">
+          <label>Pausa mínima entre páginas (s) <input name="pausa_min" type="number" min="2" max="30" value="3"></label>
+          <label>Pausa máxima (s) <input name="pausa_max" type="number" min="3" max="60" value="5"></label>
+          <label>Páginas de listado <input name="max_paginas" type="number" min="1" max="5" value="3"></label>
+        </div>
+      </fieldset>
+      <div class="botones">
+        <button id="btnPrueba" type="button" class="sec">Prueba corta (1 carga + 1 camión)</button>
+        <button id="btnInspeccionar" type="button" class="ter">Revisar la página de Wtransnet</button>
+      </div>
     </details>
-  </fieldset>
-</form>
+  </form>
+</section>
 
 <section>
   <h2>Registro <button id="btnCopiarLog" class="sec" type="button">Copiar registro</button></h2>

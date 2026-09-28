@@ -28,3 +28,8 @@ input:not([type=checkbox]), select, textarea { width: 100%; font: inherit; paddi
 pre#log { background: #10161f; color: #d7e0ea; border-radius: 8px; padding: 10px; height: 260px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
 #informe { font-family: Consolas, monospace; font-size: 12px; margin-top: 8px; }
 details summary { cursor: pointer; margin: 6px 0; }
+
+.intro { background: var(--gris); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
+.grande { font-size: 17px; }
+.grande input { font-size: 17px; padding: 9px 10px; }
+.enorme { font-size: 20px; padding: 12px 34px; }
