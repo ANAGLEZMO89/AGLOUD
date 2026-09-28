@@ -9,3 +9,10 @@ chrome.action.onClicked.addListener(async () => {
     await chrome.tabs.create({ url });
   }
 });
+
+// Al instalar o actualizar la extensión, las pestañas del buscador abiertas quedan inservibles:
+// se recargan solas para que los botones vuelvan a funcionar.
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: chrome.runtime.getURL("panel.html") });
+  for (const t of tabs) chrome.tabs.reload(t.id);
+});

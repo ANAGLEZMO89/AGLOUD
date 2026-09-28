@@ -124,9 +124,25 @@ async function lanzar({ prueba = false, reanudar = false } = {}) {
   } finally { botones(false); }
 }
 
-$("#btnPrueba").onclick = () => lanzar({ prueba: true });
-$("#btnEjecutar").onclick = () => lanzar();
-$("#btnReanudar").onclick = () => lanzar({ reanudar: true });
+// Cualquier fallo al pulsar se muestra en pantalla (nunca «no hace nada»)
+function seguro(fn) {
+  return async () => {
+    estado("Arrancando…");
+    try {
+      if (!chrome.runtime || !chrome.runtime.id) throw new Error("contexto");
+      await fn();
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      if (/contexto|context invalidated|Extension context/i.test(msg))
+        estado("Esta pestaña del buscador es de una versión anterior. Ciérrala y vuelve a abrirla con el camioncito.", "error");
+      else { estado("Error: " + msg, "error"); log("⚠ " + msg); }
+      botones(false);
+    }
+  };
+}
+$("#btnPrueba").onclick = seguro(() => lanzar({ prueba: true }));
+$("#btnEjecutar").onclick = seguro(() => lanzar());
+$("#btnReanudar").onclick = seguro(() => lanzar({ reanudar: true }));
 $("#btnDetener").onclick = () => { parar = true; estado("Deteniendo… se guardará lo leído y se descargará el Excel.", "aviso"); };
 $("#btnExcel").onclick = async () => { const p = await leer("progreso"); if (p) await descargarExcel(p); };
 $("#btnInspeccionar").onclick = async () => {
@@ -160,6 +176,7 @@ $("#btnCopiarLog").onclick = async () => {
 };
 $("#btnCopiar").onclick = async () => { await navigator.clipboard.writeText($("#informe").value); estado("Informe copiado. Pégalo en el chat."); };
 
+form.addEventListener("submit", (e) => { e.preventDefault(); if (!enMarcha) $("#btnEjecutar").click(); });
 form.addEventListener("change", () => escribir("criterios", leerFormulario()._form));
 window.addEventListener("beforeunload", (e) => { if (enMarcha) { e.preventDefault(); e.returnValue = ""; } });
 
