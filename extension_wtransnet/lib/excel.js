@@ -146,8 +146,8 @@ const Excel = (() => {
     ws.views = [{ state: "frozen", xSplit: 2, ySplit: 1 }];
     rels.slice(0, 100).forEach(([cid, rel], i) => {
       const ca = p.cargas[cid], cm = p.camiones[rel.camion], f = i + 2;
-      const vals = [cid, rel.camion, rel.posicion, rel.estado, rel.cobertura, rel.informacion, `${ubic(ca.origen)} → ${ubic(ca.destino)}`, ca.campos.disponibilidad,
-        `${ubic(cm.origen)} → ${ubic(cm.destino)}`, cm.campos.disponibilidad, ca.empresa_nombre, ca.contacto, ca.telefonos.concat(ca.moviles), ca.emails,
+      const vals = [cid, rel.camion, rel.posicion, rel.estado, rel.cobertura, rel.informacion, `${ubic(ca.origen)} → ${ubic(ca.destino)}`, ca.disponibilidad_periodo || ca.campos.disponibilidad,
+        `${ubic(cm.origen)} → ${ubic(cm.destino)}`, cm.disponibilidad_periodo || cm.campos.disponibilidad, ca.empresa_nombre, ca.contacto, ca.telefonos.concat(ca.moviles), ca.emails,
         ca.avisos_contacto, cm.empresa_nombre, cm.contacto, cm.telefonos.concat(cm.moviles), cm.emails, fuente(cm), cm.avisos_contacto,
         ...Object.keys(Compat.PESOS).map((k) => rel.criterios[k].estado), rel.pendiente, rel.motivo, rel.advertencias];
       vals.forEach((v, j) => {

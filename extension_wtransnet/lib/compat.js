@@ -102,6 +102,39 @@ const Compat = (() => {
     if (con.length) return R(PENDIENTE, "Hay comentarios publicados que deben leerse antes de llamar: " + con.join(" | "));
     return R(COMPATIBLE, "Sin comentarios publicados en ninguna de las dos ofertas");
   }
+  // Provincias (código INE) que aparecen en una ubicación: campo provincia, CP y nombres dentro del texto
+  // (un camión puede publicar varios destinos: «Barcelona, Girona»).
+  function provincias(u) {
+    const s = new Set();
+    if (u.provincia_cod) s.add(u.provincia_cod);
+    if (u.provincia && N.codProvincia(u.provincia)) s.add(N.codProvincia(u.provincia));
+    const texto = [u.texto, u.provincia, u.localidad].filter(Boolean).join(" / ");
+    if (!u.pais_iso || u.pais_iso === "ES") {
+      for (const cp of texto.match(/\b\d{5}\b/g) || []) if (+cp.slice(0, 2) >= 1 && +cp.slice(0, 2) <= 52) s.add(cp.slice(0, 2));
+      for (const tr of texto.split(/[/,;()\-\n|]+/)) { const c = N.codProvincia(tr.replace(/\d+/g, " ")); if (c) s.add(c); }
+    }
+    return s;
+  }
+  // Modo estricto (lo que pide la agencia): mismo origen, mismo destino y disponible el día de la carga.
+  function estricto(c, t) {
+    const motivos = [];
+    const po = provincias(c.origen), pt = provincias(t.origen);
+    if (!po.size) motivos.push("La carga no tiene provincia de origen legible");
+    else if (![...po].some((x) => pt.has(x))) motivos.push(`El camión no sale de ${[...po].map(N.nombreProvincia).join("/")} (publica: ${t.origen.texto || "sin origen"})`);
+    const pd = provincias(c.destino), td = provincias(t.destino);
+    const destinoLibre = ["indiferente", "cualquiera", "todos", "todas"].includes(N.clave(t.destino.texto || ""));
+    if (!pd.size) {
+      if (c.destino.pais_iso && t.destino.pais_iso && c.destino.pais_iso !== t.destino.pais_iso) motivos.push(`El camión va a ${t.destino.pais_iso}, la carga a ${c.destino.pais_iso}`);
+    } else if (!destinoLibre && ![...pd].some((x) => td.has(x))) motivos.push(`El camión no va a ${[...pd].map(N.nombreProvincia).join("/")} (publica: ${t.destino.texto || "sin destino"})`);
+    if (!c.disp_desde || !t.disp_desde) motivos.push("Falta la fecha de disponibilidad de la carga o del camión");
+    else {
+      const dia = (iso) => { const f = new Date(iso); return new Date(f.getFullYear(), f.getMonth(), f.getDate()).getTime(); };
+      const ci = dia(c.disp_desde), cf = dia(c.disp_hasta || c.disp_desde), ti = dia(t.disp_desde), tf = dia(t.disp_hasta || t.disp_desde);
+      if (ti > cf || tf < ci) motivos.push(`El camión está disponible ${N.fmtCorta(new Date(ti))}${tf !== ti ? "-" + N.fmtCorta(new Date(tf)) : ""} y la carga es ${N.fmtCorta(new Date(ci))}${cf !== ci ? "-" + N.fmtCorta(new Date(cf)) : ""}`);
+    }
+    return motivos;
+  }
+
   function informacion(t) {
     const x = [!!t.disp_desde, !!t.origen.texto, !!t.destino.texto, !!t.campos.vehiculo, !!t.campos.especialidad, t.peso && t.peso.valor != null, !!(t.telefonos.length || t.moviles.length || t.emails.length)];
     return Math.round((100 * x.filter(Boolean).length) / x.length);
@@ -117,7 +150,7 @@ const Compat = (() => {
   }
   const orden = (ev, cam) => [{ [COMPATIBLE]: 0, [PENDIENTE]: 1, Descartado: 2 }[ev.estado], -ev.cobertura, -ev.informacion, cam.leido_en];
   function comparar(a, b) { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; }
-  return { evaluar, orden, comparar, COMPATIBLE, INCOMPATIBLE, PENDIENTE, PESOS, NOMBRES };
+  return { evaluar, estricto, provincias, orden, comparar, COMPATIBLE, INCOMPATIBLE, PENDIENTE, PESOS, NOMBRES };
 })();
 
 if (typeof module !== "undefined") module.exports = Compat;

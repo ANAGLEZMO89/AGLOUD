@@ -420,7 +420,7 @@ class BotWT {
     const desde = carga.disp_desde ? new Date(carga.disp_desde) : null, hasta = carga.disp_hasta ? new Date(carga.disp_hasta) : desde;
     // Nunca una fecha anterior a hoy: Wtransnet la rechaza
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    let ini = desde ? new Date(desde.getTime() - 86400000 * (Number(cam.dias_antes) || 0)) : null;
+    let ini = desde ? new Date(desde.getTime() - 86400000 * (cam.estricto === false ? Number(cam.dias_antes) || 0 : 0)) : null;
     if (ini && ini < hoy) ini = hoy;
     const f = {
       origenes: [ub(carga.origen)].filter(Boolean), destinos: cam.filtrar_destino ? [ub(carga.destino)].filter(Boolean) : [],
@@ -454,6 +454,10 @@ class BotWT {
       if (ids.has(cam.id)) continue;
       if (!this.p.camiones[cam.id]) this.p.camiones[cam.id] = cam;
       const ev = Compat.evaluar(carga, cam, this.conf.equivalencias);
+      if (this.conf.camiones.estricto !== false) {
+        const fuera = Compat.estricto(carga, cam);
+        if (fuera.length) { ev.estado = "Descartado"; ev.descarte = "No coincide con la carga: " + fuera.join("; ") + (ev.descarte ? "; " + ev.descarte : ""); }
+      }
       const emp = claveEmp(cam);
       if (lim.empresas_distintas && ev.estado !== "Descartado") {
         if (emp && empresas.has(emp)) { this.incidencia("Omitido por empresa repetida", "Pediste empresas distintas por carga", `${cid} ↔ ${cam.id}`, cam.url); continue; }

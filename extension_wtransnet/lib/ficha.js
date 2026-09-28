@@ -262,6 +262,12 @@ const Ficha = (() => {
     const fs = N.fechas(c.disponibilidad || "");
     r.disp_desde = fs[0] ? fs[0].toISOString() : null;
     r.disp_hasta = fs[1] ? fs[1].toISOString() : r.disp_desde;
+    // Wtransnet publica además «Fecha inicio» y «Fecha fin»: periodo completo de disponibilidad de la oferta
+    const valorDe = (et) => { const p = bruto.kv.find((x) => N.clave(x.etiqueta) === et); return p ? N.fecha(p.valor) : null; };
+    const fi = valorDe("fecha inicio"), ff = valorDe("fecha fin");
+    if (fi && (!r.disp_desde || fi < new Date(r.disp_desde))) r.disp_desde = fi.toISOString();
+    if (ff && (!r.disp_hasta || ff > new Date(r.disp_hasta))) r.disp_hasta = ff.toISOString();
+    if (fi || ff) r.disponibilidad_periodo = `${fi ? N.fmtCorta(fi) : "?"} - ${ff ? N.fmtCorta(ff) : "?"}`;
     r.fecha_modificacion = N.fecha(c.fecha_modificacion || "") ? N.fecha(c.fecha_modificacion).toISOString() : null;
     r.fecha_descarga = N.fecha(c.fecha_descarga || "") ? N.fecha(c.fecha_descarga).toISOString() : null;
     r.hora_limite = N.hora(c.hora_limite || "");
