@@ -1,0 +1,30 @@
+:root { --azul: #1f4e78; --gris: #f3f5f8; --borde: #d4dae3; --texto: #1c2430; }
+* { box-sizing: border-box; }
+body { font: 15px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--texto); background: #fff; margin: 0 auto; max-width: 1100px; padding: 16px; }
+header h1 { font-size: 22px; margin: 0 0 12px; color: var(--azul); }
+header small { font-size: 13px; color: #6b7686; font-weight: normal; margin-left: 8px; }
+.pasos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.paso { background: var(--gris); border-radius: 8px; padding: 10px 12px; }
+.paso b:first-child { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--azul); color: #fff; text-align: center; margin-right: 6px; }
+.botones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+button { font: inherit; border-radius: 8px; padding: 9px 14px; cursor: pointer; border: 1px solid var(--borde); background: #fff; }
+button:disabled { opacity: .45; cursor: default; }
+.pri { background: var(--azul); color: #fff; border-color: var(--azul); font-weight: 600; }
+.sec { background: #eaf1f8; }
+.ter { background: #fff; }
+.stop { background: #c00000; color: #fff; border-color: #c00000; font-weight: 700; }
+.estado { padding: 10px 12px; border-radius: 8px; background: #eef6ee; margin-bottom: 12px; font-weight: 600; }
+.estado.aviso { background: #fff4d6; }
+.estado.error { background: #fde4e4; }
+fieldset { border: 1px solid var(--borde); border-radius: 10px; margin: 0 0 12px; padding: 10px 14px; }
+legend { font-weight: 700; color: var(--azul); padding: 0 6px; }
+label { display: block; margin: 6px 0; }
+.fila { display: flex; flex-wrap: wrap; gap: 12px; }
+.fila label { flex: 1 1 200px; }
+.grupo { margin: 8px 0; }
+.grupo label, label.linea { display: inline-flex; align-items: center; gap: 4px; margin-right: 14px; }
+input:not([type=checkbox]), select, textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 6px; margin-top: 2px; }
+.ayuda { color: #6b7686; font-size: 13px; }
+pre#log { background: #10161f; color: #d7e0ea; border-radius: 8px; padding: 10px; height: 260px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
+#informe { font-family: Consolas, monospace; font-size: 12px; margin-top: 8px; }
+details summary { cursor: pointer; margin: 6px 0; }
