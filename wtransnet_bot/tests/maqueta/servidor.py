@@ -47,7 +47,7 @@ CAMIONES = {
                tel="", email="", obs="Sólo carga paletizada"),
     "K3": dict(red="Teleroute", num="900003", disp="29/09/26 - 30/09/26", ori_p="España", ori_pr="Valencia", ori_cp="46100",
                ori_l="Burjassot", des_p="España", des_pr="Madrid", des_l="", veh="Trailer", esp="Tautliner",
-               peso="", forma="", adr="", emp="CAMIONES MAQUETA SL", cod="44444", contacto="Otro", tel="+34 600 999 888",
+               peso="0 Kg", forma="", adr="", emp="CAMIONES MAQUETA SL", cod="44444", contacto="Otro", tel="+34 600 999 888",
                email="", obs=""),
 }
 
@@ -177,6 +177,12 @@ def formulario_real(cgcm):
     cuerpo = f"""<script>
       window.addEventListener('beforeunload', function (e) {{ e.preventDefault(); e.returnValue = ''; }});
       window.onload = function () {{ alert('Bienvenido: recuerde revisar sus ofertas'); }};
+      function validar(f) {{
+        var p = f.FechaDisp.value.split('/'); var d = new Date(2000 + (+p[2]), p[1] - 1, +p[0]);
+        var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        if (!(d >= hoy)) {{ alert('La fecha inicial no puede ser anterior a la actual'); return false; }}
+        return true;
+      }}
       function cargarProv(sel, lado) {{
         alert('Cargando provincias');
         var p = document.forms.OfertasForm.elements['province_' + lado];
@@ -184,7 +190,7 @@ def formulario_real(cgcm):
         if (sel.options[sel.selectedIndex].text !== 'España') return;
         setTimeout(function () {{ {''.join(f'p.add(new Option("{x}", "{i}"));' for i, x in enumerate(PROV_REAL) if i)} }}, 700);
       }}</script>
-    <form name=OfertasForm method=get action='/WTNWEB/servlet/fhoOfertas' onsubmit="return confirm('¿Desea realizar la búsqueda?')">
+    <form name=OfertasForm method=get action='/WTNWEB/servlet/fhoOfertas' onsubmit="return validar(this) && confirm('¿Desea realizar la búsqueda?')">
     <input type=hidden name=accion value=listar><input type=hidden name=cgcm value={cgcm}>
     <table><tr><td colspan=2>Buscar {'carga' if cgcm == 'CG' else 'camión'}</td></tr>
       <tr><td>Fecha inicial disponibilidad (dd/mm/aa)*:</td><td><input type=text name=FechaDisp></td>

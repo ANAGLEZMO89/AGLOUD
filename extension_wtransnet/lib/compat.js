@@ -69,12 +69,12 @@ const Compat = (() => {
     const faltan = [], ok = [];
     for (const [k, nom, u] of [["peso", "Peso", "kg"], ["volumen", "Volumen", "m3"], ["largo", "Largo", "m"], ["ancho", "Ancho", "m"], ["alto", "Alto", "m"]]) {
       const cv = c[k] && c[k].valor, tv = t[k] && t[k].valor;
-      if (cv == null) continue;
-      if (tv == null) { faltan.push(nom); continue; }
+      if (cv == null || cv === 0) continue; // la carga no lo indica (o publica 0)
+      if (tv == null || tv === 0) { faltan.push(tv === 0 ? `${nom} (el camión publica 0: no especificado)` : nom); continue; }
       if (tv < cv) return R(INCOMPATIBLE, `${nom}: el camión indica ${tv} ${u} y la carga requiere ${cv} ${u}`);
       ok.push(`${nom} ${tv} ≥ ${cv} ${u}`);
     }
-    if (!c.peso || c.peso.valor == null) faltan.unshift("peso de la carga");
+    if (!c.peso || !c.peso.valor) faltan.unshift("peso de la carga");
     if (faltan.length) return R(PENDIENTE, "Sin dato para comparar: " + faltan.join(", ") + (ok.length ? ` (comprobado: ${ok.join("; ")})` : ""));
     return R(COMPATIBLE, ok.join("; ") + ". Capacidad indicada, no MMA");
   }

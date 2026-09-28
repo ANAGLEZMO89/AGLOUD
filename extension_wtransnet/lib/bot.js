@@ -126,7 +126,11 @@ class BotWT {
       for (const cid of this.p.orden_cargas.slice()) {
         if (this.p.cargas_completadas.includes(cid)) continue;
         if (!lim.max_camiones) { this.p.cargas_completadas.push(cid); continue; }
-        await this.camionesPara(cid, lim);
+        try { await this.camionesPara(cid, lim); }
+        catch (e) {
+          if (e instanceof Detenido || e instanceof SesionInterrumpida) throw e;
+          this.incidencia("Búsqueda de camiones fallida", e.message, cid);
+        }
         this.p.cargas_completadas.push(cid);
         await this.guardar();
       }
@@ -396,10 +400,14 @@ class BotWT {
     const fc = this.conf.filtros, cam = this.conf.camiones;
     const ub = (u) => (u.pais || u.pais_iso ? { pais: u.pais || "", pais_iso: u.pais_iso, provincia: u.provincia || "", provincia_cod: u.provincia_cod } : null);
     const desde = carga.disp_desde ? new Date(carga.disp_desde) : null, hasta = carga.disp_hasta ? new Date(carga.disp_hasta) : desde;
-    const ini = desde ? new Date(desde.getTime() - 86400000 * (Number(cam.dias_antes) || 0)) : null;
+    // Nunca una fecha anterior a hoy: Wtransnet la rechaza
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    let ini = desde ? new Date(desde.getTime() - 86400000 * (Number(cam.dias_antes) || 0)) : null;
+    if (ini && ini < hoy) ini = hoy;
     const f = {
       origenes: [ub(carga.origen)].filter(Boolean), destinos: cam.filtrar_destino ? [ub(carga.destino)].filter(Boolean) : [],
-      fecha_inicial: ini ? N.fmtCorta(ini) : fc.fecha_inicial, fecha_final: hasta ? N.fmtCorta(hasta) : fc.fecha_final,
+      fecha_inicial: ini ? N.fmtCorta(ini) : fc.fecha_inicial,
+      fecha_final: hasta ? N.fmtCorta(hasta < (ini || hoy) ? (ini || hoy) : hasta) : fc.fecha_final,
       tipo_bolsa: fc.tipo_bolsa, tipo_vehiculo: fc.tipo_vehiculo, especialidad: fc.especialidad, misma_especialidad: fc.misma_especialidad,
     };
     if (!f.origenes.length) throw new FiltroNoAplicable(`La carga ${carga.id} no tiene país de origen legible: no se puede buscar camión.`);

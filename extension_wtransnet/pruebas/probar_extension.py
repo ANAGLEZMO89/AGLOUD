@@ -30,6 +30,9 @@ def main(js=False, real=False):
     srv = servidor.arrancar()
     servidor.MODO["enlaces_js"] = js
     servidor.MODO["estilo_real"] = real
+    if "--hoy" in sys.argv:  # carga con fecha de HOY: la búsqueda de camiones no puede empezar ayer
+        import datetime as _dt
+        servidor.CARGAS["C1"]["disp"] = _dt.date.today().strftime("%d/%m/%y")
     base = f"http://127.0.0.1:{srv.server_port}/WTNWEB/"
     ext = preparar_copia()
     salida = tempfile.mkdtemp()

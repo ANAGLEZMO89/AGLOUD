@@ -37,7 +37,8 @@ function leerFormulario() {
       forma_carga: [], adr: v("adr"), doble_conductor: "", plataforma_elevadora: "", cargas_urgentes: false,
     },
     comprobaciones: { peso_maximo_kg: v("peso_maximo_kg"), descartar_no_vigentes: true, ficha_empresa_si_falta_contacto: chk("ficha_empresa") },
-    camiones: { dias_antes: 1, filtrar_destino: true, max_fichas: 20 },
+    // Camiones: por zona de carga y fechas; el destino se compara después (muchos camiones publican «cualquier destino»)
+    camiones: { dias_antes: 1, filtrar_destino: false, max_fichas: 20 },
     limites: { max_cargas: Math.min(10, Math.max(1, Number(v("max_cargas") || 10))),
       max_camiones: camiones ? Math.min(10, Math.max(1, Number(v("max_camiones") || 10))) : 0,
       empresas_distintas: chk("empresas_distintas"), max_paginas: Math.min(5, Math.max(1, Number(v("max_paginas") || 3))) },
@@ -112,7 +113,9 @@ async function lanzar({ prueba = false, reanudar = false } = {}) {
     await descargarExcel(p);
     const n = p.orden_cargas.length;
     const clase = p.estado === "completada" ? "" : "aviso";
-    estado(`${p.estado === "completada" ? "Terminado" : "Parado: " + p.estado}. ${n} carga(s). Excel en tu carpeta Descargas.` +
+    const rels = Object.values(p.relaciones).flat().filter((r) => r.estado !== "Descartado").length;
+    const leidos = Object.keys(p.camiones).length;
+    estado(`${p.estado === "completada" ? "Terminado" : "Parado: " + p.estado}. ${n} carga(s), ${leidos} camión(es) leídos, ${rels} enlace(s) carga-camión. Excel en tu carpeta Descargas.` +
       (p.estado.startsWith("interrumpida") ? " Cuando lo resuelvas, pulsa Reanudar." : ""), clase);
   } catch (e) {
     log("⚠ " + e.message);
