@@ -27,12 +27,29 @@ const Ficha = (() => {
     let seccion = "";
     const enl = (el) => [...el.querySelectorAll("a")].map((a) => ({ texto: una(a), href: a.getAttribute("href") || "" }));
     const esEtiq = (t) => t && t.length <= 45 && /:\s*$/.test(t);
-    for (const tr of doc.querySelectorAll("tr")) {
-      if (tr.querySelector("tr")) continue;
-      const cs = [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName) && (una(c) || c.querySelector("img,a")));
+    const filas = [...doc.querySelectorAll("tr")].filter((tr) => !tr.querySelector("tr"));
+    const celdas = (tr) => [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName));
+    const soloEtiquetas = (cs) => { const t = cs.map(una).filter(Boolean); return t.length >= 2 && t.every((x) => x.length <= 40 && /:\s*$/.test(x)); };
+    let saltar = null;
+    for (let fi = 0; fi < filas.length; fi++) {
+      const tr = filas[fi];
+      if (tr === saltar) continue;
+      // Caso Wtransnet: fila de etiquetas («País: | Provincia: | C.P.: | Localidad:») y debajo la fila de valores
+      const todas = celdas(tr), sig = filas[fi + 1];
+      if (sig && soloEtiquetas(todas)) {
+        const vals = celdas(sig);
+        if (vals.length === todas.length && !soloEtiquetas(vals)) {
+          todas.forEach((c, i) => { const et = una(c).replace(/:\s*$/, ""); if (et) kv.push({ seccion, etiqueta: et, valor: texto(vals[i]), enlaces: enl(vals[i]) }); });
+          saltar = sig;
+          continue;
+        }
+      }
+      const cs = todas.filter((c) => una(c) || c.querySelector("img,a"));
       if (!cs.length) continue;
       if (cs.length === 1) {
         const t = texto(cs[0]);
+        const varios = [...t.matchAll(/(?:^|\s)([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ.º ]{0,24}):\s*([^\n]*?)(?=\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ.º ]{0,24}:|\n|$)/g)];
+        if (varios.length >= 2) { for (const v of varios) kv.push({ seccion, etiqueta: v[1].trim(), valor: v[2].trim(), enlaces: enl(cs[0]) }); continue; }
         const m = t.match(/^([^:\n]{1,45}):\s*([\s\S]+)$/);
         if (m) kv.push({ seccion, etiqueta: m[1].trim(), valor: m[2], enlaces: enl(cs[0]) });
         else if (t.length <= 60 && !t.includes("\n")) seccion = t;
@@ -168,7 +185,10 @@ const Ficha = (() => {
       const bloque = bloqueSeccion(sec, etq);
       const k = N.clave(etq);
       const sub = subUbic(k);
-      if ((bloque === "origen" || bloque === "destino") && sub) { if (!(sub in ub[bloque])) ub[bloque][sub] = val; continue; }
+      if ((bloque === "origen" || bloque === "destino") && sub) {
+        if (!(sub in ub[bloque]) && val && !/:\s*$/.test(val)) ub[bloque][sub] = val;
+        continue;
+      }
       if (sub) { r.otros_datos.push(`${sec ? sec + " › " : ""}${etq}: ${val}`); continue; }
       if (["origen", "lugar de carga", "carga en", "recogida"].includes(k)) { ub.origen.texto = ub.origen.texto || val; continue; }
       if (["destino", "lugar de descarga", "descarga en", "entrega en"].includes(k)) { ub.destino.texto = ub.destino.texto || val; continue; }

@@ -52,7 +52,7 @@ class BotWT {
     const tab = await chrome.tabs.get(this.tabId);
     if (!tab.url || !tab.url.startsWith(this.origen)) throw new SesionInterrumpida(`La pestaña ha salido de Wtransnet (${(tab.url || "").slice(0, 80)}). Vuelve a abrir Wtransnet y pulsa Reanudar.`);
     const est = (await this.agente("estado")).filter((x) => x.ok).map((x) => ({ frameId: x.frameId, ...x.v }));
-    for (const e of est) for (const d of e.dialogos || []) this.log(`Wtransnet mostró una ventana (${d.tipo}): «${d.msg}»`);
+    for (const e of est) for (const d of e.dialogos || []) { this.log(`Wtransnet mostró una ventana (${d.tipo}): «${d.msg}»`); (this.dialogos = this.dialogos || []).push(d.msg); }
     for (const e of est) {
       if (e.cap) throw new SesionInterrumpida("Aparece un CAPTCHA. Resuélvelo tú en la pestaña de Wtransnet y pulsa Reanudar.");
       if (e.pwd || e.cad) throw new SesionInterrumpida("Wtransnet pide iniciar sesión o la sesión ha caducado. Inicia sesión tú y pulsa Reanudar.");
@@ -120,7 +120,7 @@ class BotWT {
     await this.activarBloqueo();
     await this.activarSinDialogos();
     try {
-      this.log(`Trabajando en la pestaña de Wtransnet: ${Ficha.urlLimpia(tabs[0].url).slice(0, 90)}`);
+      this.log(`Buscador Wtransnet v${chrome.runtime.getManifest().version} · pestaña: ${Ficha.urlLimpia(tabs[0].url).slice(0, 90)}`);
       await this.verificarCuenta();
       if (this.p.orden_cargas.length < lim.max_cargas) await this.buscarCargas(lim.max_cargas);
       for (const cid of this.p.orden_cargas.slice()) {
@@ -216,9 +216,19 @@ class BotWT {
         await add({ tipo: "select", campo: "provincia", bloque, valor: prov, cod: u.provincia_cod || N.codProvincia(prov), tabla: tablaProv });
         await add({ tipo: "texto", campo: "codigo_postal", bloque, valor: u.codigo_postal });
         await add({ tipo: "texto", campo: "localidad", bloque, valor: u.localidad });
-        if (lista.length > 1) { await this.pulsar("Anotar", "anotar", bloque); await this.dormir(800); }
+        if (amb) { try { await add({ tipo: "select", campo: "ambito", bloque, valor: amb }); } catch (e) { this.log(`Aviso: ámbito no aplicado (${e.message.slice(0, 80)})`); } }
+        // Wtransnet exige AÑADIR el origen/destino a su lista con el botón de al lado
+        const f = this.marcoFormulario(await this.estados());
+        const r = await this.uno("op", { op: { tipo: "anotarBloque", bloque } }, f).catch((e) => ({ hecho: false, motivo: e.message }));
+        await this.dormir(900);
+        if (r.hecho) {
+          const lista2 = await this.uno("controles", {}, this.marcoFormulario(await this.estados()) ?? f).catch(() => []);
+          const sel = lista2.find((c) => c.tipo === "select" && /anotacion/i.test(c.name) && N.clave(c.name).includes(bloque === "origen" ? "from" : "to"));
+          const n = sel && sel.opciones ? sel.opciones.length : null;
+          this.log(`${bloque} añadido a la lista de Wtransnet (botón «${r.boton || "sin texto"}»; elementos en la lista: ${r.antes ?? "?"} → ${n ?? "?"})`);
+          ap.push(`${bloque} añadido a la lista`);
+        } else this.log(`Aviso: no se pudo añadir el ${bloque} a la lista (${r.motivo}).`);
       }
-      if (amb) await add({ tipo: "select", campo: "ambito", bloque, valor: amb });
     }
     return ap;
   }
@@ -226,8 +236,12 @@ class BotWT {
     await this.ir(this.urls[tipo === "carga" ? "buscar_carga" : "buscar_camion"]);
     const ap = await this.aplicarFiltros(filtros, tipo);
     this.log(`Filtros aplicados y verificados (${tipo}): ${ap.join("; ")}`);
+    this.dialogos = [];
     await this.pulsar("Buscar", "buscar");
     await this.dormir(1500);
+    await this.estados();
+    const rechazo = (this.dialogos || []).find((m) => /requerid|obligatori|debe (indicar|seleccionar|introducir)|incorrect|no v[aá]lid/i.test(m));
+    if (rechazo) throw new FiltroNoAplicable(`Wtransnet no aceptó la búsqueda de ${tipo === "carga" ? "cargas" : "camiones"}: «${rechazo}»`);
     await this.esperar((est) => est.some((e) => e.filas > 0 || e.sin_resultados) && est.every((e) => e.listo === "complete") && !est.some((e) => e.buscar && e.filas === 0 && !e.sin_resultados && e.nctr > 10) && est,
       60000, "los resultados de la búsqueda");
     return ap;
@@ -398,7 +412,11 @@ class BotWT {
   // ------------------------------------------------------------------ camiones
   filtrosCamion(carga) {
     const fc = this.conf.filtros, cam = this.conf.camiones;
-    const ub = (u) => (u.pais || u.pais_iso ? { pais: u.pais || "", pais_iso: u.pais_iso, provincia: u.provincia || "", provincia_cod: u.provincia_cod } : null);
+    const ub = (u) => {
+      const iso = u.pais_iso || N.codPais(u.pais || "");
+      if (!iso) return null; // país ilegible: no se busca con datos dudosos
+      return { pais: N.codPais(u.pais || "") ? u.pais : "", pais_iso: iso, provincia: N.codProvincia(u.provincia || "") ? u.provincia : "", provincia_cod: u.provincia_cod };
+    };
     const desde = carga.disp_desde ? new Date(carga.disp_desde) : null, hasta = carga.disp_hasta ? new Date(carga.disp_hasta) : desde;
     // Nunca una fecha anterior a hoy: Wtransnet la rechaza
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);

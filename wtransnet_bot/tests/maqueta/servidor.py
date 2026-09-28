@@ -173,11 +173,22 @@ def formulario_real(cgcm):
       <tr><td>Provincia:</td><td><select name=province_{lado}><option value=''>- Seleccione provincia -</option></select></td></tr>
       <tr><td>Localidad:</td><td><input type=text name=town_{lado}></td></tr>{ambito(lado)}
       <tr><td colspan=2>Puede añadir varios {'orígenes' if lado == 'from' else 'destinos'}:</td></tr>
-      <tr><td><input type=button value='Anotar'> <select name=anotaciones_{lado}></select> <input type=button value='Borrar anotación'></td></tr>"""
+      <tr><td><input type=button value='+' title='Añadir' onclick="anotar('{lado}')"> <select name=anotaciones_{lado} size=2></select> <input type=button value='-' title='Quitar' onclick="quitar('{lado}')"></td></tr>"""
     cuerpo = f"""<script>
       window.addEventListener('beforeunload', function (e) {{ e.preventDefault(); e.returnValue = ''; }});
       window.onload = function () {{ alert('Bienvenido: recuerde revisar sus ofertas'); }};
+      function anotar(lado) {{
+        var f = document.forms.OfertasForm, pa = f.elements['country_' + lado], pr = f.elements['province_' + lado];
+        if (!pa.value || pa.value === '0') {{ alert('Seleccione un país'); return; }}
+        f.elements['anotaciones_' + lado].add(new Option(pa.options[pa.selectedIndex].text + ' ' + (pr.value ? pr.options[pr.selectedIndex].text : '') + ' ' + f.elements['zip_' + lado].value, pr.value));
+        f.elements['province_' + lado].value = ''; f.elements['zip_' + lado].value = '';
+      }}
+      function quitar(lado) {{ var s = document.forms.OfertasForm.elements['anotaciones_' + lado]; if (s.options.length) s.remove(s.options.length - 1); }}
       function validar(f) {{
+        if (!f.anotaciones_from.options.length && !f.anotaciones_to.options.length) {{ alert('El origen o destino es requerido'); return false; }}
+        var sel = [];
+        for (var i = 0; i < f.anotaciones_from.options.length; i++) sel.push(f.anotaciones_from.options[i].value);
+        f.elements['province_from'].innerHTML = '<option value="' + sel[0] + '"></option>'; f.elements['province_from'].value = sel[0];
         var p = f.FechaDisp.value.split('/'); var d = new Date(2000 + (+p[2]), p[1] - 1, +p[0]);
         var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
         if (!(d >= hoy)) {{ alert('La fecha inicial no puede ser anterior a la actual'); return false; }}
@@ -230,11 +241,11 @@ def ficha_real(cgcm, k):
       <tr><td>Peso:</td><td>{d['peso']}</td></tr><tr><td>Forma de carga:</td><td>{d['forma']}</td></tr>
       <tr><td>ADR:</td><td>{d['adr']}</td></tr>
       <tr><th colspan=4>ORIGEN(ES)</th></tr>
-      <tr><td>País:</td><td>{d['ori_p']}</td><td>Código Postal:</td><td>{d['ori_cp']}</td></tr>
-      <tr><td>{d['ori_l']} ({d['ori_pr']})</td></tr>
+      <tr><td>País:</td><td>Provincia:</td><td>Código Postal:</td><td>Localidad:</td></tr>
+      <tr><td>{d['ori_p']}</td><td>{d['ori_pr']}</td><td>{d['ori_cp']}</td><td>{d['ori_l']}</td></tr>
       <tr><th colspan=4>DESTINO(S)</th></tr>
-      <tr><td>País:</td><td>{d['des_p']}</td><td>Código Postal:</td><td>{d.get('des_cp', '')}</td></tr>
-      <tr><td>{d['des_l']} ({d['des_pr']})</td></tr>
+      <tr><td>País:</td><td>Provincia:</td><td>Código Postal:</td><td>Localidad:</td></tr>
+      <tr><td>{d['des_p']}</td><td>{d['des_pr']}</td><td>{d.get('des_cp', '')}</td><td>{d['des_l']}</td></tr>
       <tr><td colspan=4>Distancia aproximada</td></tr>
       <tr><td>Comentarios:</td><td>{html.escape(d['obs'])}</td></tr>
       <tr><td>Precio:</td><td>{d.get('precio', '')}</td></tr>

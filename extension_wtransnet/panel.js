@@ -163,6 +163,7 @@ form.addEventListener("change", () => escribir("criterios", leerFormulario()._fo
 window.addEventListener("beforeunload", (e) => { if (enMarcha) { e.preventDefault(); e.returnValue = ""; } });
 
 (async () => {
+  $("#version").textContent = "v" + chrome.runtime.getManifest().version;
   const g = await leer("criterios");
   if (g && "zonas" in g) volcarFormulario(g); // criterios guardados con el formato actual
   const hoy = new Date();

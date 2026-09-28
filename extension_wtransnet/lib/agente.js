@@ -37,6 +37,7 @@ function agenteWT(orden, args) {
   const PERMITIDAS = {
     buscar: [/^buscar$/, /^buscar ofertas$/],
     anotar: [/^anotar$/],
+    anotarBloque: [/^$/, /^(anotar|anadir|a[nñ]adir|agregar|incluir|add|\+|>>?|mas|m[aá]s)$/],
     volver: [/^volver a la lista$/, /^volver al listado$/, /^volver$/],
     paginar: [/^siguiente$/, /^pagina siguiente$/, /^sig\.?$/, /^>$/, /^>>$/, /^»$/],
     ficha: [/^\d{1,2}[ /.\-]\d{1,2}([ /.\-]\d{2,4})?( \d{1,2}[ :.]\d{2})?$/],
@@ -56,6 +57,10 @@ function agenteWT(orden, args) {
     }
     if (RED_PROHIBIDA.test(href + " " + onclick)) throw new Error("Destino bloqueado");
     if (tipo === "submit" && !["buscar", "anotar"].includes(accion)) throw new Error("Botón de envío no permitido");
+    if (accion === "anotarBloque") {
+      if (/(borr|quit|elimin|remove|delete|limpi)/.test(texto + " " + destino)) throw new Error("Es un botón de quitar, no de añadir");
+      return;
+    }
     const pats = PERMITIDAS[accion] || [];
     if (!pats.some((p) => p.test(texto) || p.test(crudo))) throw new Error(`El control «${crudo.slice(0, 60)}» no corresponde a la acción «${accion}»`);
   }
@@ -106,7 +111,8 @@ function agenteWT(orden, args) {
         etiqueta, antes: vecino(el, -1), despues: vecino(el, 1), celda_anterior: celdaAnt, fila,
         seccion: secc.get(el) || "", visible: vis(el), deshabilitado: !!el.disabled,
         form: el.form ? (el.form.getAttribute("name") || el.form.id || "form") : "",
-        texto: el.tagName === "A" || el.tagName === "BUTTON" ? norm(el.innerText) : "" };
+        texto: el.tagName === "A" || el.tagName === "BUTTON" ? norm(el.innerText) : "",
+        title: el.getAttribute("title") || "", alt: el.getAttribute("alt") || "", onclick: (el.getAttribute("onclick") || "").slice(0, 120) };
       if (tipo === "checkbox" || tipo === "radio") { o.value = el.value; o.checked = el.checked; }
       else if (["button", "submit", "image", "reset"].includes(tipo)) o.value = el.value || "";
       else if (el.tagName === "SELECT") { o.value = el.value; o.opciones = [...el.options].map((op) => ({ value: op.value, texto: norm(op.text) })); }
@@ -255,6 +261,23 @@ function agenteWT(orden, args) {
           return op.campo + " = " + (v ? "marcado" : "sin marcar");
         }
       }
+    }
+    if (op.tipo === "anotarBloque") {
+      const lista = ctr.find((c) => c.tipo === "select" && /anotacion/i.test(c.name) && bloqueDe(c) === op.bloque);
+      const antes = lista ? (els[lista.indice].options || []).length : null;
+      const ADD = /(a[nñ]adir|anotar|agregar|incluir|\badd\b|^\+$|>>|m[aá]s)/i, QUITAR = /(borr|quit|elimin|remove|delete|limpi|^-$)/i;
+      const botones = ctr.filter((c) => c.visible && !c.deshabilitado && c.tipo !== "submit"
+        && (["button", "image", "enlace"].includes(c.tipo) || c.tag === "BUTTON") && bloqueDe(c) === op.bloque
+        && !/^(buscar|aceptar|cancelar)$/.test(clave(c.value || c.texto || "")));
+      const desc = (c) => [c.texto, c.value, c.title, c.alt, c.onclick].join(" ");
+      let elegido = botones.find((c) => ADD.test(desc(c)) && !QUITAR.test(desc(c)));
+      if (!elegido) elegido = botones.find((c) => !QUITAR.test(desc(c)));
+      if (!elegido) return { hecho: false, motivo: "no hay botón para añadir " + op.bloque, antes };
+      const e = els[elegido.indice];
+      comprobarClic(e, "anotarBloque");
+      e.click();
+      const despues = lista ? (els[lista.indice].options || []).length : null;
+      return { hecho: true, antes, despues, boton: desc(elegido).trim().slice(0, 60) };
     }
     throw new Error("Operación desconocida");
   }
