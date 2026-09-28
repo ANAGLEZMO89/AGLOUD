@@ -1,0 +1,6 @@
+resultados/
+.venv/
+perfil_edge_bot/
+__pycache__/
+*.pyc
+.pytest_cache/

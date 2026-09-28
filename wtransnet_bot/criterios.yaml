@@ -1,0 +1,81 @@
+# =====================================================================
+#  CRITERIOS DEL BOT WTRANSNET  (se puede editar aquí o desde la ventana)
+#  Los textos de desplegables deben escribirse EXACTAMENTE como aparecen
+#  en Wtransnet. Consulta el archivo mapa_interfaz_*.md que genera
+#  «Inspeccionar interfaz» para ver las opciones reales.
+# =====================================================================
+
+# ---- 1. FILTROS QUE SE APLICAN EN EL FORMULARIO «BUSCAR CARGA» -------
+filtros_wtransnet:
+  origenes: []          # ej.: - {pais: "España", provincia: "Valencia", codigo_postal: "", localidad: ""}
+  destinos: []          # igual que origenes; vacío = sin filtro de destino
+  ambito_origen: ""     # texto exacto: p.ej. "Provincia y colindantes" (NO es un radio en km)
+  ambito_destino: ""
+  fecha_inicial: ""     # dd/mm/aa  (obligatoria para buscar)
+  fecha_final: ""       # dd/mm/aa
+  tipo_bolsa: []        # Trailers Completos / Grupajes / Rígidos Completos (obligatorio)
+  ida_y_vuelta: ""      # Sí / No / Indiferente / "" (no tocar)
+  redes: []             # Wtransnet / Teleroute / 123Cargo...  (texto de la casilla)
+  tipo_vehiculo: ""
+  especialidad: ""
+  misma_especialidad: null   # true / false / null (no tocar)
+  forma_carga: []       # Arriba / Lateral / Detrás
+  adr: ""               # "Sólo cargas ADR" / "No" / "Indiferente" / ""
+  doble_conductor: ""
+  plataforma_elevadora: ""   # Sí / No / ""
+  cargas_urgentes: false
+
+# ---- 2. COMPROBACIONES QUE HACE EL BOT DESPUÉS DE ABRIR CADA FICHA ----
+#      (Wtransnet no ofrece estos filtros en el formulario observado)
+comprobaciones_bot:
+  peso_minimo_kg: null
+  peso_maximo_kg: null
+  largo_maximo_m: null
+  volumen_maximo_m3: null
+  descartar_no_vigentes: true
+  leer_ficha_empresa_si_falta_contacto: true   # el contacto de empresa se marca como "general"
+  leer_actividad_empresa_camion: false         # true = abre la ficha de empresa de cada camión (más peticiones)
+
+# ---- 3. BÚSQUEDA DE CAMIONES PARA CADA CARGA -------------------------
+#  Origen y destino se toman de la propia carga (país y provincia).
+#  Los campos a null heredan el valor de filtros_wtransnet.
+camiones:
+  dias_antes_de_la_carga: 1      # la búsqueda empieza N días antes de la fecha de carga
+  filtrar_por_destino: true
+  tipo_bolsa: null
+  tipo_vehiculo: null
+  especialidad: null
+  misma_especialidad: null
+  sirve_frigorifico: ""          # sólo con Carga General: Sí / No / Indiferente / ""
+  sirve_lateral_bajo: ""
+  adr: ""
+  plataforma_elevadora: ""
+  doble_conductor: ""
+  forma_carga: []
+  max_fichas_leidas_por_carga: 20   # tope de fichas a abrir por carga (evita bucles)
+
+# ---- 4. LÍMITES ------------------------------------------------------
+limites:
+  max_cargas: 10
+  max_camiones_por_carga: 10
+  empresas_distintas_por_carga: false
+  max_paginas_listado: 3
+
+# ---- 5. EQUIVALENCIAS DE CARROCERÍA DECLARADAS POR TI ----------------
+#  El bot NO supone equivalencias. Si tú decides una, anótala aquí:
+#  - {carga: "Tautliner", camion: "Tautliner-Portab.", resultado: "compatible"}
+equivalencias_carroceria: []
+
+salida:
+  carpeta: "resultados"   # relativa a esta carpeta o ruta completa
+
+conexion:
+  modo: "conectar"            # conectar = Edge abierto con INICIAR_EDGE_WTRANSNET.bat
+  cdp_url: "http://127.0.0.1:9222"
+  perfil_bot: "perfil_edge_bot"   # sólo para modo "lanzar"
+  empresa_esperada: ""        # razón social que debe verse en la sesión (se verifica)
+
+ritmo:                        # uso moderado: nada de búsquedas masivas
+  pausa_min_s: 3
+  pausa_max_s: 6
+  reintentos: 2
