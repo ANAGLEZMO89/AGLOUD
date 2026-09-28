@@ -153,7 +153,17 @@ class BotWT {
     const est = await this.estados();
     const f = this.marcoFormulario(est);
     if (f === null) throw new FiltroNoAplicable("No encuentro el formulario de búsqueda con botón «Buscar».");
-    const r = await this.uno("op", { op }, f).catch((e) => { throw new FiltroNoAplicable(e.message); });
+    let r, ultimo;
+    for (let intento = 0; intento < 6; intento++) {
+      try { r = await this.uno("op", { op }, this.marcoFormulario(await this.estados()) ?? f); ultimo = null; break; }
+      catch (e) {
+        ultimo = e;
+        // p. ej. las provincias se cargan después de elegir el país: se espera y se reintenta
+        if (!/no coincide literalmente|No encuentro/.test(e.message)) break;
+        await this.dormir(1000);
+      }
+    }
+    if (ultimo) throw new FiltroNoAplicable(ultimo.message);
     await new Promise((res) => setTimeout(res, 400));
     await this.esperar((e) => e.length && e.every((x) => x.listo === "complete") && e, 20000, "el formulario");
     return r;
@@ -441,6 +451,11 @@ class BotWT {
         await this.pausa(0.5);
         const { bruto } = await this.leerDocumento(l.filas[0].href);
         info.etiquetas = bruto.kv.map((x) => ({ seccion: x.seccion, etiqueta: x.etiqueta, campo: this.campoBot(x) }));
+        const { doc } = await this.descargar(l.filas[0].href);
+        info.estructura = Ficha.estructura(doc);
+        const reg = Ficha.interpretar(bruto, tipo, l.filas[0], l.filas[0].href);
+        info.lectura = { id: reg.id, origen: reg.origen.texto, destino: reg.destino.texto, disponibilidad: reg.campos.disponibilidad || "",
+          telefonos: reg.telefonos.length + reg.moviles.length, emails: reg.emails.length, empresa: !!reg.empresa_nombre, peso: reg.peso.original };
         info.enlaces_contacto = bruto.contacto.length;
       }
       informe.paginas[nombre] = info;

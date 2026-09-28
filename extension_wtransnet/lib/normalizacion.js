@@ -106,16 +106,16 @@ const N = (() => {
   // ------------------------------------------------ ubicación
   // Códigos INE de provincia (= dos primeras cifras del código postal español).
   const PROVINCIAS = {
-    "01": ["alava", "araba", "araba alava", "alava araba"], "02": ["albacete"], "03": ["alicante", "alacant", "alicante alacant"],
+    "01": ["alava", "araba", "araba alava", "alava araba", "araba alava"], "02": ["albacete"], "03": ["alicante", "alacant", "alicante alacant"],
     "04": ["almeria"], "05": ["avila"], "06": ["badajoz"], "07": ["baleares", "illes balears", "islas baleares", "balears"],
-    "08": ["barcelona"], "09": ["burgos"], "10": ["caceres"], "11": ["cadiz"], "12": ["castellon", "castello", "castellon castello"],
+    "08": ["barcelona"], "09": ["burgos"], "10": ["caceres"], "11": ["cadiz"], "12": ["castellon", "castello", "castellon castello", "castellon de la plana", "castello de la plana"],
     "13": ["ciudad real"], "14": ["cordoba"], "15": ["a coruna", "la coruna", "coruna"], "16": ["cuenca"], "17": ["girona", "gerona"],
     "18": ["granada"], "19": ["guadalajara"], "20": ["gipuzkoa", "guipuzcoa"], "21": ["huelva"], "22": ["huesca"], "23": ["jaen"],
     "24": ["leon"], "25": ["lleida", "lerida"], "26": ["la rioja", "rioja"], "27": ["lugo"], "28": ["madrid"], "29": ["malaga"],
     "30": ["murcia"], "31": ["navarra", "nafarroa"], "32": ["ourense", "orense"], "33": ["asturias"], "34": ["palencia"],
-    "35": ["las palmas", "palmas"], "36": ["pontevedra"], "37": ["salamanca"], "38": ["santa cruz de tenerife", "s c tenerife", "tenerife"],
+    "35": ["las palmas", "palmas"], "36": ["pontevedra"], "37": ["salamanca"], "38": ["santa cruz de tenerife", "s c tenerife", "tenerife", "sta cruz de tenerife", "s c de tenerife"],
     "39": ["cantabria"], "40": ["segovia"], "41": ["sevilla"], "42": ["soria"], "43": ["tarragona"], "44": ["teruel"], "45": ["toledo"],
-    "46": ["valencia"], "47": ["valladolid"], "48": ["bizkaia", "vizcaya"], "49": ["zamora"], "50": ["zaragoza"], "51": ["ceuta"], "52": ["melilla"],
+    "46": ["valencia"], "47": ["valladolid"], "48": ["bizkaia", "vizcaya", "vizcaya bizkaia"], "49": ["zamora"], "50": ["zaragoza"], "51": ["ceuta"], "52": ["melilla"],
   };
   const PROV_POR_NOMBRE = {};
   for (const [c, ns] of Object.entries(PROVINCIAS)) ns.forEach((n) => (PROV_POR_NOMBRE[n] = c));

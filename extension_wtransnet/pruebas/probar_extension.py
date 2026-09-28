@@ -26,9 +26,10 @@ def preparar_copia():
     return dst
 
 
-def main(js=False):
+def main(js=False, real=False):
     srv = servidor.arrancar()
     servidor.MODO["enlaces_js"] = js
+    servidor.MODO["estilo_real"] = real
     base = f"http://127.0.0.1:{srv.server_port}/WTNWEB/"
     ext = preparar_copia()
     salida = tempfile.mkdtemp()
@@ -46,6 +47,8 @@ def main(js=False):
         panel.goto(f"chrome-extension://{ext_id}/panel.html")
         panel.evaluate(f"chrome.storage.local.set({{baseUrl: '{base}'}})")
         panel.fill("[name=origenes]", "España; Valencia")
+        if real:
+            panel.select_option("[name=ambito_origen]", "Provincia y colindantes")
         panel.fill("[name=fecha_inicial]", "28/09/26")
         panel.fill("[name=fecha_final]", "05/10/26")
         panel.check("input[name=tipo_bolsa][value='Trailers Completos']")
@@ -83,8 +86,13 @@ def main(js=False):
     prohibidas = [q for q in rutas if any(x in q for x in ("accion=alta", "accion=interes", "/chat", "mailto", "tel:"))]
     if prohibidas:
         fallos.append(f"Peticiones prohibidas: {prohibidas}")
-    listar = [parse_qs(urlsplit(q).query) for q in rutas if "accion=listar" in q and "cgcm=CG" in q and "fIni" in q]
-    if not listar or listar[0].get("provOri") != ["3"] or listar[0].get("fIni") != ["28/09/26"] or listar[0].get("bTC") != ["1"]:
+    listar = [parse_qs(urlsplit(q).query) for q in rutas if "accion=listar" in q and "cgcm=CG" in q and ("fIni" in q or "FechaDisp" in q)]
+    if real:
+        ok_f = listar and listar[0].get("province_from") == ["5"] and listar[0].get("FechaDisp") == ["28/09/26"] and listar[0].get("TipoBolsa_Completa") == ["1"] \
+            and listar[0].get("region_from") == ["1"]
+    else:
+        ok_f = listar and listar[0].get("provOri") == ["3"] and listar[0].get("fIni") == ["28/09/26"] and listar[0].get("bTC") == ["1"]
+    if not ok_f:
         fallos.append(f"Filtros de carga no enviados correctamente: {listar[:1]}")
     wb = openpyxl.load_workbook(ruta)
     print("HOJAS:", wb.sheetnames)
@@ -123,5 +131,5 @@ def main(js=False):
 
 
 if __name__ == "__main__":
-    ok = main(js="--js" in sys.argv)
+    ok = main(js="--js" in sys.argv, real="--real" in sys.argv)
     sys.exit(0 if ok else 1)

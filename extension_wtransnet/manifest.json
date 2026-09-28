@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Buscador Wtransnet (sólo lectura)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Busca cargas y camiones en tu sesión de Wtransnet, los relaciona y genera un Excel. No publica, no contacta, no contrata.",
   "permissions": [
     "storage",

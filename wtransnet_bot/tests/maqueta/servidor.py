@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 PETICIONES: list[tuple[str, str]] = []
-MODO = {"enlaces_js": False}
+MODO = {"enlaces_js": False, "estilo_real": False}
 
 PROVINCIAS = ["", "Alicante/Alacant", "Madrid", "Valencia", "Barcelona", "Zaragoza"]
 PAISES = ["", "España", "Francia", "Portugal"]
@@ -153,6 +153,92 @@ def empresa(cod):
                 f"<td>+34 900 000 {cod[:3]}</td></tr><tr><td>Actividad:</td><td>Agencia de transporte</td></tr></table>")
 
 
+# ------------------------------------------------------------------ variante con la estructura observada en Wtransnet (28/09/2026)
+PROV_REAL = ["- Seleccione provincia -", "A Coruña", "Alicante", "Castellón de la Plana", "Madrid", "Valencia"]
+PAIS_REAL = ["- Seleccione país -", "Alemania", "España", "Francia"]
+
+
+def formulario_real(cgcm):
+    def radios(nombre, ops):
+        return "".join(f"<input type=radio name={nombre} value={i}{' checked' if i == len(ops) - 1 else ''}>{o} " for i, o in enumerate(ops))
+    sel = lambda n, ops: f"<select name={n}>" + "".join(f"<option value='{i}'>{html.escape(o)}</option>" for i, o in enumerate(ops)) + "</select>"
+    redes = "" if cgcm == "CM" else ("<tr><td>Buscar en*:</td><td><input type=hidden name=selectedBolsaId>"
+             "<input type=checkbox name=Bolsas.1 value=1 checked>Wtransnet <input type=checkbox name=Bolsas.400 value=1>Teleroute "
+             "<input type=checkbox name=Bolsas.403 value=1>123Cargo/Bursa</td></tr>")
+    ambito = lambda lado: ("" if cgcm == "CM" else
+        f"<tr><td>Ámbito:</td><td>{radios('region_' + lado, ['Comunidad Autónoma', 'Provincia y colindantes', 'Misma provincia'])}</td></tr>")
+    ubic = lambda lado, titulo: f"""<tr><td colspan=2><b>{titulo}</b></td></tr>
+      <tr><td>País:</td><td><select name=country_{lado} onchange="cargarProv(this, '{lado}')">""" + "".join(f"<option value='{i}'>{p}</option>" for i, p in enumerate(PAIS_REAL)) + f"""</select></td></tr>
+      <tr><td>Código postal:</td><td><input type=text name=zip_{lado}></td></tr>
+      <tr><td>Provincia:</td><td><select name=province_{lado}><option value=''>- Seleccione provincia -</option></select></td></tr>
+      <tr><td>Localidad:</td><td><input type=text name=town_{lado}></td></tr>{ambito(lado)}
+      <tr><td colspan=2>Puede añadir varios {'orígenes' if lado == 'from' else 'destinos'}:</td></tr>
+      <tr><td><input type=button value='Anotar'> <select name=anotaciones_{lado}></select> <input type=button value='Borrar anotación'></td></tr>"""
+    cuerpo = f"""<script>
+      function cargarProv(sel, lado) {{
+        var p = document.forms.OfertasForm.elements['province_' + lado];
+        p.innerHTML = "<option value=''>- Seleccione provincia -</option>";
+        if (sel.options[sel.selectedIndex].text !== 'España') return;
+        setTimeout(function () {{ {''.join(f'p.add(new Option("{x}", "{i}"));' for i, x in enumerate(PROV_REAL) if i)} }}, 700);
+      }}</script>
+    <form name=OfertasForm method=get action='/WTNWEB/servlet/fhoOfertas'>
+    <input type=hidden name=accion value=listar><input type=hidden name=cgcm value={cgcm}>
+    <table><tr><td colspan=2>Buscar {'carga' if cgcm == 'CG' else 'camión'}</td></tr>
+      <tr><td>Fecha inicial disponibilidad (dd/mm/aa)*:</td><td><input type=text name=FechaDisp></td>
+          <td>Fecha final disponibilidad (dd/mm/aa)*:</td><td><input type=text name=FechaFinDisp></td></tr>
+      <tr><td>Tipo de bolsa(s)*:</td><td><input type=checkbox name=TipoBolsa_Completa value=1>Trailers Completos
+          <input type=checkbox name=TipoBolsa_Grupaje value=1>Grupajes <input type=checkbox name=TipoBolsa_Express value=1>Rígidos Completos</td></tr>
+      <tr><td>Viajes Ida y Vuelta:</td><td>{radios('idaVuelta', ['Si', 'No', 'Indiferente'])}</td></tr>
+      {redes}
+      <tr><td>Tipo de vehículo:</td><td>{sel('TipoCamionId', ['Bitrén', 'Camión 3,5 T. MMA', 'Cualquiera', 'Trailer'])}</td></tr>
+      <tr><td>Especialidad:</td><td>{sel('EspecialidadId', ['- Seleccione especialidad -', 'Carga General', 'Frigorífico', 'Furgón', 'Tautliner'])}
+          <input type=checkbox name=soloEspe value=1>Misma Especialidad</td></tr>
+      <tr><td>Forma de Carga:</td><td><input type=checkbox name=Arriba value=1>arriba <input type=checkbox name=Lateral value=1>lateral
+          <input type=checkbox name=Detras value=1>detrás</td></tr>
+      <tr><td>ADR:</td><td>{radios('Adr', ['Sólo cargas ADR', 'No', 'Indiferente'])}</td></tr>
+      {ubic('from', 'Origen')}{ubic('to', 'Destino')}
+      <tr><td><input type=submit name=Buscar value=Buscar></td></tr></table></form>
+      <a href='/WTNWEB/servlet/wchat'>WChat</a>"""
+    return _pag(cuerpo)
+
+
+def ficha_real(cgcm, k):
+    d = (CARGAS if cgcm == "CG" else CAMIONES)[k]
+    fechas = d["disp"].split(" - ")
+    tel = f"<tr><td><img src='/img/tlf.gif'></td><td><a href='tel:{d['tel'].replace(' ', '')}'>{d['tel']}</a></td></tr>" if d["tel"] else ""
+    mail = f"<tr><td><img src='/img/mail.gif'></td><td><a href='mailto:{d['email']}'>{d['email']}</a></td></tr>" if d["email"] else ""
+    cuerpo = f"""<table>
+      <tr><td>Nº Oferta:</td><td>{d['num']}</td><td>Fecha y hora de modificación:</td><td>28/09/26 09:15</td></tr>
+      <tr><td><img alt='{d['red']}'></td></tr>
+      <tr><td colspan=4>Resumen breve de la oferta:</td></tr>
+      <tr><td>País:</td><td>{d['ori_p']}</td><td>Código Postal:</td><td>{d['ori_cp']}</td></tr>
+      <tr><td>Cod. Emp.:</td><td><a href='/WTNWEB/servlet/fhoEmpresa?cod={d['cod']}'>{d['cod']}</a></td></tr>
+      <tr><td>Fecha disponibilidad:</td><td>{fechas[0]}</td></tr>
+      <tr><td colspan=4>Fecha descarga:</td></tr>
+      <tr><td>Tipo de bolsa(s):</td><td>Trailers Completos</td></tr>
+      <tr><td>Viajes Ida y Vuelta:</td><td>No</td></tr>
+      <tr><td>Tipo de vehículo:</td><td>{d['veh']}</td></tr><tr><td>Especialidad:</td><td>{d['esp']}</td></tr>
+      <tr><td>Peso:</td><td>{d['peso']}</td></tr><tr><td>Forma de carga:</td><td>{d['forma']}</td></tr>
+      <tr><td>ADR:</td><td>{d['adr']}</td></tr>
+      <tr><th colspan=4>ORIGEN(ES)</th></tr>
+      <tr><td>País:</td><td>{d['ori_p']}</td><td>Código Postal:</td><td>{d['ori_cp']}</td></tr>
+      <tr><td>{d['ori_l']} ({d['ori_pr']})</td></tr>
+      <tr><th colspan=4>DESTINO(S)</th></tr>
+      <tr><td>País:</td><td>{d['des_p']}</td><td>Código Postal:</td><td>{d.get('des_cp', '')}</td></tr>
+      <tr><td>{d['des_l']} ({d['des_pr']})</td></tr>
+      <tr><td colspan=4>Distancia aproximada</td></tr>
+      <tr><td>Comentarios:</td><td>{html.escape(d['obs'])}</td></tr>
+      <tr><td>Precio:</td><td>{d.get('precio', '')}</td></tr>
+      <tr><td colspan=4>Detalles contacto oferta:</td></tr>
+      <tr><td>Cod. Emp.:</td><td><a href='/WTNWEB/servlet/fhoEmpresa?cod={d['cod']}'>{d['emp']}</a> ({d['cod']})</td></tr>
+      <tr><td>Contacto:</td><td>{d['contacto']}</td></tr>{tel}{mail}
+      <tr><td>Fecha inicio:</td><td>{fechas[0]}</td></tr><tr><td>Fecha fin:</td><td>{fechas[-1]}</td></tr>
+    </table>
+    <input type=button value='Ofertar' onclick="location.href='/WTNWEB/servlet/fhoOfertas?accion=alta'">
+    <a href='/WTNWEB/servlet/chat?c={d['cod']}'>Abrir chat</a>"""
+    return _pag(cuerpo)
+
+
 class Manejador(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -170,11 +256,11 @@ class Manejador(BaseHTTPRequestHandler):
         elif u.path == "/WTNWEB/servlet/fhoOfertas":
             acc = q.get("accion")
             if acc == "form":
-                cuerpo = formulario(q.get("cgcm"))
+                cuerpo = formulario_real(q.get("cgcm")) if MODO["estilo_real"] else formulario(q.get("cgcm"))
             elif acc == "listar":
                 cuerpo = listado(q.get("cgcm"), q)
             elif acc == "ficha":
-                cuerpo = ficha(q.get("cgcm"), q.get("id"))
+                cuerpo = ficha_real(q.get("cgcm"), q.get("id")) if MODO["estilo_real"] else ficha(q.get("cgcm"), q.get("id"))
             else:
                 cuerpo = _pag("ACCIÓN COMERCIAL EJECUTADA (esto no debe ocurrir nunca)")
         elif u.path == "/WTNWEB/servlet/fhoEmpresa":

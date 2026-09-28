@@ -125,13 +125,14 @@ function agenteWT(orden, args) {
     tipo_vehiculo: ["tipo de vehiculo", "tipo vehiculo", "vehiculo"],
     especialidad: ["especialidad", "carroceria", "especialidad carroceria"],
     misma_especialidad: ["misma especialidad"],
-    ida_y_vuelta: ["viajes de ida y vuelta", "ida y vuelta", "ida vuelta"],
+    ida_y_vuelta: ["viajes de ida y vuelta", "viajes ida y vuelta", "ida y vuelta", "ida vuelta"],
     adr: ["adr"], doble_conductor: ["doble conductor"], plataforma_elevadora: ["plataforma elevadora", "plataforma"],
     cargas_urgentes: ["cargas urgentes", "urgentes", "urgente"],
     sirve_frigorifico: ["sirve frigorifico"], sirve_lateral_bajo: ["sirve lateral bajo"],
     forma_carga: ["forma de carga", "forma carga", "carga por"], redes: ["redes", "red"], tipo_bolsa: ["tipo de bolsa", "bolsa"],
   };
   const OPCIONES_GRUPO = { tipo_bolsa: ["trailers completos", "grupajes", "rigidos completos"],
+    ambito: ["comunidad autonoma", "provincia y colindantes", "misma provincia"],
     redes: ["wtransnet", "teleroute", "123cargo", "bursa", "123cargo bursa"], forma_carga: ["arriba", "lateral", "detras"] };
   const TIPOS_TEXTO = ["text", "search", "tel", "number", "date", ""];
   const cerca = (c) => clave(c.etiqueta || c.antes || c.celda_anterior || c.fila || "");
@@ -141,7 +142,7 @@ function agenteWT(orden, args) {
   const bloqueDe = (c) => {
     const t = clave([c.seccion, c.fila, c.celda_anterior, c.etiqueta, c.antes].join(" "));
     const id = clave(c.name + " " + c.id);
-    const o = /\borig/.test(t) || /ori/.test(id), d = /\bdest/.test(t) || /des/.test(id);
+    const o = /\borig/.test(t) || /ori/.test(id) || /\bfrom\b/.test(id), d = /\bdest/.test(t) || /des/.test(id) || /\bto\b/.test(id);
     return o && !d ? "origen" : d && !o ? "destino" : "";
   };
   function localizar(ctr, campo, bloque, tipos) {
@@ -165,7 +166,12 @@ function agenteWT(orden, args) {
     const sin = ETIQUETAS[campo];
     let g = ctr.filter((c) => ["radio", "checkbox"].includes(c.tipo) && c.visible &&
       coincide(clave([c.seccion, c.fila, c.celda_anterior].join(" ")), sin) && (!bloque || bloqueDe(c) === bloque));
-    if (!g.length && OPCIONES_GRUPO[campo]) g = ctr.filter((c) => ["radio", "checkbox"].includes(c.tipo) && c.visible && coincide(textoOpcion(c), OPCIONES_GRUPO[campo]));
+    if (!g.length && OPCIONES_GRUPO[campo]) {
+      // grupo reconocido por el texto de sus opciones; se completa con todos los controles del mismo «name»
+      const semillas = ctr.filter((c) => ["radio", "checkbox"].includes(c.tipo) && c.visible && coincide(textoOpcion(c), OPCIONES_GRUPO[campo]) && (!bloque || bloqueDe(c) === bloque));
+      const nombres = new Set(semillas.map((c) => c.name).filter(Boolean));
+      g = ctr.filter((c) => ["radio", "checkbox"].includes(c.tipo) && c.visible && (semillas.includes(c) || nombres.has(c.name)));
+    }
     return g;
   }
   const casillaUnica = (ctr, campo) => ctr.filter((x) => x.tipo === "checkbox" && x.visible && coincide(textoOpcion(x) + " " + cerca(x), ETIQUETAS[campo]));
@@ -195,6 +201,10 @@ function agenteWT(orden, args) {
     const pref = op.bloque ? op.bloque + " " : "";
     switch (op.tipo) {
       case "select": {
+        if (op.campo === "ambito") {
+          const g = grupo(ctr, "ambito", op.bloque).filter((c) => c.tipo === "radio");
+          if (g.length) return aplicar({ ...op, tipo: "opcion" });
+        }
         const c = localizar(ctr, op.campo, op.bloque, ["select"]);
         const o = opcionSelect(c, op.valor, op.cod, op.tabla);
         el(c).value = o.value; disparar(el(c));
@@ -324,6 +334,10 @@ function agenteWT(orden, args) {
         const [bloque, campo] = item.includes(".") ? item.split(".") : ["", item];
         try {
           const cl = CLASE[campo];
+          if (campo === "ambito") {
+            const g = grupo(ctr, "ambito", bloque).filter((c) => c.tipo === "radio");
+            if (g.length) return { item, estado: "localizado", tipo: "radio", opciones: g.map(textoOpcion) };
+          }
           if (cl === "texto" || cl === "select") {
             const c = localizar(ctr, campo, bloque, cl === "texto" ? TIPOS_TEXTO : ["select"]);
             return { item, estado: "localizado", tipo: c.tipo, junto_a: cerca(c), opciones: (c.opciones || []).map((o) => o.texto) };

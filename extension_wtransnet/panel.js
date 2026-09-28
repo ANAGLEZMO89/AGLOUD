@@ -133,9 +133,10 @@ $("#btnInspeccionar").onclick = async () => {
     for (const [n, pg] of Object.entries(inf.paginas)) {
       lineas.push(`== ${n} ==`);
       if (pg.filtros) for (const f of pg.filtros) lineas.push(`${f.item}: ${f.estado} ${f.tipo || ""} ${f.junto_a ? "[" + f.junto_a + "]" : ""} ${f.detalle || ""} ${f.opciones ? "{" + f.opciones.slice(0, 40).join(" | ") + "}" : ""}`);
-      if (pg.controles) lineas.push("CONTROLES: " + JSON.stringify(pg.controles));
       if ("filas" in pg) lineas.push(`filas=${pg.filas} columnas=${(pg.cabecera || []).join(" | ")} siguiente=${pg.siguiente} enlace=${pg.enlace}`);
       if (pg.etiquetas) for (const e of pg.etiquetas) lineas.push(`  ficha: [${e.seccion}] ${e.etiqueta} -> ${e.campo}`);
+      if (pg.lectura) lineas.push("  LECTURA: " + JSON.stringify({ ...pg.lectura, id: "(oculto)", origen: (pg.lectura.origen || "").replace(/\d/g, "#"), destino: (pg.lectura.destino || "").replace(/\d/g, "#") }));
+      if (pg.estructura) lineas.push("  ESTRUCTURA (números y emails ocultos):", ...pg.estructura.map((x) => "    " + x));
       lineas.push("");
     }
     $("#informe").value = lineas.join("\n");
@@ -144,6 +145,12 @@ $("#btnInspeccionar").onclick = async () => {
     estado(malos ? `Revisión hecha: ${malos} filtro(s) sin localizar. Copia el informe y pégalo en el chat.` : "Revisión hecha: todos los filtros localizados.", malos ? "aviso" : "");
   } catch (e) { log("⚠ " + e.message); estado(e.message, "error"); }
   finally { botones(false); }
+};
+$("#btnCopiarLog").onclick = async () => {
+  const p = await leer("progreso");
+  const inc = p ? p.incidencias.map((i) => `- ${i.tipo}: ${String(i.detalle).replace(/\d{6,}/g, "#")}`).join("\n") : "";
+  await navigator.clipboard.writeText(`REGISTRO\n${$("#log").textContent}\nESTADO: ${p ? p.estado : "-"}\nINCIDENCIAS:\n${inc}`);
+  estado("Registro copiado. Pégalo en el chat.");
 };
 $("#btnCopiar").onclick = async () => { await navigator.clipboard.writeText($("#informe").value); estado("Informe copiado. Pégalo en el chat."); };
 

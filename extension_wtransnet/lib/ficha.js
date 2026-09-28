@@ -69,7 +69,8 @@ const Ficha = (() => {
   const CAMPOS = {
     numero_oferta: ["n oferta", "no oferta", "num oferta", "numero oferta", "numero de oferta", "n de oferta", "oferta n", "oferta", "referencia", "ref", "id oferta", "codigo oferta", "cod oferta"],
     red: ["red", "bolsa de origen", "procedencia", "origen de la oferta"],
-    fecha_modificacion: ["modificada", "modificado", "fecha modificacion", "ultima modificacion", "actualizada", "fecha actualizacion", "fecha de modificacion"],
+    fecha_modificacion: ["modificada", "modificado", "fecha modificacion", "ultima modificacion", "actualizada", "fecha actualizacion", "fecha de modificacion",
+      "fecha y hora de modificacion"],
     fecha_publicacion: ["publicada", "fecha publicacion", "fecha de publicacion", "fecha alta"],
     disponibilidad: ["disponibilidad", "fecha disponibilidad", "fecha de disponibilidad", "fecha de carga", "fecha carga", "disponible", "fechas", "fecha"],
     hora_limite: ["hora limite", "hora limite de carga", "hora"],
@@ -87,14 +88,14 @@ const Ficha = (() => {
     plataforma_elevadora: ["plataforma elevadora", "plataforma"], doble_conductor: ["doble conductor"],
     equipamiento: ["equipamiento", "otros equipamientos", "equipamientos", "extras", "otros"],
     observaciones: ["observaciones", "comentarios", "notas", "comentario", "otras observaciones"],
-    num_viajes: ["viajes", "n viajes", "numero de viajes", "num viajes", "no viajes"],
-    ida_y_vuelta: ["ida y vuelta", "viaje de ida y vuelta", "ida vuelta"],
+    num_viajes: ["viajes", "n viajes", "numero de viajes", "num viajes", "no viajes", "numero de ofertas o viajes"],
+    ida_y_vuelta: ["ida y vuelta", "viaje de ida y vuelta", "viajes ida y vuelta", "viajes de ida y vuelta", "ida vuelta"],
     distancia: ["distancia", "km", "kms", "kilometros", "distancia aproximada"],
     precio: ["precio", "importe", "tarifa", "flete", "precio ofertado"], moneda: ["moneda", "divisa"],
     plazo_pago: ["plazo pago", "plazo de pago", "dias pago", "dias de pago"],
     forma_pago: ["forma de pago", "forma pago", "medio de pago"],
-    comentarios_pago: ["comentarios pago", "comentarios de pago", "observaciones pago", "condiciones de pago"],
-    empresa_codigo: ["codigo empresa", "cod empresa", "codigo de empresa", "n empresa", "id empresa", "codigo cliente", "cod cliente", "codigo"],
+    comentarios_pago: ["comentarios pago", "comentarios de pago", "observaciones pago", "condiciones de pago", "informacion adicional sobre el pago"],
+    empresa_codigo: ["codigo empresa", "cod empresa", "cod emp", "codigo de empresa", "n empresa", "id empresa", "codigo cliente", "cod cliente", "codigo"],
     empresa_nombre: ["empresa", "razon social", "nombre empresa", "nombre de la empresa", "anunciante", "ofertante"],
     contacto: ["contacto", "persona de contacto", "persona contacto", "atiende", "responsable", "nombre contacto"],
     telefono: ["telefono", "telefonos", "tel", "tfno", "telf", "tlf", "telefono fijo"],
@@ -110,7 +111,8 @@ const Ficha = (() => {
     const k = N.clave(etq);
     if (subUbic(k)) return null;
     for (const [c, s] of Object.entries(CAMPOS)) if (s.includes(k)) return c;
-    for (const [c, s] of Object.entries(CAMPOS)) if (s.some((x) => x.length > 3 && k.startsWith(x + " "))) return c;
+    // prefijo sólo con sinónimos de varias palabras o muy concretos (nunca «fecha», «codigo», «viajes»…)
+    for (const [c, s] of Object.entries(CAMPOS)) if (s.some((x) => (x.includes(" ") || ["peso", "volumen", "precio", "largo", "ancho", "alto"].includes(x)) && k.startsWith(x + " "))) return c;
     return null;
   }
   function bloqueSeccion(sec, etq) {
@@ -201,13 +203,32 @@ const Ficha = (() => {
     // contactos
     const tel = [];
     for (const campo of ["telefono", "movil"]) for (const t of N.telefonos(c[campo] || "")) if (!tel.some((x) => x[1] === t)) tel.push([campo, t]);
+    // Sección «contacto» de la ficha: los teléfonos y emails pueden ir con iconos en lugar de etiqueta escrita
+    const zonaContacto = bruto.kv.filter((p) => /contacto/.test(N.clave(p.seccion)) && !["observaciones", "comentarios_pago"].includes(canon(p.etiqueta || "")))
+      .map((p) => p.valor).join("\n");
+    for (const t of N.telefonos(zonaContacto)) if (!tel.some((x) => x[1] === t)) tel.push([/^\+?(34)?[67]/.test(t) ? "movil" : "telefono", t]);
+    const emZona = N.emails(zonaContacto);
     for (const e of bruto.contacto) if (e.tipo === "tel" || e.tipo === "callto") { const t = N.telefono(e.valor); if (t && !tel.some((x) => x[1] === t)) tel.push(["telefono", t]); }
     const em = N.emails(c.email || "");
+    for (const x of emZona) if (!em.includes(x)) em.push(x);
     for (const e of bruto.contacto) if (e.tipo === "mailto") for (const x of N.emails(e.valor)) if (!em.includes(x)) em.push(x);
     r.telefonos = tel.filter((x) => x[0] === "telefono").map((x) => x[1]);
     r.moviles = tel.filter((x) => x[0] === "movil").map((x) => x[1]);
     r.emails = em;
-    r.contacto = N.limpiar(c.contacto || "");
+    // Empresa: nombre = texto (no numérico) del enlace a la ficha de empresa; código = número de «Cod. Emp.»
+    const enlacesEmp = bruto.kv.flatMap((p) => (p.enlaces || []).map((a) => ({ ...a, sec: p.seccion })))
+      .filter((a) => a.texto && !/^(tel|mailto|javascript)/i.test(a.href) && /empresa|emp/i.test(a.href));
+    const conNombre = enlacesEmp.filter((a) => !/^\s*[\d\s().\-]+\s*$/.test(a.texto));
+    if (conNombre.length) {
+      const pref = conNombre.find((a) => /contacto/.test(N.clave(a.sec))) || conNombre[0];
+      if (!c.empresa_nombre || /^\s*[\d\s|().\-]+\s*$/.test(c.empresa_nombre)) c.empresa_nombre = pref.texto;
+      r.enlace_empresa = pref.href;
+    } else if (enlacesEmp.length && !r.enlace_empresa) r.enlace_empresa = enlacesEmp[0].href;
+    if (c.empresa_codigo) {
+      const cod = String(c.empresa_codigo).match(/\b\d{3,}\b/);
+      if (cod) c.empresa_codigo = cod[0];
+    }
+    r.contacto = N.limpiar((c.contacto || "").split(" | ")[0]);
     r.empresa_nombre = N.limpiar(c.empresa_nombre || "");
     r.empresa_codigo = N.limpiar(c.empresa_codigo || "");
     r.contacto_fuente = r.telefonos.length || r.moviles.length || r.emails.length ? "oferta" : "";
@@ -235,7 +256,25 @@ const Ficha = (() => {
     return r;
   }
 
-  return { extraer, interpretar, canon, subUbic, bloqueSeccion, urlLimpia, texto, CAMPOS };
+  // Estructura de una ficha para diagnóstico: filas y celdas con números y emails ocultos.
+  function estructura(doc) {
+    const ocultar = (t) => t.replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/g, "<email>").replace(/\d/g, "#");
+    const out = [];
+    for (const tr of doc.querySelectorAll("tr")) {
+      if (tr.querySelector("tr")) continue;
+      const cs = [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName));
+      const partes = cs.map((c) => {
+        const img = [...c.querySelectorAll("img")].map((i) => "[img:" + (i.getAttribute("alt") || i.getAttribute("title") || (i.getAttribute("src") || "").split("/").pop()) + "]").join("");
+        const a = [...c.querySelectorAll("a")].map((x) => "[a:" + ((x.getAttribute("href") || "").split(/[?(]/)[0].slice(0, 40)) + "]").join("");
+        return (c.tagName === "TH" ? "TH:" : "") + img + a + ocultar(una(c)).slice(0, 60);
+      }).filter((x) => x.trim());
+      if (partes.length) out.push(partes.join(" | "));
+      if (out.length >= 150) break;
+    }
+    return out;
+  }
+
+  return { extraer, interpretar, estructura, canon, subUbic, bloqueSeccion, urlLimpia, texto, CAMPOS };
 })();
 
 if (typeof module !== "undefined") module.exports = Ficha;
