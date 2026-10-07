@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi calendario rosa</title>
+<meta name="description" content="Calendario rosa interactivo con tareas, recordatorios y avisos por WhatsApp.">
+<meta name="theme-color" content="#e0569a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Calendario">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root">
+  <div id="floaters" aria-hidden="true"></div>
+  <div class="wrap">
+
+    <header class="glass header">
+      <div class="brand">
+        <div class="mascots" id="mascotsHeader"></div>
+        <div class="brand-text">
+          <h1 class="title">Mi calendario rosa</h1>
+          <div class="speech" id="speech"></div>
+        </div>
+      </div>
+      <div class="nav">
+        <button class="circle-btn" data-action="prev" aria-label="Mes anterior">‹</button>
+        <div class="month-label"><span id="monthLabel"></span> <span class="year" id="yearLabel"></span></div>
+        <button class="circle-btn" data-action="next" aria-label="Mes siguiente">›</button>
+        <button class="pill-btn" data-action="today">Hoy</button>
+      </div>
+      <div class="header-actions">
+        <button class="pill-btn" data-action="open-settings">WhatsApp y avisos</button>
+        <button class="pill-btn primary" data-action="open-settings">Fondo y colores</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="cal-wrap" id="tiltWrap">
+        <div class="cal-card" id="card">
+          <div class="weekdays">
+            <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div class="we">Sáb</div><div class="we">Dom</div>
+          </div>
+          <div class="grid" id="grid"></div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="glass panel" id="dayPanel">
+          <div class="day-head">
+            <div class="cube-box" id="cubeBox"></div>
+            <div class="day-info">
+              <div class="sel-label" id="selLabel"></div>
+              <div class="sel-row">
+                <span class="sel-summary" id="selSummary"></span>
+                <button class="wa-soft" data-action="send-day" id="sendDayBtn" hidden>Enviar resumen por WhatsApp</button>
+              </div>
+            </div>
+          </div>
+          <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+          <div class="task-list" id="taskList"></div>
+        </div>
+
+        <div class="glass panel form">
+          <div class="form-head">
+            <h2 class="form-title">Nueva tarea</h2>
+            <div class="sel-short" id="selShort"></div>
+          </div>
+          <input id="newTitle" class="text-input" placeholder="¿Qué tienes que hacer?" autocomplete="off" enterkeyhint="done">
+          <div class="field">
+            <span class="field-label">Hora</span>
+            <input id="newTime" type="time" class="time-input" value="10:00">
+          </div>
+          <div class="field top">
+            <span class="field-label">Categoría</span>
+            <div class="opts" id="catOpts"></div>
+          </div>
+          <div class="field top">
+            <span class="field-label">Avisarme</span>
+            <div class="opts" id="remOpts"></div>
+          </div>
+          <button class="add-btn" data-action="add">Añadir tarea</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="modal-back" id="modal" hidden data-action="close-settings">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 class="modal-title" id="modalTitle">Personaliza tu calendario</h2>
+        <button class="close-btn" data-action="close-settings" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="msec">
+        <div class="msec-title">Tono de rosa</div>
+        <div class="tone-grid" id="toneOpts"></div>
+      </div>
+
+      <div class="msec">
+        <div class="msec-title">Fondo</div>
+        <div class="bg-grid" id="bgOpts"></div>
+      </div>
+
+      <div class="msec">
+        <div class="msec-title">WhatsApp y avisos</div>
+        <div class="wa-row">
+          <input id="waInput" class="wa-input" placeholder="Tu número" inputmode="tel" autocomplete="tel">
+          <button class="wa-strong" data-action="test-wa">Probar WhatsApp</button>
+        </div>
+        <div class="small">Se enviará a <span id="waDisplay"></span></div>
+        <button class="pill-btn notif-btn" data-action="ask-notif" id="notifBtn"></button>
+        <div class="note">Cuando llegue la hora de un aviso, el muñeco te muestra un recordatorio con un botón que abre WhatsApp con el mensaje ya escrito para tu número. Los avisos funcionan mientras el calendario esté abierto (en el móvil, instalado y en segundo plano puede no avisar). Para que lleguen solos con el calendario cerrado hace falta conectar un servicio de envío (WhatsApp Business API).</div>
+      </div>
+
+      <div class="msec">
+        <div class="msec-title">Copia de seguridad</div>
+        <div class="note">Tus tareas se guardan en este dispositivo. Para pasarlas del ordenador al móvil (o al revés), descarga una copia aquí y cárgala en el otro.</div>
+        <div class="wa-row">
+          <button class="pill-btn" data-action="export">Descargar copia</button>
+          <button class="pill-btn" data-action="import">Cargar copia</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </div>
+
+      <div class="msec" id="installSec" hidden>
+        <div class="msec-title">Instalar</div>
+        <button class="pill-btn primary" data-action="install">Instalar la app en este dispositivo</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="date" id="moveDate" class="move-date" tabindex="-1" aria-hidden="true">
+  <div id="fx" aria-hidden="true"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
