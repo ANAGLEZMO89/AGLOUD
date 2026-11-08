@@ -31,3 +31,4 @@ Thumbs.db
 /storage/app/backups/*
 /database/*.sqlite
 /htaccess-raiz-sin-ssh.txt.bak
+/agcloud-*.zip
