@@ -1,30 +1,52 @@
-# AGLOUD
+# AG Cloud · GA AGOPYME
 
-## Mi calendario rosa (app para ordenador y móvil)
+Plataforma de gestión de la gestoría: **AG Cloud** (equipo del despacho) y **Portal del cliente**.
+Reconstrucción como aplicación real del prototipo `AG Cloud.dc.html`.
 
-La app está en la carpeta [`docs/`](docs/). Es una web instalable (PWA): se abre en el navegador del ordenador y se instala en el móvil como una app más, con icono propio y funcionamiento sin conexión.
+| | |
+|---|---|
+| Estado | **Fase 1** (base, clientes y gestor documental). Ver [`documentacion/FASE-1.md`](documentacion/FASE-1.md) |
+| Despliegue | Hostinger · [`documentacion/DESPLIEGUE-HOSTINGER.md`](documentacion/DESPLIEGUE-HOSTINGER.md) |
+| Stack | PHP 8.3 · Laravel 13 · MySQL/MariaDB · Blade + CSS/JS propios (sin Node en el servidor) |
 
-### Publicarla (una sola vez)
-1. Fusiona esta rama en `main`.
-2. En GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main` / carpeta `/docs` → Save**.
-3. En 1-2 minutos estará en: `https://anaglezmo89.github.io/AGLOUD/`
+## Seguridad (resumen)
 
-### Instalar
-- **Ordenador (Chrome o Edge):** abre la dirección y pulsa el icono de instalar de la barra de direcciones (o Ajustes del calendario → «Instalar la app»).
-- **Android (Chrome):** menú ⋮ → «Instalar aplicación» / «Añadir a pantalla de inicio».
-- **iPhone (Safari):** botón Compartir → «Añadir a pantalla de inicio».
+- **Roles**: `admin_gestoria`, `asesor` (despacho) · `cliente_admin`, `cliente_empleado` (portal). Comprobados en el servidor en cada petición (`app/Http/Middleware/Rol.php`).
+- **Multi-tenant**: todo dato de cliente lleva `cliente_id`. Un filtro global (`app/Models/Concerns/PerteneceACliente.php`, `Cliente::booted`, `Documento::booted`) limita **cualquier** consulta de un usuario del portal a su cliente, y una política (`app/Policies/DocumentoPolicy.php`) lo vuelve a comprobar. Tests en `tests/Feature/AislamientoTest.php`.
+- **Contraseñas** con bcrypt; recuperación por correo; **2FA TOTP** opcional con códigos de recuperación; bloqueo tras 5 intentos; cambio obligatorio de la contraseña provisional.
+- **Documentos cifrados en reposo** (XChaCha20-Poly1305, libsodium) en `storage/app/privado`, fuera de la carpeta pública, servidos solo por controlador tras comprobar permisos. Clave propia `DOCS_KEY`.
+- **Datos sensibles de la ficha** (IBAN, socios, certificados y sus contraseñas) cifrados en la base de datos.
+- **Registro de accesos** (`audit_logs`), solo inserción.
+- **HTTPS obligatorio**, HSTS, CSP estricta (sin scripts en línea), cookies de sesión cifradas y `Secure`.
+- **Copias diarias** (BD + documentos) en ZIP AES-256, en el servidor y en Google Drive.
 
-### Qué hace
-- Vista mensual, tareas por día con hora, categoría y aviso.
-- Marcar hecha (confeti), mover tareas (arrastrando en el ordenador o con el botón 📅 en el móvil), borrar.
-- Recordatorios en pantalla y notificaciones del sistema mientras la app está abierta.
-- Botones de WhatsApp que abren el mensaje ya escrito para tu número.
-- 6 tonos de rosa y 6 fondos.
-- Copia de seguridad: descargar / cargar las tareas (para pasarlas entre ordenador y móvil).
+## Desarrollo local
 
-### Limitaciones
-- Las tareas se guardan en cada dispositivo por separado; no se sincronizan solas.
-- Los avisos solo saltan con la app abierta. Para avisos con la app cerrada o envío automático por WhatsApp hace falta un servidor (p. ej. WhatsApp Business Cloud API o Twilio).
+```bash
+composer install
+cp .env.example .env   # APP_ENV=local, DB_CONNECTION=sqlite, MAIL_MAILER=log, SESSION_SECURE_COOKIE=false
+php artisan key:generate
+touch database/database.sqlite && php artisan migrate
+php artisan agcloud:instalar            # genera DOCS_KEY, despacho y administrador
+php artisan db:seed --class=DemoSeeder  # SOLO pruebas: usuarios @demo.test, contraseña Prueba2026
+php artisan serve
+php artisan test                        # 37 tests (aislamiento, acceso, cifrado, copias)
+```
 
-### Actualizar la app
-Tras cambiar archivos en `docs/`, sube la versión en `docs/sw.js` (`VERSION`) para que los móviles descarguen la nueva.
+## Estructura
+
+```
+app/Http/Controllers   Escritorio, Clientes (+ secciones y accesos), Documentos, Cuenta, Admin/, Portal/
+app/Services           AlmacenDocumentos (cifrado), Auditoria, AccesosPortal, CopiaSeguridad, GoogleDrive
+app/Support            Formato (es-ES), Validacion (NIF/IBAN), ClasificadorDocumentos, SeccionesAlta
+config/agcloud.php     Catálogos del prototipo: carpetas, plazos de conservación, regímenes, menú…
+resources/views        Vistas Blade fieles al prototipo
+public/css|js|fonts    Estilos, JS y tipografías Onest/Geist Mono autoalojadas (sin Google Fonts: RGPD)
+despliegue/            instalar.sh y actualizar.sh para Hostinger
+```
+
+## Reglas del proyecto
+
+- Formato español en importes y fechas (`1.234,56 €` · `dd/mm/aaaa`).
+- Sin datos de ejemplo en producción (`DemoSeeder` se niega a ejecutarse en `production`).
+- **No** hay envío de ficheros a AEAT, RED, SEPE ni DEHú: solo se hará cuando se pida expresamente y tras validar los diseños de registro oficiales vigentes.

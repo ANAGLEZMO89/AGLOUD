@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>body{margin:0;background:#E9E9E4;font-family:'Onest',system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#0B0B0B}a:hover{color:#3C3C3C}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px 'Geist Mono',monospace;padding:3px 7px;background:#0B0B0B;color:#C8F031;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 'Onest',sans-serif;color:#0B0B0B}.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}.dv-oid{font:600 10.5px 'Geist Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#0B0B0B;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 12px/1.3 'Onest',sans-serif;color:rgba(0,0,0,.6)}.dv-card{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#C8F031;color:#0B0B0B}.dv-next{margin:22px 0 0;font:12px/1.5 'Onest',sans-serif;color:rgba(0,0,0,.55)}</style></helmet>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Panel de <a class="dv-oid" href="#1a">1a</a> con los colores de <a class="dv-oid" href="#1c">1c</a></span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Sidebar negra, fondo blanco cálido, bloque lima y tarjeta negra</div>
+<div class="dv-card" style="width:1440px;height:900px;display:grid;grid-template-columns:248px minmax(0,1fr);background:#F4F4F0;color:#0B0B0B">
+  <aside style="background:#0B0B0B;color:#F4F4F0;display:flex;flex-direction:column;padding:20px 14px;gap:18px;min-height:0">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px">
+      <img src="assets/logo-ga.png" alt="GA" style="width:38px;height:38px;border-radius:50%;object-fit:cover;background:#fff"></img>
+      <div style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800;font-size:16px;letter-spacing:.04em">AG CLOUD</span><span style="font-size:11px;color:#8A8A85">por GA AGOPYME</span></div>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;background:#C8F031;color:#0B0B0B;font-weight:600;font-size:14px"><span style="width:6px;height:6px;border-radius:50%;background:#0B0B0B"></span>Escritorio</div>
+      <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6E6E69;padding:0 12px 4px">{{ g.label }}</div>
+          <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-radius:8px;font-size:14px;color:#BDBDB7;cursor:pointer" style-hover="background:#1C1C1C;color:#FFFFFF">
+              <span>{{ it.l }}</span>
+              <sc-if value="{{ it.badge }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px 'Geist Mono',monospace;background:#C8F031;color:#0B0B0B;border-radius:10px;padding:1px 7px">{{ it.badge }}</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:#1C1C1C">
+      <div style="width:34px;height:34px;border-radius:50%;background:#F4F4F0;color:#0B0B0B;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">AG</div>
+      <div style="display:flex;flex-direction:column;gap:1px;font-size:13px"><span style="font-weight:600">Ana García</span><span style="color:#8A8A85;font-size:12px">Asesora · Huelva</span></div>
+    </div>
+  </aside>
+  <main style="display:flex;flex-direction:column;min-width:0;min-height:0">
+    <header style="height:64px;flex:none;display:flex;align-items:center;gap:16px;padding:0 28px">
+      <div style="flex:1;max-width:520px;display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 16px;border-radius:20px;background:#FFFFFF;color:#8A8A85;font-size:14px"><span>Buscar cliente, NIF, expediente o modelo…</span><span style="font:500 11px 'Geist Mono',monospace;color:#6A6A65">Ctrl K</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:18px;background:#FFFFFF;font-size:13px;color:#3C3C3C"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031;box-shadow:0 0 0 2px #0B0B0B inset"></span>Fichado 08:57 · <span style="font-family:'Geist Mono',monospace">3 h 12 min</span></div>
+        <div style="height:38px;padding:0 16px;border-radius:19px;background:#0B0B0B;color:#FFFFFF;display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;cursor:pointer"><span style="color:#C8F031;font-size:18px;line-height:1">+</span>Nuevo</div>
+      </div>
+    </header>
+    <div style="flex:1;min-height:0;padding:8px 28px 24px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#6A6A65">Miércoles, 4 de noviembre de 2026</span><h1 style="margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em">Buenos días, Ana</h1></div>
+        <span style="font-size:13px;color:#3C3C3C">Próximo plazo: <strong>20 nov</strong> · modelos mensuales</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px">
+        <div style="background:#C8F031;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:13px;font-weight:600">Asuntos para hoy</span>
+          <span style="font:600 30px/1.1 'Geist Mono',monospace;letter-spacing:-.03em">12</span>
+          <span style="font-size:12.5px">4 notificaciones · 5 documentos</span>
+        </div>
+        <sc-for list="{{ kpis3 }}" as="k" hint-placeholder-count="3">
+          <div style="background:#FFFFFF;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:13px;color:#6A6A65">{{ k.l }}</span>
+            <span style="font:600 30px/1.1 'Geist Mono',monospace;letter-spacing:-.03em">{{ k.v }}</span>
+            <span style="font-size:12.5px;color:#3C3C3C">{{ k.s }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px">
+        <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
+          <div style="background:#FFFFFF;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">Próximos plazos</span><span style="font-size:13px;color:#3C3C3C;text-decoration:underline">Calendario</span></div>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+              <sc-for list="{{ plazos }}" as="p" hint-placeholder-count="4">
+                <div style="border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:#F4F4F0">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px 'Geist Mono',monospace">{{ p.d }} <span style="font-size:11px;color:#6A6A65">{{ p.m }}</span></span><span style="font:500 11px 'Geist Mono',monospace;color:#3C3C3C">{{ p.left }}</span></div>
+                  <span style="font-size:13px;font-weight:600;line-height:1.3;text-wrap:pretty">{{ p.t }}</span>
+                  <span style="font-size:12px;color:#6A6A65">{{ p.s }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;background:#FFFFFF;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><span style="font-weight:700;font-size:15px">Expedientes abiertos</span><span style="font-size:13px;color:#3C3C3C;text-decoration:underline">Ver los 38</span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) minmax(0,1.2fr) 90px 130px;gap:12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9A9A94;padding:6px 0;border-bottom:1px solid #EDEDE8"><span>Ref.</span><span>Cliente</span><span>Trámite</span><span>Asesor</span><span>Estado</span></div>
+            <sc-for list="{{ expedientes }}" as="e" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) minmax(0,1.2fr) 90px 130px;gap:12px;align-items:center;font-size:13.5px;padding:9px 0;border-bottom:1px solid #F1F1EC">
+                <span style="font:500 12px 'Geist Mono',monospace;color:#6A6A65">{{ e.ref }}</span>
+                <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.cli }}</span>
+                <span style="color:#3C3C3C">{{ e.tram }}</span>
+                <span style="color:#3C3C3C">{{ e.resp }}</span>
+                <span style="justify-self:start;font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;background:{{ e.lbg }};color:{{ e.lfg }}">{{ e.estado }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
+          <div style="background:#FFFFFF;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><span style="font-weight:700;font-size:15px">Notificaciones AEAT · TGSS</span><span style="font:600 11px 'Geist Mono',monospace;background:#0B0B0B;color:#C8F031;border-radius:10px;padding:2px 8px">7 sin leer</span></div>
+            <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;align-items:start;padding:7px 0;border-top:1px solid #EDEDE8">
+                <span style="font:600 11px 'Geist Mono',monospace;text-align:center;padding:4px 0;border-radius:6px;background:#F4F4F0;color:#0B0B0B">{{ n.org }}</span>
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                  <span style="font-size:13.5px;font-weight:600">{{ n.tipo }}</span>
+                  <span style="font-size:12.5px;color:#6A6A65">{{ n.cli }}</span>
+                  <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#3C3C3C"><span style="width:7px;height:7px;border-radius:50%;background:{{ n.dot }}"></span>{{ n.plazo }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-height:0;background:#0B0B0B;color:#F4F4F0;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:4px;overflow:hidden">
+            <span style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;color:#C8F031;padding-bottom:6px">PORTAL DEL CLIENTE · EN DIRECTO</span>
+            <sc-for list="{{ actividad }}" as="a" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #222222;font-size:13px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong style="font-weight:600">{{ a.who }}</strong> <span style="color:#BDBDB7">{{ a.what }}</span></span><span style="font:500 11.5px 'Geist Mono',monospace;color:#8A8A85;white-space:nowrap">{{ a.t }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div></div>
+</div>
+<p class="dv-next">Prueba a pedir: "aplica <a class="dv-oid" href="#2a">2a</a> como base y empezamos con Clientes" · "en <a class="dv-oid" href="#2a">2a</a>, la barra superior negra como en <a class="dv-oid" href="#1c">1c</a>"</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">AG CLOUD · Escritorio principal del asesor · 3 direcciones con la paleta GA AGOPYME</span></div>
+<div class="dv-opts">
+
+<!-- 1a CLARO -->
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Claro · sidebar blanca, lima como estado activo</div>
+<div class="dv-card" style="width:1440px;height:900px;display:grid;grid-template-columns:248px minmax(0,1fr);background:#F4F4F0;color:#0B0B0B">
+  <aside style="background:#FFFFFF;border-right:1px solid #E6E6E0;display:flex;flex-direction:column;padding:20px 14px;gap:18px;min-height:0">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px">
+      <img src="assets/logo-ga.png" alt="GA" style="width:38px;height:38px;border-radius:50%;object-fit:cover"></img>
+      <div style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800;font-size:16px;letter-spacing:.04em">AG CLOUD</span><span style="font-size:11px;color:#7A7A75">por GA AGOPYME</span></div>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;background:#C8F031;font-weight:600;font-size:14px"><span style="width:6px;height:6px;border-radius:50%;background:#0B0B0B"></span>Escritorio</div>
+      <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9A9A94;padding:0 12px 4px">{{ g.label }}</div>
+          <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-radius:8px;font-size:14px;color:#3C3C3C;cursor:pointer" style-hover="background:#F3F3F3;color:#0B0B0B">
+              <span>{{ it.l }}</span>
+              <sc-if value="{{ it.badge }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px 'Geist Mono',monospace;background:#0B0B0B;color:#C8F031;border-radius:10px;padding:1px 7px">{{ it.badge }}</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:#F4F4F0">
+      <div style="width:34px;height:34px;border-radius:50%;background:#0B0B0B;color:#C8F031;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">AG</div>
+      <div style="display:flex;flex-direction:column;gap:1px;font-size:13px"><span style="font-weight:600">Ana García</span><span style="color:#7A7A75;font-size:12px">Asesora · Huelva</span></div>
+    </div>
+  </aside>
+  <main style="display:flex;flex-direction:column;min-width:0;min-height:0">
+    <header style="height:64px;flex:none;display:flex;align-items:center;gap:16px;padding:0 28px;border-bottom:1px solid #E6E6E0;background:#FFFFFF">
+      <div style="flex:1;max-width:520px;display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 14px;border-radius:10px;background:#F4F4F0;border:1px solid #E6E6E0;color:#8A8A85;font-size:14px"><span>Buscar cliente, NIF, expediente o modelo…</span><span style="font:500 11px 'Geist Mono',monospace;border:1px solid #DADAD4;border-radius:5px;padding:2px 6px;color:#6A6A65">Ctrl K</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:18px;border:1px solid #E6E6E0;font-size:13px;color:#3C3C3C"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031;box-shadow:0 0 0 2px #0B0B0B inset"></span>Fichado 08:57 · <span style="font-family:'Geist Mono',monospace">3 h 12 min</span></div>
+        <div style="height:38px;padding:0 16px;border-radius:10px;background:#0B0B0B;color:#FFFFFF;display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;cursor:pointer"><span style="color:#C8F031;font-size:18px;line-height:1">+</span>Nuevo</div>
+      </div>
+    </header>
+    <div style="flex:1;min-height:0;padding:24px 28px;display:flex;flex-direction:column;gap:20px;overflow:hidden">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#7A7A75">Miércoles, 4 de noviembre de 2026</span><h1 style="margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em">Buenos días, Ana</h1></div>
+        <span style="font-size:13px;color:#3C3C3C">Próximo plazo: <strong>20 nov</strong> · modelos mensuales</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+          <div style="background:#FFFFFF;border:1px solid #E6E6E0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:13px;color:#6A6A65">{{ k.l }}</span>
+            <span style="font:600 30px/1.1 'Geist Mono',monospace;letter-spacing:-.03em">{{ k.v }}</span>
+            <span style="font-size:12.5px;color:#3C3C3C">{{ k.s }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px">
+        <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
+          <div style="background:#FFFFFF;border:1px solid #E6E6E0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:15px">Próximos plazos</span><span style="font-size:13px;color:#3C3C3C;text-decoration:underline">Calendario</span></div>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+              <sc-for list="{{ plazos }}" as="p" hint-placeholder-count="4">
+                <div style="border:1px solid #E6E6E0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:#FBFBF8">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 20px 'Geist Mono',monospace">{{ p.d }} <span style="font-size:11px;color:#6A6A65">{{ p.m }}</span></span><span style="font:500 11px 'Geist Mono',monospace;color:#3C3C3C">{{ p.left }}</span></div>
+                  <span style="font-size:13px;font-weight:600;line-height:1.3;text-wrap:pretty">{{ p.t }}</span>
+                  <span style="font-size:12px;color:#6A6A65">{{ p.s }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;background:#FFFFFF;border:1px solid #E6E6E0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><span style="font-weight:600;font-size:15px">Expedientes abiertos</span><span style="font-size:13px;color:#3C3C3C;text-decoration:underline">Ver los 38</span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) minmax(0,1.2fr) 90px 130px;gap:12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9A9A94;padding:6px 0;border-bottom:1px solid #EDEDE8"><span>Ref.</span><span>Cliente</span><span>Trámite</span><span>Asesor</span><span>Estado</span></div>
+            <sc-for list="{{ expedientes }}" as="e" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) minmax(0,1.2fr) 90px 130px;gap:12px;align-items:center;font-size:13.5px;padding:9px 0;border-bottom:1px solid #F1F1EC">
+                <span style="font:500 12px 'Geist Mono',monospace;color:#6A6A65">{{ e.ref }}</span>
+                <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.cli }}</span>
+                <span style="color:#3C3C3C">{{ e.tram }}</span>
+                <span style="color:#3C3C3C">{{ e.resp }}</span>
+                <span style="justify-self:start;font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;background:{{ e.lbg }};color:{{ e.lfg }}">{{ e.estado }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
+          <div style="background:#FFFFFF;border:1px solid #E6E6E0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><span style="font-weight:600;font-size:15px">Notificaciones AEAT · TGSS</span><span style="font:600 11px 'Geist Mono',monospace;background:#0B0B0B;color:#C8F031;border-radius:10px;padding:2px 8px">7 sin leer</span></div>
+            <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;align-items:start;padding:7px 0;border-top:1px solid #F1F1EC">
+                <span style="font:600 11px 'Geist Mono',monospace;text-align:center;padding:4px 0;border-radius:6px;background:#F3F3F3;color:#0B0B0B">{{ n.org }}</span>
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                  <span style="font-size:13.5px;font-weight:600">{{ n.tipo }}</span>
+                  <span style="font-size:12.5px;color:#6A6A65">{{ n.cli }}</span>
+                  <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#3C3C3C"><span style="width:7px;height:7px;border-radius:50%;background:{{ n.dot }}"></span>{{ n.plazo }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-height:0;background:#FFFFFF;border:1px solid #E6E6E0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:4px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><span style="font-weight:600;font-size:15px">Actividad en el portal del cliente</span></div>
+            <sc-for list="{{ actividad }}" as="a" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #F1F1EC;font-size:13px"><span><strong style="font-weight:600">{{ a.who }}</strong> <span style="color:#3C3C3C">{{ a.what }}</span></span><span style="font:500 11.5px 'Geist Mono',monospace;color:#8A8A85;white-space:nowrap">{{ a.t }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div></div>
+
+<!-- 1b OSCURO -->
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Oscuro · negro de marca, cifras en lima, tabla protagonista</div>
+<div class="dv-card" style="width:1440px;height:900px;display:grid;grid-template-columns:232px minmax(0,1fr);background:#0B0B0B;color:#F4F4F0;border-color:#000">
+  <aside style="border-right:1px solid #1E1E1E;display:flex;flex-direction:column;padding:20px 12px;gap:18px;min-height:0">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+      <img src="assets/logo-ga.png" alt="GA" style="width:36px;height:36px;border-radius:50%;object-fit:cover;background:#fff"></img>
+      <span style="font-weight:800;font-size:16px;letter-spacing:.04em">AG <span style="color:#C8F031">CLOUD</span></span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:#1A1A1A;color:#C8F031;font-weight:600;font-size:14px;box-shadow:inset 3px 0 0 #C8F031">Escritorio</div>
+      <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="font:500 10.5px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#6E6E69;padding:0 12px 4px">{{ g.label }}</div>
+          <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-radius:8px;font-size:14px;color:#BDBDB7;cursor:pointer" style-hover="background:#161616;color:#FFFFFF">
+              <span>{{ it.l }}</span>
+              <sc-if value="{{ it.badge }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px 'Geist Mono',monospace;background:#C8F031;color:#0B0B0B;border-radius:10px;padding:1px 7px">{{ it.badge }}</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid #1E1E1E">
+      <div style="width:32px;height:32px;border-radius:50%;background:#C8F031;color:#0B0B0B;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">AG</div>
+      <div style="display:flex;flex-direction:column;gap:1px;font-size:13px"><span style="font-weight:600">Ana García</span><span style="color:#8A8A85;font-size:12px">Asesora</span></div>
+    </div>
+  </aside>
+  <main style="display:flex;flex-direction:column;min-width:0;min-height:0">
+    <header style="height:68px;flex:none;display:flex;align-items:center;gap:16px;padding:0 28px;border-bottom:1px solid #1E1E1E">
+      <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:20px;font-weight:700;letter-spacing:-.01em">Escritorio</span><span style="font:400 12px 'Geist Mono',monospace;color:#8A8A85">MIÉ 04.11.2026 · 12:09</span></div>
+      <div style="margin-left:auto;width:380px;display:flex;align-items:center;justify-content:space-between;height:38px;padding:0 14px;border-radius:9px;background:#141414;border:1px solid #242424;color:#7E7E79;font-size:13.5px"><span>Buscar en AG CLOUD…</span><span style="font:500 11px 'Geist Mono',monospace;color:#8A8A85">Ctrl K</span></div>
+      <div style="height:38px;padding:0 14px;border-radius:9px;border:1px solid #242424;display:flex;align-items:center;gap:8px;font-size:13px;color:#D0D0CA"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031"></span>08:57 · <span style="font-family:'Geist Mono',monospace">3:12</span></div>
+      <div style="height:38px;padding:0 16px;border-radius:9px;background:#C8F031;color:#0B0B0B;display:flex;align-items:center;font-weight:700;font-size:14px;cursor:pointer">+ Nuevo</div>
+    </header>
+    <div style="flex:1;min-height:0;padding:22px 28px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #1E1E1E;border-radius:14px;background:#111111">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+          <div style="padding:18px 20px;display:flex;flex-direction:column;gap:8px;border-right:1px solid #1E1E1E">
+            <span style="font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#8A8A85">{{ k.l }}</span>
+            <span style="font:500 40px/1 'Geist Mono',monospace;letter-spacing:-.04em;color:#C8F031">{{ k.v }}</span>
+            <span style="font-size:13px;color:#BDBDB7">{{ k.s }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px">
+        <div style="display:flex;flex-direction:column;gap:18px;min-height:0">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:15px">Próximos plazos</span><span style="font:500 12px 'Geist Mono',monospace;color:#8A8A85">NOV — DIC 2026</span></div>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+              <sc-for list="{{ plazos }}" as="p" hint-placeholder-count="4">
+                <div style="background:#141414;border:1px solid #222222;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13px 'Geist Mono',monospace;color:#F4F4F0">{{ p.d }} {{ p.m }}</span><span style="font:500 11px 'Geist Mono',monospace;color:#0B0B0B;background:#C8F031;border-radius:5px;padding:2px 6px">{{ p.left }}</span></div>
+                  <span style="font-size:13.5px;font-weight:600;line-height:1.3;text-wrap:pretty">{{ p.t }}</span>
+                  <span style="font-size:12px;color:#8A8A85">{{ p.s }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;background:#111111;border:1px solid #1E1E1E;border-radius:14px;padding:16px 20px;display:flex;flex-direction:column;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px">
+              <span style="font-weight:600;font-size:15px">Expedientes abiertos</span>
+              <div style="display:flex;gap:6px;font-size:12.5px">
+                <span style="padding:4px 10px;border-radius:7px;background:#F4F4F0;color:#0B0B0B;font-weight:600">Todos 38</span>
+                <span style="padding:4px 10px;border-radius:7px;border:1px solid #262626;color:#BDBDB7">Míos 14</span>
+                <span style="padding:4px 10px;border-radius:7px;border:1px solid #262626;color:#BDBDB7">Esperando cliente 9</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:130px minmax(0,1.4fr) minmax(0,1.2fr) 100px 140px;gap:12px;font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;text-transform:uppercase;color:#6E6E69;padding:8px 0;border-bottom:1px solid #222"><span>Ref.</span><span>Cliente</span><span>Trámite</span><span>Asesor</span><span>Estado</span></div>
+            <sc-for list="{{ expedientes }}" as="e" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:130px minmax(0,1.4fr) minmax(0,1.2fr) 100px 140px;gap:12px;align-items:center;font-size:13.5px;padding:11px 0;border-bottom:1px solid #1A1A1A">
+                <span style="font:500 12px 'Geist Mono',monospace;color:#8A8A85">{{ e.ref }}</span>
+                <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.cli }}</span>
+                <span style="color:#BDBDB7">{{ e.tram }}</span>
+                <span style="color:#BDBDB7">{{ e.resp }}</span>
+                <span style="justify-self:start;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px;background:{{ e.dbg }};color:{{ e.dfg }}">{{ e.estado }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:18px;min-height:0">
+          <div style="background:#111111;border:1px solid #1E1E1E;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600;font-size:15px">Notificaciones</span><span style="font:500 12px 'Geist Mono',monospace;color:#C8F031">7 SIN LEER</span></div>
+            <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:3px;padding:9px 12px;border-radius:10px;background:#161616;border:1px solid #202020">
+                <div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 11px 'Geist Mono',monospace;color:#F4F4F0;letter-spacing:.04em">{{ n.org }}</span><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#BDBDB7"><span style="width:7px;height:7px;border-radius:50%;background:{{ n.dot }}"></span>{{ n.plazo }}</span></div>
+                <span style="font-size:13.5px;font-weight:600">{{ n.tipo }}</span>
+                <span style="font-size:12.5px;color:#8A8A85">{{ n.cli }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-height:0;border:1px solid #1E1E1E;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+            <span style="font-weight:600;font-size:15px;padding-bottom:4px">Portal del cliente</span>
+            <sc-for list="{{ actividad }}" as="a" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #1A1A1A;font-size:13px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong style="font-weight:600">{{ a.who }}</strong> <span style="color:#BDBDB7">{{ a.what }}</span></span><span style="font:400 11.5px 'Geist Mono',monospace;color:#6E6E69;white-space:nowrap">{{ a.t }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div></div>
+
+<!-- 1c HÍBRIDO -->
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Híbrido · barra superior negra, foco «Hoy» en lima, expedientes en tablero</div>
+<div class="dv-card" style="width:1440px;height:900px;display:flex;flex-direction:column;background:#F4F4F0;color:#0B0B0B">
+  <header style="flex:none;background:#0B0B0B;color:#F4F4F0;display:flex;flex-direction:column">
+    <div style="height:60px;display:flex;align-items:center;gap:18px;padding:0 28px">
+      <img src="assets/logo-ga.png" alt="GA" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:#fff"></img>
+      <span style="font-weight:800;font-size:16px;letter-spacing:.04em">AG CLOUD</span>
+      <div style="margin-left:24px;width:440px;display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 14px;border-radius:18px;background:#1C1C1C;color:#8A8A85;font-size:13.5px"><span>Buscar cliente, NIF o expediente…</span><span style="font:500 11px 'Geist Mono',monospace">Ctrl K</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:13px">
+        <span style="display:flex;align-items:center;gap:8px;color:#D0D0CA"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031"></span>Fichado · <span style="font-family:'Geist Mono',monospace">3 h 12 min</span></span>
+        <span style="display:flex;align-items:center;gap:6px;color:#D0D0CA">Avisos <span style="font:600 11px 'Geist Mono',monospace;background:#C8F031;color:#0B0B0B;border-radius:10px;padding:1px 7px">7</span></span>
+        <div style="width:32px;height:32px;border-radius:50%;background:#F4F4F0;color:#0B0B0B;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">AG</div>
+      </div>
+    </div>
+    <nav style="height:46px;display:flex;align-items:stretch;gap:4px;padding:0 20px;border-top:1px solid #1E1E1E;font-size:13.5px">
+      <span style="display:flex;align-items:center;padding:0 12px;color:#FFFFFF;font-weight:600;box-shadow:inset 0 -3px 0 #C8F031">Escritorio</span>
+      <sc-for list="{{ topNav }}" as="t" hint-placeholder-count="9">
+        <span style="display:flex;align-items:center;padding:0 12px;color:#A8A8A2;cursor:pointer" style-hover="color:#FFFFFF">{{ t }}</span>
+      </sc-for>
+      <span style="display:flex;align-items:center;padding:0 12px;color:#A8A8A2">Más ▾</span>
+    </nav>
+  </header>
+  <div style="flex:1;min-height:0;padding:24px 28px;display:grid;grid-template-columns:400px minmax(0,1fr) 340px;gap:18px;overflow:hidden">
+    <div style="display:flex;flex-direction:column;gap:18px;min-height:0">
+      <div style="background:#C8F031;border-radius:18px;padding:22px 24px;display:flex;flex-direction:column;gap:14px">
+        <span style="font-size:13px;font-weight:600">Miércoles, 4 de noviembre</span>
+        <div style="display:flex;align-items:flex-end;gap:14px"><span style="font:600 96px/0.85 'Geist Mono',monospace;letter-spacing:-.06em">12</span><span style="font-size:22px;font-weight:700;line-height:1.15;letter-spacing:-.01em;padding-bottom:4px">asuntos para hoy, Ana</span></div>
+        <div style="display:flex;flex-direction:column;border-top:1px solid rgba(11,11,11,.25)">
+          <sc-for list="{{ hoy }}" as="h" hint-placeholder-count="4">
+            <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(11,11,11,.25);font-size:14px"><span>{{ h.l }}</span><span style="font:600 14px 'Geist Mono',monospace">{{ h.v }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex:1;min-height:0;background:#0B0B0B;color:#F4F4F0;border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:12px">
+        <span style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;color:#C8F031">ADAPTACIÓN VERIFACTU 2027</span>
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 40px/1 'Geist Mono',monospace;letter-spacing:-.04em">37</span><span style="font-size:15px;color:#BDBDB7">de 120 clientes listos</span></div>
+        <div style="height:10px;border-radius:5px;background:#262626;overflow:hidden"><div style="width:31%;height:100%;background:#C8F031;border-radius:5px"></div></div>
+        <span style="font-size:13px;color:#BDBDB7;line-height:1.45">Sociedades obligadas desde el 1 de enero; autónomos desde el 1 de julio.</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;min-height:0">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:20px;font-weight:700;letter-spacing:-.01em">Expedientes</span><span style="font-size:13px;color:#3C3C3C">38 abiertos · <span style="text-decoration:underline">Ver todos</span></span></div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+        <sc-for list="{{ kanban }}" as="col" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:8px;background:#EAEAE5;border-radius:14px;padding:10px;min-height:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 4px"><span style="font-size:12.5px;font-weight:700">{{ col.estado }}</span><span style="font:600 11px 'Geist Mono',monospace;color:#3C3C3C">{{ col.n }}</span></div>
+            <sc-for list="{{ col.items }}" as="e" hint-placeholder-count="2">
+              <div style="background:#FFFFFF;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                <span style="font:500 11px 'Geist Mono',monospace;color:#6A6A65">{{ e.ref }}</span>
+                <span style="font-size:13.5px;font-weight:600;line-height:1.3">{{ e.tram }}</span>
+                <span style="font-size:12.5px;color:#3C3C3C">{{ e.cli }}</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:4px"><span style="width:22px;height:22px;border-radius:50%;background:#0B0B0B;color:#C8F031;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ e.ini }}</span><span style="font:500 11px 'Geist Mono',monospace;color:#6A6A65">{{ e.when }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-height:0">
+      <div style="background:#FFFFFF;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:15px;font-weight:700;padding-bottom:8px">Plazos</span>
+        <sc-for list="{{ plazos }}" as="p" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid #EDEDE8">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;background:#F4F4F0;height:44px"><span style="font:600 16px/1 'Geist Mono',monospace">{{ p.d }}</span><span style="font:500 9.5px 'Geist Mono',monospace;color:#6A6A65">{{ p.m }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:600;line-height:1.3">{{ p.t }}</span><span style="font-size:12px;color:#6A6A65">{{ p.s }} · {{ p.left }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-height:0;background:#FFFFFF;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:2px;overflow:hidden">
+        <span style="font-size:15px;font-weight:700;padding-bottom:8px">Notificaciones</span>
+        <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4">
+          <div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #EDEDE8">
+            <span style="width:7px;height:7px;flex:none;margin-top:6px;border-radius:50%;background:{{ n.dot }}"></span>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:600"><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#6A6A65">{{ n.org }}</span> · {{ n.tipo }}</span><span style="font-size:12px;color:#6A6A65">{{ n.cli }} · {{ n.plazo }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Prueba a pedir: "me quedo con <a class="dv-oid" href="#1c">1c</a> pero con la sidebar de <a class="dv-oid" href="#1a">1a</a>" · "pasa <a class="dv-oid" href="#1a">1a</a> a modo oscuro" · "empezamos con el módulo de Clientes"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const chips = {
+      'En curso': { lbg: '#E6F6A8', lfg: '#2E3A00', dbg: 'rgba(200,240,49,.14)', dfg: '#C8F031' },
+      'Esperando cliente': { lbg: '#FCEBCB', lfg: '#6E4300', dbg: 'rgba(245,165,36,.16)', dfg: '#F5B544' },
+      'Revisión': { lbg: '#ECECE7', lfg: '#3C3C3C', dbg: '#262626', dfg: '#D0D0CA' },
+      'Presentado': { lbg: '#0B0B0B', lfg: '#C8F031', dbg: '#C8F031', dfg: '#0B0B0B' }
+    };
+    const expedientes = [
+      { ref: 'EXP-2026-0412', cli: 'Construcciones Doñana SL', tram: 'Constitución de SL', resp: 'Ana G.', ini: 'AG', when: 'Notaría 7 nov', estado: 'En curso' },
+      { ref: 'EXP-2026-0409', cli: 'Youssef El Amrani', tram: 'Arraigo sociolaboral', resp: 'Lucía M.', ini: 'LM', when: 'Falta contrato', estado: 'Esperando cliente' },
+      { ref: 'EXP-2026-0405', cli: 'Pedro Gil Romero', tram: 'Transferencia DGT', resp: 'Javier R.', ini: 'JR', when: 'Ayer', estado: 'Presentado' },
+      { ref: 'EXP-2026-0398', cli: 'Clínica Dental Costa SL', tram: 'Subvención Kit Digital', resp: 'Ana G.', ini: 'AG', when: 'Hoy', estado: 'Revisión' },
+      { ref: 'EXP-2026-0391', cli: 'Laura Méndez Ortiz', tram: 'Alta en RETA', resp: 'Lucía M.', ini: 'LM', when: '2 nov', estado: 'Presentado' }
+    ].map(e => ({ ...e, ...chips[e.estado] }));
+    const order = ['En curso', 'Esperando cliente', 'Revisión', 'Presentado'];
+    const counts = { 'En curso': 17, 'Esperando cliente': 9, 'Revisión': 5, 'Presentado': 7 };
+    return {
+      navGroups: [
+        { label: 'Gestión', items: [{ l: 'Clientes' }, { l: 'Expedientes' }, { l: 'Calendario' }, { l: 'Tareas y horario' }] },
+        { label: 'Áreas', items: [{ l: 'Contabilidad' }, { l: 'Fiscal' }, { l: 'Laboral y SS' }, { l: 'Facturación' }] },
+        { label: 'Comunicación', items: [{ l: 'Notificaciones', badge: 7 }, { l: 'Documentos' }, { l: 'Portal del cliente' }] },
+        { label: 'Análisis', items: [{ l: 'Informes' }] }
+      ],
+      topNav: ['Clientes', 'Contabilidad', 'Fiscal', 'Laboral y SS', 'Facturación', 'Documentos', 'Expedientes', 'Calendario', 'Portal del cliente'],
+      kpis: [
+        { l: 'Clientes activos', v: '1.240', s: '+18 este mes' },
+        { l: 'Modelos por presentar', v: '64', s: 'Plazo 20 de noviembre' },
+        { l: 'Notificaciones sin leer', v: '7', s: '2 requerimientos de AEAT' },
+        { l: 'Expedientes abiertos', v: '38', s: '9 esperando al cliente' }
+      ],
+      plazos: [
+        { d: '20', m: 'NOV', t: 'Modelos 303, 111 y 115 mensuales', s: 'Octubre · 41 clientes', left: '16 días' },
+        { d: '30', m: 'NOV', t: 'Seguros sociales de octubre', s: '212 trabajadores', left: '26 días' },
+        { d: '30', m: 'NOV', t: 'Cierre de nóminas de noviembre', s: '58 empresas', left: '26 días' },
+        { d: '20', m: 'DIC', t: 'Modelo 202, tercer pago fraccionado', s: '96 sociedades', left: '46 días' }
+      ],
+      notifs: [
+        { org: 'AEAT', tipo: 'Requerimiento de información', cli: 'Hnos. Ruiz Panadería SL', plazo: '10 días hábiles', dot: '#E5484D' },
+        { org: 'TGSS', tipo: 'Reclamación de deuda', cli: 'Marta López Vega', plazo: 'Hasta el 30 nov', dot: '#F5A524' },
+        { org: 'AEAT', tipo: 'Comunicación de inicio · IVA 2T', cli: 'Talleres Odiel SL', plazo: '10 días hábiles', dot: '#E5484D' },
+        { org: 'DEHú', tipo: 'Notificación pendiente de abrir', cli: 'Café Las Colonias SL', plazo: 'Caduca en 4 días', dot: '#F5A524' }
+      ],
+      actividad: [
+        { who: 'Marta López', what: 'subió 12 facturas de octubre', t: 'hace 8 min' },
+        { who: 'Talleres Odiel SL', what: 'descargó las nóminas de octubre', t: 'hace 25 min' },
+        { who: 'Café Las Colonias SL', what: 'envió 3 tickets por WhatsApp', t: 'hace 1 h' },
+        { who: 'Laura Méndez', what: 'completó sus datos de alta', t: 'hace 2 h' }
+      ],
+      hoy: [
+        { l: 'Notificaciones por revisar', v: '4' },
+        { l: 'Documentos nuevos de clientes', v: '5' },
+        { l: 'Tareas asignadas', v: '2' },
+        { l: 'Citas', v: '1' }
+      ],
+      kpis3: [
+        { l: 'Clientes activos', v: '1.240', s: '+18 este mes' },
+        { l: 'Modelos por presentar', v: '64', s: 'Plazo 20 de noviembre' },
+        { l: 'Expedientes abiertos', v: '38', s: '9 esperando al cliente' }
+      ],
+      expedientes,
+      kanban: order.map(s => ({ estado: s, n: counts[s], items: expedientes.filter(e => e.estado === s) }))
+    };
+  }
+}
+</script>
+</body>
+</html>
