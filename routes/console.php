@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Schedule;
 | (ver docs/DESPLIEGUE-HOSTINGER.md)
 */
 
+// Despliegue automático: si GitHub ha traído una versión nueva, aplica migraciones
+Schedule::command('agcloud:aplicar-version')->everyMinute()->withoutOverlapping(10);
+
 // Copia de seguridad diaria a las 03:15 (hora de Madrid)
 Schedule::command('agcloud:backup')->dailyAt('03:15')->timezone('Europe/Madrid')->withoutOverlapping(120);
 
