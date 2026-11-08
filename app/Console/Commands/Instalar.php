@@ -33,7 +33,12 @@ class Instalar extends Command
                 return self::FAILURE;
             }
             $k = AlmacenDocumentos::generarClave();
-            file_put_contents($env, rtrim(file_get_contents($env))."\nDOCS_KEY=$k\n");
+            $txt = (string) file_get_contents($env);
+            // Rellena la línea DOCS_KEY= existente (si la añadiéramos debajo, ganaría la vacía)
+            $txt = preg_match('/^DOCS_KEY=.*$/m', $txt)
+                ? preg_replace('/^DOCS_KEY=.*$/m', 'DOCS_KEY='.$k, $txt, 1)
+                : rtrim($txt)."\nDOCS_KEY=$k\n";
+            file_put_contents($env, $txt);
             config(['app.docs_key' => $k]);
             $this->warn('Se ha generado DOCS_KEY en el .env. GUÁRDALA FUERA DEL SERVIDOR (gestor de contraseñas): sin ella los documentos no se pueden recuperar.');
         } else {

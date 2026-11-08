@@ -17,7 +17,7 @@ header('X-Frame-Options: DENY');
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex');
 
-if (empty($_SERVER['HTTPS']) && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') !== 'https' && ($_SERVER['HTTP_HOST'] ?? '') !== '127.0.0.1:8123') {
+if (empty($_SERVER['HTTPS']) && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') !== 'https' && ! in_array(strtok((string) ($_SERVER['HTTP_HOST'] ?? ''), ':'), ['127.0.0.1', 'localhost'], true)) {
     header('Location: https://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'], true, 301);
     exit;
 }

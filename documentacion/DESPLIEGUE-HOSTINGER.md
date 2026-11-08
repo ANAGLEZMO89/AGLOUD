@@ -1,5 +1,7 @@
 # Cómo subir AG Cloud a Hostinger (paso a paso)
 
+> **¿Sin experiencia con terminal?** Usa el camino fácil: [`SUBIR-SIN-SSH.md`](SUBIR-SIN-SSH.md) (ZIP + instalador desde el navegador).
+
 Guía pensada para hacerla tú desde hPanel, sin conocimientos técnicos. Tiempo estimado: **1 hora** la primera vez.
 
 > **Antes de empezar, ten a mano:**
@@ -221,7 +223,9 @@ Hace una copia previa, pone la web en mantenimiento un minuto, descarga los camb
 
 ---
 
-## Plan B · Si tu plan no tiene SSH
+## Plan B · Sin SSH
+
+Usa la guía [`SUBIR-SIN-SSH.md`](SUBIR-SIN-SSH.md) con el ZIP preparado y el instalador web. Lo de abajo es la versión manual.
 
 Se puede, pero es menos limpio: todo el proyecto queda dentro de la carpeta pública, protegido por un `.htaccess`.
 
