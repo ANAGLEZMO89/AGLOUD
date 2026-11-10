@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Versión desplegada (archivo VERSION): sirve también para refrescar CSS y JS en los navegadores
+    'version' => is_file(base_path('VERSION')) ? substr(preg_replace('/[^A-Za-z0-9._-]/', '', (string) file_get_contents(base_path('VERSION'))), 0, 40) : '1',
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

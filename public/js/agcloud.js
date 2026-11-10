@@ -212,6 +212,66 @@
     });
   }
 
+
+  // ---------- Notificaciones: registrar (plantillas) ----------
+  var nf = $('[data-notif-form]');
+  if (nf) {
+    var tipos = []; try { tipos = JSON.parse(nf.getAttribute('data-tipos') || '[]'); } catch (e) {}
+    var pl = $('[data-plantilla]', nf);
+    on(pl, 'change', function () {
+      var t = tipos[parseInt(pl.value, 10)];
+      if (!t) { var ti = $('[data-f="2"]', nf); ti.value = ''; ti.focus(); return; }
+      $$('[data-f]', nf).forEach(function (el) { var k = parseInt(el.getAttribute('data-f'), 10); el.value = t[k] == null ? '' : t[k]; });
+    });
+    var ab = $('[data-abierta]', nf), acc = $('[data-acceso]', nf);
+    on(ab, 'change', function () { acc.classList.toggle('hidden', !ab.checked); });
+  }
+
+  // ---------- Avisos en este navegador ----------
+  var navOn = function () { try { return localStorage.getItem('agcloud.avisosNav') === '1'; } catch (e) { return false; } };
+  var cbNav = $('[data-avisos-nav]'), perm = $('[data-avisos-perm]');
+  var permTxt = function () {
+    if (!perm) return;
+    perm.textContent = !window.Notification ? 'Este navegador no admite avisos.' : Notification.permission === 'granted' ? 'Permiso concedido en este navegador.' : Notification.permission === 'denied' ? 'Bloqueados en el navegador. Actívalos desde el candado de la barra de direcciones.' : 'El navegador pedirá permiso al activarlos.';
+  };
+  if (cbNav) {
+    cbNav.checked = navOn() && !!window.Notification && Notification.permission === 'granted';
+    permTxt();
+    on(cbNav, 'change', function () {
+      var save = function (ok) { try { localStorage.setItem('agcloud.avisosNav', ok ? '1' : '0'); } catch (e) {} cbNav.checked = ok; permTxt(); };
+      if (!cbNav.checked || !window.Notification) return save(false);
+      if (Notification.permission === 'granted') return save(true);
+      try { Notification.requestPermission().then(function (p) { save(p === 'granted'); }); } catch (e) { save(false); }
+    });
+  }
+  var mt = document.querySelector('meta[name="agc-caducan"]');
+  if (mt && navOn() && window.Notification && Notification.permission === 'granted') {
+    var nCad = parseInt(mt.getAttribute('content'), 10) || 0, hoyIso = new Date().toISOString().slice(0, 10), ult = '';
+    try { ult = localStorage.getItem('agcloud.avisosUlt') || ''; } catch (e) {}
+    if (nCad > 0 && ult !== hoyIso) {
+      try { new Notification('AG Cloud · Notificaciones', { body: nCad + (nCad === 1 ? ' notificación sin abrir caduca' : ' notificaciones sin abrir caducan') + ' en los próximos días.' }); localStorage.setItem('agcloud.avisosUlt', hoyIso); } catch (e) {}
+    }
+  }
+
+  // ---------- Expedientes: vista previa de la plantilla ----------
+  var ef = $('[data-exp-form]');
+  if (ef) {
+    var tpl = {}; try { tpl = JSON.parse(ef.getAttribute('data-tpl') || '{}'); } catch (e) {}
+    var stp = $('[data-exp-tpl]', ef), hon = $('[data-exp-hon]', ef);
+    var pinta = function (cambiaHon) {
+      var t = tpl[stp.value]; if (!t) return;
+      $('[data-prev-cat]', ef).textContent = 'PLANTILLA · ' + t.cat;
+      $('[data-prev-hon]', ef).textContent = eu(t.hon).replace(',00', '') + ' €';
+      var ul = $('[data-prev-pasos]', ef);
+      while (ul.firstChild) ul.removeChild(ul.firstChild);
+      t.pasos.forEach(function (p) { var d = document.createElement('div'); d.className = 'prev-paso'; d.appendChild(document.createElement('span')); d.appendChild(document.createTextNode(p)); ul.appendChild(d); });
+      $('[data-prev-docs]', ef).textContent = 'Se pedirá al cliente: ' + (t.docs.length ? t.docs.join(', ') : 'nada por ahora');
+      if (cambiaHon && hon) hon.value = eu(t.hon);
+    };
+    on(stp, 'change', function () { pinta(true); });
+    pinta(false);
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

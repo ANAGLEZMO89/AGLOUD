@@ -49,6 +49,16 @@ class Cliente extends Model
         });
     }
 
+    public function expedientes(): HasMany
+    {
+        return $this->hasMany(Expediente::class);
+    }
+
+    public function notificaciones(): HasMany
+    {
+        return $this->hasMany(Notificacion::class);
+    }
+
     public function asesor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'asesor_id');

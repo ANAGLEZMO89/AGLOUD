@@ -4,8 +4,11 @@ namespace Database\Seeders;
 
 use App\Models\Cliente;
 use App\Models\Documento;
+use App\Models\Expediente;
+use App\Models\Notificacion;
 use App\Models\User;
 use App\Services\AlmacenDocumentos;
+use App\Support\Plazos;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
@@ -64,6 +67,26 @@ class DemoSeeder extends Seeder
         $doc($cafe, 'contable/recibidas', 'fra', '20261103_fra_endesa-octubre.pdf', '2026-11-03', ['origen' => 'Portal del cliente', 'por_revisar' => true, 'subido_por' => $cli->id]);
         $doc($cafe, 'laboral/nominas', 'nom', '20261031_nom_octubre-pedro.pdf', '2026-10-31', ['origen' => 'Portal del cliente', 'compartido' => true, 'por_revisar' => true, 'subido_por' => $emp->id]);
         $doc($trans, 'fiscal/modelos', 'mod', '20261020_mod_303-3t-2026_transportes.pdf', '2026-10-20');
+
+        // Notificaciones y expedientes de prueba (fase 2)
+        $hoy = Plazos::hoy();
+        foreach ([[$cafe, 0, 2, null], [$cafe, 1, 8, null], [$trans, 3, 6, 1], [$trans, 8, 15, null], [$cafe, 6, 4, 2]] as [$cl, $t, $hace, $abierta]) {
+            $tp = config('agcloud.tipos_notificacion')[$t];
+            $n = new Notificacion(['cliente_id' => $cl->id, 'organismo' => $tp[0], 'canal' => $tp[1], 'tipo' => $tp[2], 'asunto' => 'Prueba · '.$tp[2], 'referencia' => 'CSV DEMO'.$t.$hace, 'puesta' => $hoy->subDays($hace)->toDateString(), 'plazo_n' => $tp[3], 'plazo_tipo' => $tp[4], 'accion' => $tp[5], 'responsable_id' => $cl->asesor_id]);
+            if ($abierta) {
+                $n->estado = 'Aceptada';
+                $n->acceso = $hoy->subDays($abierta)->toDateString();
+            }
+            $n->recalcular();
+            $n->save();
+        }
+        Notificacion::aplicarCaducidad();
+        foreach ([[$cafe, 'Requerimiento AEAT', 'En curso', 9, 2, 1], [$trans, 'Transferencia DGT', 'Esperando cliente', 20, 1, 0], [$cafe, 'Alta en RETA', 'Presentado', null, 4, 3], [$trans, 'Subvención para pymes', 'Abierto', 40, 0, 0]] as [$cl, $tr, $est, $dias, $hechos, $dok]) {
+            $t = config('agcloud.plantillas_expediente')[$tr];
+            $e = Expediente::create(['cliente_id' => $cl->id, 'ref' => Expediente::siguienteRef(), 'tramite' => $tr, 'categoria' => $t['cat'], 'responsable_id' => $cl->asesor_id, 'estado' => $est, 'apertura' => $hoy->subDays(12)->toDateString(), 'plazo' => $dias ? $hoy->addDays($dias)->toDateString() : null,
+                'pasos' => array_map(fn ($l, $i) => ['l' => $l, 'ok' => $i < $hechos], $t['pasos'], array_keys($t['pasos'])), 'docs' => array_map(fn ($l, $i) => ['l' => $l, 'ok' => $i < $dok], $t['docs'], array_keys($t['docs'])), 'honorarios' => $t['hon']]);
+            $e->evento('Expediente abierto (datos de prueba)');
+        }
 
         $this->command?->info('Datos de prueba creados. Contraseña de todos los usuarios: '.$pass);
     }

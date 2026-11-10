@@ -92,7 +92,7 @@ class ClienteController extends Controller
         $tab = (string) $request->query('tab', 'resumen');
         $docs = $c->documentos()->gestor()->vivos()->orderByDesc('fecha')->orderBy('nombre');
         $nDocs = (clone $docs)->count();
-        $tabs = [['resumen', 'Resumen', null], ['datos', 'Datos fiscales', null], ['obl', 'Obligaciones', null], ['trab', 'Trabajadores', null], ['docs', 'Documentos', $nDocs ?: null], ['exp', 'Expedientes', null], ['alta', 'Datos de alta', null], ['accesos', 'Accesos al portal', $c->usuarios()->count() ?: null]];
+        $tabs = [['resumen', 'Resumen', null], ['datos', 'Datos fiscales', null], ['obl', 'Obligaciones', null], ['trab', 'Trabajadores', null], ['docs', 'Documentos', $nDocs ?: null], ['exp', 'Expedientes', $c->expedientes()->where('estado', '!=', 'Cerrado')->count() ?: null], ['alta', 'Datos de alta', null], ['accesos', 'Accesos al portal', $c->usuarios()->count() ?: null]];
 
         $actividad = AuditLog::where('cliente_id', $c->id)->with('user')->latest('created_at')->limit(6)->get();
 
@@ -101,6 +101,7 @@ class ClienteController extends Controller
             'docs' => $tab === 'docs' ? $docs->limit(200)->get() : collect(),
             'porRevisar' => $c->documentos()->gestor()->vivos()->where('por_revisar', true)->orderByDesc('created_at')->limit(5)->get(),
             'actividad' => $actividad,
+            'expedientes' => $tab === 'exp' ? $c->expedientes()->with('responsable')->orderByRaw("estado = 'Cerrado'")->orderByDesc('id')->get() : collect(),
             'usuarios' => $tab === 'accesos' ? $c->usuarios()->orderBy('name')->get() : collect(),
             'nRevisar' => EscritorioController::nRevisar(),
         ];

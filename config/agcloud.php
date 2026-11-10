@@ -87,6 +87,7 @@ return [
     'menu' => [
         ['label' => 'Gestión', 'items' => [
             ['clientes', 'Clientes', 'clientes.index'],
+            ['expedientes', 'Expedientes', 'expedientes.index'],
             ['proveedores', 'Proveedores', null],
             ['acreedores', 'Acreedores', null],
             ['calendario', 'Calendario', null],
@@ -101,7 +102,7 @@ return [
             ['horario', 'Control horario', null],
         ]],
         ['label' => 'Comunicación', 'items' => [
-            ['notificaciones', 'Notificaciones', null],
+            ['notificaciones', 'Notificaciones', 'notificaciones.index'],
             ['documentos', 'Documentos', 'documentos.index'],
             ['portal', 'Portal del cliente', null],
         ]],
@@ -127,6 +128,70 @@ return [
         ['label' => 'Comunicación', 'items' => [
             ['pt_msgs', 'Mi asesor', null],
         ]],
+    ],
+
+    // ---------------- Fase 2 · Notificaciones ----------------
+    'organismos' => [
+        'AEAT' => 'Agencia Tributaria',
+        'TGSS' => 'Tesorería General de la Seguridad Social',
+        'DGT' => 'Dirección General de Tráfico',
+        'SEPE' => 'Servicio Público de Empleo Estatal',
+        'JA' => 'Junta de Andalucía',
+        'AYTO' => 'Ayuntamiento',
+        'OTRO' => 'Otro organismo',
+    ],
+    'organismos_url' => [
+        'AEAT' => 'https://sede.agenciatributaria.gob.es/Sede/notificaciones.html',
+        'TGSS' => 'https://sede.seg-social.gob.es/',
+        'DGT' => 'https://dehu.redsara.es/',
+        'SEPE' => 'https://dehu.redsara.es/',
+        'JA' => 'https://dehu.redsara.es/',
+        'AYTO' => 'https://dehu.redsara.es/',
+        'OTRO' => 'https://dehu.redsara.es/',
+    ],
+    'canales' => ['Sede AEAT', 'Sede TGSS', 'DEHú', 'Correo postal', 'Otro'],
+    // Plantillas de notificación (NT_TPL del prototipo): [organismo, canal, tipo, plazo número, h|m|n, acción]
+    'tipos_notificacion' => [
+        ['AEAT', 'Sede AEAT', 'Requerimiento de información', 10, 'h', 'Requerimiento'],
+        ['AEAT', 'Sede AEAT', 'Comunicación de inicio de comprobación limitada', 10, 'h', 'Alegaciones'],
+        ['AEAT', 'Sede AEAT', 'Propuesta de liquidación provisional', 10, 'h', 'Alegaciones'],
+        ['AEAT', 'Sede AEAT', 'Providencia de apremio', 1, 'm', 'Recurso de reposición'],
+        ['AEAT', 'Sede AEAT', 'Acuerdo de devolución', 1, 'm', 'Recurso de reposición'],
+        ['TGSS', 'Sede TGSS', 'Reclamación de deuda', 1, 'm', 'Recurso de alzada'],
+        ['TGSS', 'DEHú', 'Resolución de alta de oficio', 1, 'm', 'Recurso de alzada'],
+        ['TGSS', 'Sede TGSS', 'Comunicación informativa', 0, 'n', ''],
+        ['DGT', 'DEHú', 'Notificación de denuncia', 20, 'n', 'Identificar conductor o alegar'],
+        ['SEPE', 'DEHú', 'Requerimiento de documentación', 10, 'h', 'Requerimiento'],
+        ['AYTO', 'DEHú', 'Liquidación de tasa', 1, 'm', 'Recurso de reposición'],
+        ['JA', 'DEHú', 'Resolución de subvención', 1, 'm', 'Recurso de alzada'],
+    ],
+    // Comunidad autónoma para los festivos autonómicos fijos (AN = Andalucía: 28-F y Jueves Santo)
+    'comunidad' => env('FESTIVOS_COMUNIDAD', 'AN'),
+    // Festivos además de los nacionales (que se calculan solos). Formato AAAA-MM-DD, separados por comas.
+    // Ej.: autonómicos de Andalucía y locales de Huelva. Revísalos cada año.
+    'festivos_extra' => array_filter(array_map('trim', explode(',', (string) env('FESTIVOS_EXTRA', '')))),
+    // Avisar cuando falten estos días para que caduque una notificación sin abrir
+    'avisar_dias' => (int) env('NOTIF_AVISAR_DIAS', 3),
+
+    // ---------------- Fase 2 · Expedientes ----------------
+    'estados_expediente' => [
+        'Abierto' => ['#F4F4F0', '#0B0B0B'],
+        'En curso' => ['#E6F6A8', '#2E3A00'],
+        'Esperando cliente' => ['#FCEBCB', '#6E4300'],
+        'Presentado' => ['#0B0B0B', '#C8F031'],
+        'Cerrado' => ['#ECECE7', '#6A6A65'],
+    ],
+    // Plantillas de trámite (TPL del prototipo): categoría, honorarios orientativos (€ sin IVA), pasos y documentos
+    'plantillas_expediente' => [
+        'Constitución de SL' => ['cat' => 'Mercantil', 'hon' => 350, 'pasos' => ['Certificación negativa de denominación', 'Cuenta bancaria y depósito del capital', 'Firma de la escritura en notaría', 'Alta censal (036) y NIF definitivo', 'Inscripción en el Registro Mercantil'], 'docs' => ['DNI de los socios', 'Estatutos revisados', 'Certificado bancario del capital']],
+        'Arraigo sociolaboral' => ['cat' => 'Extranjería', 'hon' => 300, 'pasos' => ['Revisión de requisitos', 'Recopilación de documentación', 'Presentación telemática', 'Subsanación si hay requerimiento', 'Resolución'], 'docs' => ['Pasaporte completo', 'Certificado de empadronamiento', 'Contrato de trabajo firmado', 'Antecedentes penales del país de origen']],
+        'Transferencia DGT' => ['cat' => 'Tráfico', 'hon' => 90, 'pasos' => ['Comprobación de cargas del vehículo', 'Liquidación del ITP', 'Presentación en la DGT', 'Envío del permiso de circulación'], 'docs' => ['DNI de comprador y vendedor', 'Contrato de compraventa', 'Permiso de circulación y ficha técnica']],
+        'Subvención para pymes' => ['cat' => 'Subvenciones', 'hon' => 150, 'pasos' => ['Estudio de requisitos', 'Preparación de la memoria', 'Presentación de la solicitud', 'Resolución', 'Justificación'], 'docs' => ['Certificados al corriente AEAT y TGSS', 'Presupuestos o facturas de la inversión', 'Memoria del proyecto']],
+        'Alta en RETA' => ['cat' => 'Autónomos', 'hon' => 60, 'pasos' => ['Alta censal (036/037)', 'Alta en el RETA', 'Elección de base de cotización', 'Acceso al portal del cliente'], 'docs' => ['DNI', 'IBAN para domiciliación', 'Descripción de la actividad']],
+        'Requerimiento AEAT' => ['cat' => 'Notificaciones', 'hon' => 120, 'pasos' => ['Lectura y análisis', 'Recopilación de justificantes', 'Redacción de la respuesta', 'Presentación por registro electrónico', 'Resolución'], 'docs' => ['Facturas del periodo requerido', 'Libros registro']],
+        'Reclamación TGSS' => ['cat' => 'Notificaciones', 'hon' => 120, 'pasos' => ['Revisión de la deuda', 'Comprobación de pagos', 'Pago o alegaciones', 'Cierre'], 'docs' => ['Recibos de cuotas', 'Extracto bancario']],
+        'Licencia de apertura' => ['cat' => 'Licencias', 'hon' => 250, 'pasos' => ['Consulta urbanística', 'Proyecto técnico', 'Declaración responsable', 'Inspección municipal'], 'docs' => ['Contrato de alquiler', 'Planos del local', 'Certificado de instalaciones']],
+        'Otro trámite' => ['cat' => 'Otros', 'hon' => 0, 'pasos' => ['Análisis', 'Preparación', 'Presentación', 'Resolución'], 'docs' => []],
     ],
 
     // Copias de seguridad

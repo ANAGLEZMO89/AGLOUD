@@ -23,6 +23,7 @@
       <a class="btn soft" href="{{ route('clientes.edit', $c) }}">Editar ficha</a>
       @if($c->telefono)<a class="btn lime" href="https://wa.me/{{ $c->whatsapp() }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>@endif
       <form method="POST" action="{{ route('escritorio.seleccionar', $c) }}">@csrf<input type="hidden" name="volver" value="{{ route('documentos.index', [], false) }}"><button class="btn soft" type="submit">Subir documento</button></form>
+      @unless($c->es_despacho)<a class="btn" href="{{ route('expedientes.index', ['nuevo' => 1, 'cli' => $c->id]) }}" style="background:#0B0B0B;color:#fff"><span style="color:#C8F031">+</span>Nuevo expediente</a>@endunless
     </div>
   </div>
 
@@ -102,11 +103,22 @@
   @endif
 
   {{-- OBLIGACIONES / TRABAJADORES / EXPEDIENTES (próximas fases) --}}
-  @if(in_array($tab, ['obl', 'trab', 'exp'], true))
+  @if($tab === 'exp')
+  <div class="card pad16" style="gap:6px">
+    @forelse($expedientes as $x)
+      @php [$xbg, $xfg] = $x->colores(); @endphp
+      <a href="{{ route('expedientes.show', $x) }}" style="display:grid;grid-template-columns:130px minmax(0,1fr) 140px auto;gap:14px;align-items:center;padding:12px 6px;border-bottom:1px solid #F1F1EC;font-size:13.5px;border-radius:8px;text-decoration:none;color:var(--ink)"><span style="font:500 12px var(--mono);color:#6A6A65">{{ $x->ref }}</span><span style="font-weight:600">{{ $x->tramite }}</span><span class="ell" style="color:#3C3C3C">{{ $x->responsable?->name ?? '—' }}</span><span style="justify-self:start;font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;background:{{ $xbg }};color:{{ $xfg }}">{{ $x->estado }}</span></a>
+    @empty
+      <div style="padding:36px 10px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center"><span style="font-size:15px;font-weight:600">Sin expedientes abiertos</span>@unless($c->es_despacho)<a class="btn sm" href="{{ route('expedientes.index', ['nuevo' => 1, 'cli' => $c->id]) }}" style="background:#0B0B0B;color:#fff">Abrir expediente</a>@endunless</div>
+    @endforelse
+  </div>
+  @endif
+
+  @if(in_array($tab, ['obl', 'trab'], true))
   <div class="card">
     <div class="empty">
-      <b>{{ ['obl' => 'Obligaciones fiscales', 'trab' => 'Trabajadores', 'exp' => 'Expedientes'][$tab] }}: módulo en preparación</b>
-      <span>{{ ['obl' => 'Se calcularán desde la contabilidad y los parámetros fiscales en la fase Fiscal.', 'trab' => 'Cuando contrate, el alta en Seguridad Social se gestionará desde aquí (fase Laboral).', 'exp' => 'Los expedientes llegan en la próxima fase.'][$tab] }}</span>
+      <b>{{ ['obl' => 'Obligaciones fiscales', 'trab' => 'Trabajadores'][$tab] }}: módulo en preparación</b>
+      <span>{{ ['obl' => 'Se calcularán desde la contabilidad y los parámetros fiscales en la fase Fiscal.', 'trab' => 'Cuando contrate, el alta en Seguridad Social se gestionará desde aquí (fase Laboral).'][$tab] }}</span>
     </div>
   </div>
   @endif

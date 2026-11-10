@@ -16,6 +16,19 @@
           <div class="emptybox">Todavía no hay documentos. Cuando tu asesor comparta algo contigo, aparecerá aquí.</div>
         @endforelse
       </div>
+      @if($tramites->count())
+      <div class="card" style="gap:6px">
+        <div class="card-h" style="padding-bottom:6px"><span class="ct">Tus trámites</span></div>
+        @foreach($tramites as $x)
+          @php [$xbg, $xfg] = $x->colores(); $faltan = $x->docsPendientes(); @endphp
+          <div style="display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid #F1F1EC">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-weight:600;font-size:14px">{{ $x->tramite }}</span><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;background:{{ $xbg }};color:{{ $xfg }}">{{ $x->estado }}</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="bar5"><i style="width:{{ $x->pct() }}%"></i></div><span class="mono11">{{ $x->progTxt() }}</span></div>
+            @if($faltan)<span style="font-size:12.5px;color:#6E4300">Nos falta: {{ implode(', ', $faltan) }}. Puedes subirlo aquí al lado.</span>@else<span style="font-size:12.5px;color:#6A6A65">Tenemos toda la documentación.</span>@endif
+          </div>
+        @endforeach
+      </div>
+      @endif
     </div>
     <div class="col">
       <form class="card limecard" method="POST" action="{{ route('portal.documentos.subir') }}" enctype="multipart/form-data" data-upload-form style="gap:10px">

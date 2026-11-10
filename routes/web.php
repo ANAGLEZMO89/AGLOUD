@@ -9,6 +9,8 @@ use App\Http\Controllers\ClienteSeccionController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\EscritorioController;
+use App\Http\Controllers\ExpedienteController;
+use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\Portal\PortalController;
 use Illuminate\Support\Facades\Route;
 
@@ -71,6 +73,34 @@ Route::middleware('auth')->group(function () {
         Route::post('/documentos/cancelar', [DocumentoController::class, 'cancelar'])->name('documentos.cancelar');
         Route::post('/documentos/vaciar-papelera', [DocumentoController::class, 'vaciarPapelera'])->name('documentos.vaciar');
         Route::get('/documentos/indice', [DocumentoController::class, 'indice'])->name('documentos.indice');
+
+        // Notificaciones (registro manual · sin conexión con DEHú/AEAT/TGSS)
+        Route::get('/notificaciones', [NotificacionController::class, 'index'])->name('notificaciones.index');
+        Route::post('/notificaciones', [NotificacionController::class, 'store'])->name('notificaciones.store');
+        Route::post('/notificaciones/avisos', [NotificacionController::class, 'guardarAvisos'])->name('notificaciones.avisos');
+        Route::prefix('notificaciones/{notificacion}')->name('notificaciones.')->whereNumber('notificacion')->group(function () {
+            Route::post('/abrir', [NotificacionController::class, 'abrir'])->name('abrir');
+            Route::post('/rechazar', [NotificacionController::class, 'rechazar'])->name('rechazar');
+            Route::post('/archivar', [NotificacionController::class, 'archivar'])->name('archivar');
+            Route::post('/actualizar', [NotificacionController::class, 'actualizar'])->name('actualizar');
+            Route::post('/adjuntar', [NotificacionController::class, 'adjuntar'])->name('adjuntar');
+            Route::get('/calendario.ics', [NotificacionController::class, 'ics'])->name('ics');
+            Route::delete('/', [NotificacionController::class, 'destroy'])->name('destroy');
+        });
+
+        // Expedientes
+        Route::get('/expedientes', [ExpedienteController::class, 'index'])->name('expedientes.index');
+        Route::post('/expedientes', [ExpedienteController::class, 'store'])->name('expedientes.store');
+        Route::prefix('expedientes/{expediente}')->name('expedientes.')->whereNumber('expediente')->group(function () {
+            Route::get('/', [ExpedienteController::class, 'show'])->name('show');
+            Route::post('/estado', [ExpedienteController::class, 'estado'])->name('estado');
+            Route::post('/paso/{i}', [ExpedienteController::class, 'paso'])->whereNumber('i')->name('paso');
+            Route::post('/doc/{i}', [ExpedienteController::class, 'doc'])->whereNumber('i')->name('doc');
+            Route::post('/nota', [ExpedienteController::class, 'nota'])->name('nota');
+            Route::post('/portal', [ExpedienteController::class, 'portal'])->name('portal');
+            Route::post('/actualizar', [ExpedienteController::class, 'actualizar'])->name('actualizar');
+            Route::delete('/', [ExpedienteController::class, 'destroy'])->name('destroy');
+        });
     });
 
     // ---------------- Administración del despacho ----------------

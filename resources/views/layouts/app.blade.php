@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta name="robots" content="noindex, nofollow">
+@isset($nCaducan)<meta name="agc-caducan" content="{{ $nCaducan }}">@endisset
 <title>{{ $titulo ?? 'AG Cloud' }} · AG Cloud</title>
 <link rel="icon" href="{{ asset('img/logo-ga-128.png') }}">
 <link rel="preload" href="{{ asset('fonts/onest-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
@@ -45,7 +46,7 @@
             </div>
             <div class="nav-sub">
               @foreach($g['items'] as [$id, $l, $ruta])
-                <a class="nav-it {{ $activo === $id ? 'on' : '' }} {{ $ruta ? '' : 'off' }}" href="{{ $ruta ? route($ruta) : route('preparacion', $id) }}"><span>{{ $l }}</span>@if($id === 'documentos' && ($nRevisar ?? 0))<span class="nbadge">{{ $nRevisar }}</span>@endif</a>
+                <a class="nav-it {{ $activo === $id ? 'on' : '' }} {{ $ruta ? '' : 'off' }}" href="{{ $ruta ? route($ruta) : route('preparacion', $id) }}"><span>{{ $l }}</span>@if($id === 'documentos' && ($nRevisar ?? 0))<span class="nbadge">{{ $nRevisar }}</span>@endif @if($id === 'notificaciones' && ($nNotif ?? 0))<span class="nbadge">{{ $nNotif }}</span>@endif</a>
               @endforeach
             </div>
           </div>
