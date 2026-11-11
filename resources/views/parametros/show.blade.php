@@ -134,6 +134,15 @@
           @endforeach
         </div>
       </div>
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Cuentas laborales (asiento de nómina)</span>
+        <span class="hint muted">Se proponen al hacer un asiento de nómina en Mantenimiento de apuntes. Las que dejes vacías se eligen en cada asiento.</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px">
+          @foreach(['sueldos' => 'Sueldos y salarios', 'especie' => 'Sueldos y salarios en especie', 'dietas' => 'Dietas de nóminas', 'indemn' => 'Indemnizaciones', 'acr_irpf_nom' => 'Acreedor IRPF (nóminas)', 'acr_irpf_esp' => 'Acreedor IRPF en especie', 'rem_pend' => 'Remuneraciones pendientes de pago', 'ss_acr' => 'Seguridad Social acreedora', 'ss_emp' => 'Seguridad Social a cargo de la empresa', 'anticipos' => 'Anticipos', 'embargos' => 'Embargos', 'ded_esp' => 'Deducciones en especie', 'otras_ded' => 'Otras deducciones'] as $k => $l)
+            <label class="lbl-s">{{ $l }}<input class="inp mono" name="{{ $k }}" value="{{ old($k, $p[$k] ?? '') }}" maxlength="9" placeholder="Sin cuenta"><span class="hint muted">{{ ($p[$k] ?? '') !== '' ? \App\Services\Contabilidad::nombre(\App\Services\Contabilidad::a9((string) $p[$k])) : '' }}</span></label>
+          @endforeach
+        </div>
+      </div>
     @endif
 
     @if($modulo === 'productos')

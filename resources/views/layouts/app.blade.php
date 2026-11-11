@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta name="robots" content="noindex, nofollow">
+<meta name="agc-base" content="{{ rtrim(asset(''), '/') }}">
 @isset($nCaducan)<meta name="agc-caducan" content="{{ $nCaducan }}">@endisset
 <title>{{ $titulo ?? 'AG Cloud' }} · AG Cloud</title>
 <link rel="icon" href="{{ asset('img/logo-ga-128.png') }}">

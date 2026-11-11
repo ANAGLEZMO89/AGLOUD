@@ -438,48 +438,6 @@
   }
 
   // ---------- Contabilidad: asiento manual y bandeja ----------
-  var apF = $('[data-asiento]');
-  if (apF) {
-    var ctas = {}; try { ctas = JSON.parse(apF.getAttribute('data-cuentas') || '{}'); } catch (e) {}
-    var apBox = $('[data-ap-lines]', apF), apN = 9000;
-    var a9 = function (v) { v = String(v || '').replace(/\D/g, ''); return v.length >= 9 ? v.slice(0, 9) : (v + '000000000').slice(0, 9); };
-    var nomDe = function (v) {
-      var c = a9(v); if (!String(v || '').replace(/\D/g, '')) return '';
-      if (ctas[c]) return ctas[c];
-      var k4 = a9(c.slice(0, 4)), k3 = a9(c.slice(0, 3));
-      return ctas[k4] || ctas[k3] || '⚠ No existe en el plan de cuentas';
-    };
-    var apCalc = function () {
-      var d = 0, h = 0;
-      $$('[data-ap-line]', apBox).forEach(function (row) {
-        d += pnum($('[data-k="d"]', row).value); h += pnum($('[data-k="h"]', row).value);
-        var n = $('[data-ap-nom]', row); n.textContent = nomDe($('[data-k="c"]', row).value);
-        n.style.color = /^⚠/.test(n.textContent) ? '#B42318' : '#3C3C3C';
-      });
-      d = Math.round(d * 100) / 100; h = Math.round(h * 100) / 100;
-      $('[data-ap-sd]', apF).textContent = eu(d); $('[data-ap-sh]', apF).textContent = eu(h);
-      var cu = $('[data-ap-cuadre]', apF), ok = Math.abs(d - h) < 0.005 && d > 0;
-      cu.textContent = ok ? '✓ Cuadra' : (d || h ? 'Diferencia ' + eu(d - h) : '');
-      cu.style.color = ok ? '#2E7D32' : '#B42318';
-    };
-    var apWire = function (row) {
-      on($('[data-ap-del]', row), 'click', function () { if ($$('[data-ap-line]', apBox).length > 2) { row.remove(); apCalc(); } });
-      ['d', 'h'].forEach(function (k) {
-        on($('[data-k="' + k + '"]', row), 'keydown', function (e) {
-          if (e.key !== '=') return; e.preventDefault();
-          var d = 0, h = 0; $$('[data-ap-line]', apBox).forEach(function (r) { if (r !== row) { d += pnum($('[data-k="d"]', r).value); h += pnum($('[data-k="h"]', r).value); } });
-          var dif = Math.round((k === 'd' ? h - d : d - h) * 100) / 100; if (dif > 0) { e.target.value = eu(dif); apCalc(); }
-        });
-      });
-    };
-    $$('[data-ap-line]', apBox).forEach(apWire);
-    on($('[data-ap-add]', apF), 'click', function () {
-      var row = $('[data-ap-tpl]').content.firstElementChild.cloneNode(true), n = apN++;
-      $$('[data-k]', row).forEach(function (el) { el.name = 'l[' + n + '][' + el.getAttribute('data-k') + ']'; });
-      apBox.appendChild(row); apWire(row); $('input', row).focus();
-    });
-    on(apF, 'input', apCalc); apCalc();
-  }
   var band = $('[data-bandeja]');
   if (band) {
     var todas = $('[data-band-todas]', band);
@@ -522,6 +480,77 @@
     });
     ff.addEventListener('change', function (e) { if (e.target.hasAttribute && e.target.hasAttribute('data-tipo') && fDirty) fDirty.classList.remove('hidden'); });
   }
+
+  // ---------- Bandeja de facturas: subida y ventana de revisión con OCR ----------
+  var bdz = $('[data-band-drop]');
+  if (bdz) {
+    var bfi = $('[data-band-files]'), bform = bdz.closest('form');
+    on(bfi, 'change', function () { if (bfi.files.length) bform.submit(); });
+    on(bdz, 'dragover', function (e) { e.preventDefault(); bdz.classList.add('sobre'); });
+    on(bdz, 'dragleave', function () { bdz.classList.remove('sobre'); });
+    on(bdz, 'drop', function (e) {
+      e.preventDefault(); bdz.classList.remove('sobre');
+      if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+      try { bfi.files = e.dataTransfer.files; bform.submit(); } catch (x) {}
+    });
+  }
+  var rv = $('[data-rev]');
+  if (rv && $('[data-r="base"]', rv)) {
+    var rcta = {}, rter = {}, rdef = {};
+    try { rcta = JSON.parse(rv.getAttribute('data-cuentas') || '{}'); rter = JSON.parse(rv.getAttribute('data-terceros') || '{}'); rdef = JSON.parse(rv.getAttribute('data-cta-def') || '{}'); } catch (e) {}
+    var R = function (k) { return $('[data-r="' + k + '"]', rv); };
+    var rclase = function () { var v = $('[data-rev-clase-v]', rv); return v ? v.value : 'Recibida'; };
+    var rcalc = function () {
+      var base = pnum(R('base').value), iva = Math.round(base * (+R('iva').value) / 100 * 100) / 100, ret = Math.round(base * (+R('ret').value) / 100 * 100) / 100;
+      $('[data-rt="base"]', rv).textContent = eu(base); $('[data-rt="iva"]', rv).textContent = eu(iva); $('[data-rt="ret"]', rv).textContent = eu(ret); $('[data-rt="tot"]', rv).textContent = eu(base + iva - ret);
+      var c = String(R('cuenta').value || '').replace(/\D/g, ''); c = c.length >= 9 ? c.slice(0, 9) : (c + '000000000').slice(0, 9);
+      var n = $('[data-rev-cta-n]', rv); n.textContent = R('cuenta').value ? (rcta[c] || rcta[(c.slice(0, 3) + '000000')] || 'No existe en el PGC') : '';
+      var ter = $('[data-rev-ter]', rv), nuevo = !ter || !ter.value;
+      $$('[data-rev-nuevo]', rv).forEach(function (el) { el.style.display = rclase() === 'Emitida' || nuevo ? '' : 'none'; });
+      $$('[data-solo]', rv).forEach(function (el) { if (!el.hasAttribute('data-rev-nuevo')) el.style.display = el.getAttribute('data-solo') === rclase() ? '' : 'none'; else if (rclase() !== 'Recibida') el.style.display = 'none'; });
+      var cl = $('[data-rev-cta-l]', rv); if (cl) cl.textContent = rclase() === 'Emitida' ? 'ingreso' : 'gasto';
+    };
+    $$('[data-rev-clase]', rv).forEach(function (b) {
+      on(b, 'click', function () {
+        var antes = rclase();
+        $('[data-rev-clase-v]', rv).value = b.getAttribute('data-rev-clase');
+        $$('[data-rev-clase]', rv).forEach(function (x) { x.classList.toggle('on', x === b); });
+        if (!R('cuenta').value || R('cuenta').value === rdef[antes]) R('cuenta').value = rdef[rclase()] || '';
+        rcalc();
+      });
+    });
+    on(rv, 'input', rcalc); on(rv, 'change', rcalc); rcalc();
+    var bocr = $('[data-rev-ocr]', rv), rmsg = $('[data-rev-msg]', rv);
+    on(bocr, 'click', function () {
+      if (!window.AGCOcr) { rmsg.textContent = 'El lector OCR no está disponible.'; return; }
+      bocr.disabled = true; rmsg.textContent = 'Descargando el documento…';
+      fetch(rv.getAttribute('data-doc'), { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('doc'); return r.blob(); })
+        .then(function (bl) { return window.AGCOcr.texto(bl, function (m) { rmsg.textContent = m; }); })
+        .then(function (txt) {
+          var o = window.AGCOcr.factura(txt, rv.getAttribute('data-nif-empresa'));
+          if (o.nif) R('nif').value = o.nif;
+          if (o.nombre && !R('nombre').value) R('nombre').value = o.nombre;
+          if (o.num) R('num').value = o.num;
+          if (o.fecha) R('fecha').value = o.fecha;
+          if (o.base) R('base').value = eu(o.base);
+          if ([21, 10, 5, 4, 0].indexOf(o.iva) >= 0) R('iva').value = String(o.iva);
+          if ([0, 1, 7, 15, 19].indexOf(o.ret) >= 0) R('ret').value = String(o.ret);
+          var t = o.nif && rter[o.nif], sel = $('[data-rev-ter]', rv);
+          if (t && sel) sel.value = String(t[0]);
+          rmsg.textContent = 'Leído con OCR · confianza ' + o.confianza + ' %' + (t ? ' · tercero reconocido por su NIF' : (o.nif ? ' · NIF ' + o.nif + ' sin dar de alta: se creará al contabilizar' : '')) + '. Revisa los datos.';
+          rmsg.style.color = o.confianza >= 80 ? '#2E3A00' : '#6E4300';
+          rcalc();
+        })
+        .catch(function () { rmsg.textContent = 'No se ha podido leer el documento: completa los datos a mano.'; rmsg.style.color = '#8A1C1C'; })
+        .then(function () { bocr.disabled = false; });
+    });
+    // Documento nuevo: se lee solo al abrirlo
+    if (bocr && !R('num').value) bocr.click();
+  }
+  // Imprimir / guardar como PDF y cierre de los desplegables de pestañas
+  $$('[data-print]').forEach(function (b) { on(b, 'click', function () { window.print(); }); });
+  document.addEventListener('click', function (e) { $$('details.ct-dd[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); }); });
+  $$('[data-autosubmit-select]').forEach(function (s) { on(s, 'change', function () { s.form.submit(); }); });
 
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {

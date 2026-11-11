@@ -144,10 +144,16 @@ class ParametrosController extends Controller
     private function datosContabilidad(Request $r): array
     {
         $claves = array_keys(Parametros::defecto('contabilidad'));
-        $r->validate(collect($claves)->mapWithKeys(fn ($k) => [$k => ['required', 'regex:/^\d{3,9}$/']])->all(), ['*.regex' => 'Las cuentas tienen de 3 a 9 cifras.']);
+        $opcionales = ['especie', 'dietas', 'acr_irpf_esp', 'anticipos', 'embargos', 'ded_esp', 'otras_ded'];
+        $r->validate(collect($claves)->mapWithKeys(fn ($k) => [$k => [in_array($k, $opcionales, true) ? 'nullable' : 'required', 'regex:/^\d{3,9}$/']])->all(), ['*.regex' => 'Las cuentas tienen de 3 a 9 cifras.']);
         $out = [];
         foreach ($claves as $k) {
             $v = (string) $r->input($k);
+            if ($v === '' && in_array($k, $opcionales, true)) {
+                $out[$k] = '';
+
+                continue;
+            }
             if (! Contabilidad::existeEnPgc(Contabilidad::a9($v))) {
                 throw ValidationException::withMessages([$k => 'La cuenta '.$v.' no existe en el plan de cuentas.']);
             }

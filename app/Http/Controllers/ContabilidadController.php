@@ -12,6 +12,7 @@ use App\Models\FacturaRecibida;
 use App\Services\Auditoria;
 use App\Services\Contabilidad;
 use App\Support\Formato;
+use App\Support\Parametros;
 use App\Support\Plazos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,15 +23,15 @@ use InvalidArgumentException;
 /** Contabilidad de la empresa elegida (PGC-PYMES). */
 class ContabilidadController extends Controller
 {
-    public function __construct(private Contabilidad $conta) {}
+    public function __construct(protected Contabilidad $conta) {}
 
-    private function ctx(Request $r): ?Cliente
+    protected function ctx(Request $r): ?Cliente
     {
         return $r->attributes->get('ctx');
     }
 
     /** Empresa y ejercicio de trabajo (?ej=2026) */
-    private function base(Request $r, string $tab): array|RedirectResponse
+    protected function base(Request $r, string $tab): array|RedirectResponse
     {
         $c = $this->ctx($r);
         if (! $c) {
@@ -45,7 +46,7 @@ class ContabilidadController extends Controller
             'nBandeja' => $this->pendientes($c, $ej)->count(), 'nAsientos' => Asiento::where('ejercicio_id', $ej->id)->count()];
     }
 
-    private function pendientes(Cliente $c, Ejercicio $ej): Collection
+    protected function pendientes(Cliente $c, Ejercicio $ej): Collection
     {
         $em = Factura::where('cliente_id', $c->id)->where('estado', 'Emitida')->whereNull('asiento_id')->whereYear('fecha', $ej->anio)->orderBy('fecha')->get()
             ->map(fn ($f) => ['k' => 'e'.$f->id, 'tipo' => 'Emitida', 'id' => $f->id, 'num' => $f->num, 'fecha' => $f->fecha, 'ter' => $f->receptor_nombre ?: 'Factura simplificada', 'nif' => $f->receptor_nif,
@@ -55,7 +56,12 @@ class ContabilidadController extends Controller
                 'base' => (float) $f->base, 'iva' => (float) $f->cuota, 'ret' => (float) $f->retencion, 'total' => (float) $f->total, 'cuenta' => $this->conta->cuentaGasto($f), 'deducible' => $f->deducible,
                 'url' => route($f->clase === 'compra' ? 'proveedores.facturas' : 'acreedores.facturas', ['editar' => $f->id])]);
 
-        return $em->concat($re)->sortBy(fn ($x) => $x['fecha']->toDateString())->values();
+        // Documentos subidos a la bandeja (pendientes de revisar con OCR)
+        $docs = \App\Models\BandejaDocumento::with('documento')->where('cliente_id', $c->id)->get()
+            ->map(fn ($d) => ['k' => 'd'.$d->id, 'tipo' => 'Documento', 'id' => $d->id, 'num' => '—', 'fecha' => $d->created_at->toImmutable()->startOfDay(), 'ter' => $d->documento?->nombre_original ?: 'Documento', 'nif' => '',
+                'base' => 0.0, 'iva' => 0.0, 'ret' => 0.0, 'total' => 0.0, 'cuenta' => '', 'origen' => $d->origen, 'url' => route('contabilidad.bandeja', ['revisar' => 'd'.$d->id])]);
+
+        return $em->concat($re)->sortBy(fn ($x) => $x['fecha']->toDateString())->values()->concat($docs);
     }
 
     // ------------------------------------------------------------ resumen
@@ -176,6 +182,26 @@ class ContabilidadController extends Controller
     }
 
     // ------------------------------------------------------- mantenimiento de apuntes
+    /** Plantillas de asiento más usadas: [nombre, cuentas] (prototipo + habituales en gestoría) */
+    public const PLANTILLAS = [
+        ['Ingreso (factura emitida)', ['430000000', '705000000', '477000000']], ['Gasto (factura de acreedor)', ['629000000', '472000000', '410000000']],
+        ['Compra (factura de proveedor)', ['600000000', '472000000', '400000000']], ['Cobro de cliente', ['572000000', '430000000']],
+        ['Pago a proveedor', ['400000000', '572000000']], ['Pago a acreedor', ['410000000', '572000000']], ['Gasto bancario', ['626000000', '572000000']],
+        ['Liquidación de IVA', ['477000000', '472000000', '475000000']], ['Pago del IVA (303)', ['475000000', '572000000']], ['Liquidación de IRPF (111/115)', ['475100000', '572000000']],
+        ['Pago de nóminas', ['465000000', '572000000']], ['Pago de seguros sociales', ['476000000', '572000000']], ['Cuota de autónomos (RETA)', ['642000000', '572000000']],
+        ['Alquiler del local', ['621000000', '472000000', '475100000', '410000000']], ['Suministros', ['628000000', '472000000', '410000000']],
+        ['Aportación de capital', ['572000000', '100000000']], ['Préstamo recibido', ['572000000', '520000000']], ['Cuota de préstamo', ['520000000', '662000000', '572000000']],
+        ['Amortización del inmovilizado', ['681000000', '281000000']], ['Ingreso de efectivo en el banco', ['572000000', '570000000']], ['Retirada de efectivo', ['570000000', '572000000']],
+    ];
+
+    /** Partidas del asiento de nómina: [clave, nombre, parámetro de cuenta, lado] */
+    public const NOMINA = [
+        ['mon', 'Remuneraciones monetarias', 'sueldos', 'd'], ['esp', 'Remuneraciones en especie', 'especie', 'd'], ['diet', 'Dietas', 'dietas', 'd'], ['ind', 'Indemnizaciones', 'indemn', 'd'],
+        ['ssE', 'Seguridad Social empresa', 'ss_emp', 'd'], ['ant', 'Anticipo', 'anticipos', 'h'], ['emb', 'Embargo', 'embargos', 'h'], ['dedE', 'Deducciones en especie', 'ded_esp', 'h'],
+        ['otr', 'Otras deducciones', 'otras_ded', 'h'], ['irpf', 'IRPF', 'acr_irpf_nom', 'h'], ['irpfE', 'IRPF en especie', 'acr_irpf_esp', 'h'], ['ssT', 'Seguridad Social empleado', 'ss_acr', 'h'],
+        ['neto', 'Salario neto', 'rem_pend', 'h'],
+    ];
+
     public function apuntes(Request $request)
     {
         $b = $this->base($request, 'apuntes');
@@ -183,22 +209,36 @@ class ContabilidadController extends Controller
             return $b;
         }
         $a = $request->query('editar') ? Asiento::with('apuntes')->where('cliente_id', $b['c']->id)->find((int) $request->query('editar')) : null;
-        $lineas = old('l', $a ? $a->apuntes->map(fn ($p) => ['c' => $p->cuenta, 'd' => (float) $p->debe ? Formato::num($p->debe) : '', 'h' => (float) $p->haber ? Formato::num($p->haber) : '', 't' => $p->concepto])->all() : [['c' => '', 'd' => '', 'h' => '', 't' => ''], ['c' => '', 'd' => '', 'h' => '', 't' => '']]);
+        $lineas = old('l', $a ? $a->apuntes->map(fn ($p) => ['c' => $p->cuenta, 'd' => (float) $p->debe ? Formato::num($p->debe) : '', 'h' => (float) $p->haber ? Formato::num($p->haber) : '', 't' => $p->concepto, 'doc' => $p->documento])->all() : [['c' => '', 'd' => '', 'h' => '', 't' => '', 'doc' => ''], ['c' => '', 'd' => '', 'h' => '', 't' => '', 'doc' => '']]);
+        $par = Parametros::get('contabilidad');
+        $a9 = fn ($k) => ($par[$k] ?? '') !== '' ? Contabilidad::a9((string) $par[$k]) : '';
+        $guardado = $request->query('guardado') ? Asiento::with('apuntes')->where('cliente_id', $b['c']->id)->find((int) $request->query('guardado')) : null;
 
-        return view('contabilidad.apuntes', $b + ['a' => $a, 'lineas' => array_values($lineas), 'catalogo' => $this->catalogo($b['c'])]);
+        return view('contabilidad.apuntes', $b + ['a' => $a, 'lineas' => array_values($lineas), 'catalogo' => $this->catalogo($b['c']), 'guardado' => $guardado,
+            'ultimos' => Asiento::with('apuntes')->where('ejercicio_id', $b['ej']->id)->orderByDesc('numero')->limit(8)->get(),
+            'cfg' => ['ventas' => $a9('ventas'), 'compras' => $a9('compras'), 'gasto' => $a9('gasto_servicios'), 'ivaRep' => $a9('iva_repercutido'), 'ivaSop' => $a9('iva_soportado'),
+                'retSop' => $a9('ret_soportada'), 'retPrac' => $a9('ret_practicada'), 'nif' => (string) $b['c']->nif, 'empresa' => (string) $b['c']->nombre,
+                'nomina' => collect(self::NOMINA)->mapWithKeys(fn ($r) => [$r[0] => $a9($r[2])])->all()],
+            'tipo' => old('tipo', $request->query('tipo', 'Manual')),
+            // NIF → subcuenta (proveedores, acreedores y clientes) para que el OCR proponga el tercero
+            'terceros' => \App\Models\Tercero::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('cuenta', 'nif')->merge(Cuenta::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('codigo', 'nif'))->all()]);
     }
 
     /** Cuentas para el autocompletado: PGC (a 9 dígitos) y subcuentas propias */
-    private function catalogo(Cliente $c): array
+    protected function catalogo(Cliente $c): array
     {
+        Contabilidad::sincronizarBancos($c);
         $out = [];
         foreach (config('pgc') as $k => $n) {
             $out[Contabilidad::a9((string) $k)] = $n;
         }
         foreach (Contabilidad::propias($c) as $k => $n) {
-            $out[$k] = $n;
+            $out[(string) $k] = $n;
         }
-        ksort($out);
+        foreach (Contabilidad::ocultas($c) as $k) {
+            unset($out[$k]);
+        }
+        ksort($out, SORT_STRING);
 
         return $out;
     }
@@ -208,10 +248,12 @@ class ContabilidadController extends Controller
         $c = $this->ctx($request);
         abort_unless($c, 403);
         $request->validate(['fecha' => ['required', 'date'], 'concepto' => ['required', 'string', 'max:255'], 'l' => ['required', 'array', 'min:2', 'max:200'],
-            'l.*.c' => ['nullable', 'string', 'max:12'], 'l.*.d' => ['nullable', 'string', 'max:20'], 'l.*.h' => ['nullable', 'string', 'max:20'], 'l.*.t' => ['nullable', 'string', 'max:255'], 'editar' => ['nullable', 'integer']],
+            'l.*.c' => ['nullable', 'string', 'max:12'], 'l.*.d' => ['nullable', 'string', 'max:20'], 'l.*.h' => ['nullable', 'string', 'max:20'], 'l.*.t' => ['nullable', 'string', 'max:255'],
+            'l.*.doc' => ['nullable', 'string', 'max:40'], 'editar' => ['nullable', 'integer'], 'tipo' => ['nullable', 'in:Manual,Factura,Nómina'],
+            'archivo' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:'.config('agcloud.max_upload_kb')]],
             ['concepto.required' => 'Escribe el concepto del asiento.']);
         $ls = collect($request->input('l'))->filter(fn ($l) => trim((string) ($l['c'] ?? '')) !== '' || trim((string) ($l['d'] ?? '')) !== '' || trim((string) ($l['h'] ?? '')) !== '')
-            ->map(fn ($l) => [trim((string) ($l['c'] ?? '')), Formato::parseNum($l['d'] ?? ''), Formato::parseNum($l['h'] ?? ''), trim((string) ($l['t'] ?? '')) ?: null])->values()->all();
+            ->map(fn ($l) => [trim((string) ($l['c'] ?? '')), Formato::parseNum($l['d'] ?? ''), Formato::parseNum($l['h'] ?? ''), trim((string) ($l['t'] ?? '')) ?: null, trim((string) ($l['doc'] ?? ''))])->values()->all();
         foreach ($ls as $l) {
             if (! preg_match('/^\d{3,9}$/', $l[0])) {
                 throw ValidationException::withMessages(['form' => 'Cada apunte necesita una cuenta (de 3 a 9 cifras).']);
@@ -224,20 +266,36 @@ class ContabilidadController extends Controller
         if ($sust && $sust->fecha->year !== (int) substr($request->input('fecha'), 0, 4)) {
             throw ValidationException::withMessages(['form' => 'No se puede mover un asiento a otro ejercicio.']);
         }
+        $tipo = $sust?->tipo ?? (string) ($request->input('tipo') ?: 'Manual');
         try {
-            $a = $this->conta->asentar($c, $request->input('fecha'), trim($request->input('concepto')), $ls, $sust?->tipo ?? 'Manual', null, null, $request->user()->id, $sust);
+            $a = $this->conta->asentar($c, $request->input('fecha'), trim($request->input('concepto')), $ls, $tipo, null, null, $request->user()->id, $sust);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['form' => $e->getMessage()]);
         }
-        Auditoria::registrar('contabilidad.asiento', ($sust ? 'Modificado' : 'Creado').' el asiento '.$a->numero.': '.$a->concepto, null, $c->id);
+        // Justificante (factura o nómina) al gestor documental
+        if ($request->hasFile('archivo')) {
+            $file = $request->file('archivo');
+            $g = app(\App\Services\AlmacenDocumentos::class)->guardar($file, $c->id);
+            $nom = $tipo === 'Nómina' ? ['laboral/nominas', 'nom'] : ['contable/recibidas', 'fra'];
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'pdf');
+            $doc = \App\Models\Documento::create([
+                'cliente_id' => $c->id, 'ambito' => 'gestor', 'borrador' => false, 'carpeta' => $nom[0], 'tipo' => $nom[1],
+                'nombre' => \App\Support\ClasificadorDocumentos::nombreSeguro($a->fecha->format('Ymd').'_'.$nom[1].'_asiento-'.$a->numero.'.'.$ext),
+                'nombre_original' => \App\Support\ClasificadorDocumentos::nombreSeguro($file->getClientOriginalName()), 'fecha' => $a->fecha->toDateString(),
+                'mime' => $g['mime'], 'tamano' => $g['tamano'], 'ruta' => $g['ruta'], 'sha256' => $g['sha256'], 'origen' => 'Despacho', 'subido_por' => $request->user()->id,
+            ]);
+            $a->update(['documento_id' => $doc->id]);
+        }
+        Auditoria::registrar('contabilidad.asiento', ($sust ? 'Modificado' : 'Creado').' el asiento '.$a->numero.' ('.$tipo.'): '.$a->concepto, null, $c->id);
 
-        return redirect()->route('contabilidad.diario', ['ej' => $a->fecha->year])->with('ok', 'Asiento '.$a->numero.' '.($sust ? 'modificado' : 'registrado').'.');
+        return redirect()->route('contabilidad.apuntes', ['ej' => $a->fecha->year, 'guardado' => $a->id, 'tipo' => $sust ? null : $tipo])
+            ->with('ok', 'Asiento '.$a->numero.' '.($sust ? 'modificado' : 'registrado').'.');
     }
 
     // ------------------------------------------------------------ mayor
     public function mayor(Request $request)
     {
-        $b = $this->base($request, 'mayor');
+        $b = $this->base($request, 'extracto');
         if (! is_array($b)) {
             return $b;
         }
@@ -432,7 +490,7 @@ class ContabilidadController extends Controller
         return back()->with('ok', 'Subcuenta '.$d['codigo'].' guardada.');
     }
 
-    private function csv(string $nombre, array $cab, array $filas)
+    protected function csv(string $nombre, array $cab, array $filas)
     {
         return response()->streamDownload(function () use ($cab, $filas) {
             $o = fopen('php://output', 'w');

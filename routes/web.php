@@ -10,12 +10,16 @@ use App\Http\Controllers\ClienteAccesoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ClienteSeccionController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\ContabilidadListadosController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\EscritorioController;
 use App\Http\Controllers\ExpedienteController;
+use App\Http\Controllers\BandejaController;
 use App\Http\Controllers\CobrosPagosController;
+use App\Http\Controllers\ConciliadorController;
+use App\Http\Controllers\RegistroMercantilController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\FiscalController;
@@ -97,15 +101,42 @@ Route::middleware('auth')->group(function () {
         // Contabilidad de la empresa elegida
         Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
             Route::get('/', [ContabilidadController::class, 'index'])->name('index');
-            Route::get('/bandeja', [ContabilidadController::class, 'bandeja'])->name('bandeja');
+            Route::get('/bandeja', [BandejaController::class, 'bandeja'])->name('bandeja');
+            Route::post('/bandeja/subir', [BandejaController::class, 'subir'])->name('bandeja.subir');
+            Route::delete('/bandeja/documentos/{documento}', [BandejaController::class, 'descartar'])->whereNumber('documento')->name('bandeja.descartar');
+            Route::post('/bandeja/{k}/contabilizar', [BandejaController::class, 'contabilizarRevision'])->where('k', '[erd]\\d+')->name('bandeja.revisar');
             Route::post('/bandeja', [ContabilidadController::class, 'contabilizar'])->name('contabilizar');
             Route::get('/diario', [ContabilidadController::class, 'diario'])->name('diario');
             Route::delete('/asientos/{asiento}', [ContabilidadController::class, 'borrar'])->whereNumber('asiento')->name('borrar');
             Route::get('/apuntes', [ContabilidadController::class, 'apuntes'])->name('apuntes');
             Route::post('/apuntes', [ContabilidadController::class, 'guardarAsiento'])->name('apuntes.guardar');
-            Route::get('/mayor', [ContabilidadController::class, 'mayor'])->name('mayor');
-            Route::get('/sumas-y-saldos', [ContabilidadController::class, 'sumas'])->name('sumas');
-            Route::get('/cuentas-anuales', [ContabilidadController::class, 'cuentasAnuales'])->name('anuales');
+            // Listados contables
+            Route::get('/listados/extracto', [ContabilidadController::class, 'mayor'])->name('mayor');
+            Route::get('/listados/sumas-y-saldos', [ContabilidadController::class, 'sumas'])->name('sumas');
+            Route::get('/listados/balances-oficiales', [ContabilidadController::class, 'cuentasAnuales'])->name('anuales');
+            Route::get('/listados/cuenta-de-explotacion', [ContabilidadListadosController::class, 'pyg'])->name('pyg');
+            Route::get('/listados/diario', [ContabilidadListadosController::class, 'ldiario'])->name('ldiario');
+            Route::get('/listados/mayor', [ContabilidadListadosController::class, 'lmayor'])->name('lmayor');
+            Route::redirect('/mayor', '/contabilidad/listados/extracto');
+            Route::redirect('/sumas-y-saldos', '/contabilidad/listados/sumas-y-saldos');
+            Route::redirect('/cuentas-anuales', '/contabilidad/listados/balances-oficiales');
+            // Conciliador bancario
+            Route::get('/conciliador', [ConciliadorController::class, 'index'])->name('conciliador');
+            Route::post('/conciliador/importar', [ConciliadorController::class, 'importar'])->name('conciliador.importar');
+            Route::post('/conciliador/automatico', [ConciliadorController::class, 'automatico'])->name('conciliador.auto');
+            Route::post('/conciliador/{mov}/conciliar', [ConciliadorController::class, 'conciliar'])->whereNumber('mov')->name('conciliador.conciliar');
+            Route::post('/conciliador/{mov}/asiento', [ConciliadorController::class, 'crearAsiento'])->whereNumber('mov')->name('conciliador.asiento');
+            Route::post('/conciliador/{mov}/deshacer', [ConciliadorController::class, 'deshacer'])->whereNumber('mov')->name('conciliador.deshacer');
+            Route::delete('/conciliador/{mov}', [ConciliadorController::class, 'borrarMovimiento'])->whereNumber('mov')->name('conciliador.borrar');
+            // Registro Mercantil
+            Route::get('/registro-mercantil/{sec}', [RegistroMercantilController::class, 'seccion'])->whereIn('sec', ['plantillas', 'legalia', 'd2'])->name('rm');
+            Route::post('/registro-mercantil/{sec}', [RegistroMercantilController::class, 'guardar'])->whereIn('sec', ['plantillas', 'legalia', 'd2'])->name('rm.guardar');
+            Route::get('/registro-mercantil/documento/{doc}', [RegistroMercantilController::class, 'documento'])->whereIn('doc', ['cert', 'acta', 'aplic', 'titular', 'instancia', 'gestion'])->name('rm.doc');
+            // Plan General Contable de la empresa
+            Route::get('/pgc', [ContabilidadListadosController::class, 'pgc'])->name('pgc');
+            Route::post('/pgc', [ContabilidadListadosController::class, 'guardarPgc'])->name('pgc.guardar');
+            Route::delete('/pgc/{codigo}', [ContabilidadListadosController::class, 'borrarPgc'])->where('codigo', '\\d{9}')->name('pgc.borrar');
+            Route::post('/pgc/{codigo}/reactivar', [ContabilidadListadosController::class, 'reactivarPgc'])->where('codigo', '\\d{9}')->name('pgc.reactivar');
             Route::get('/ejercicios', [ContabilidadController::class, 'ejercicios'])->name('ejercicios');
             Route::post('/ejercicios', [ContabilidadController::class, 'abrirEjercicio'])->name('ejercicios.abrir');
             Route::post('/ejercicios/{ejercicio}/cerrar', [ContabilidadController::class, 'cerrarEjercicio'])->whereNumber('ejercicio')->name('ejercicios.cerrar');

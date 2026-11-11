@@ -58,12 +58,33 @@ class Contabilidad
 
     public static function propias(Cliente $c): Collection
     {
-        $m = Cuenta::where('cliente_id', $c->id)->pluck('nombre', 'codigo');
+        $m = Cuenta::where('cliente_id', $c->id)->where('oculta', false)->pluck('nombre', 'codigo');
         foreach (Tercero::where('cliente_id', $c->id)->get(['cuenta', 'nombre']) as $t) {
             $m[$t->cuenta] = $t->nombre;
         }
 
         return $m;
+    }
+
+    /** Cuentas del PGC que la empresa ha dado de baja */
+    public static function ocultas(Cliente $c): array
+    {
+        return Cuenta::where('cliente_id', $c->id)->where('oculta', true)->pluck('codigo')->map(fn ($x) => (string) $x)->all();
+    }
+
+    /** Subcuentas 572… de las cuentas bancarias de la ficha de la empresa (Datos bancarios) */
+    public static function sincronizarBancos(Cliente $c): void
+    {
+        foreach ($c->seccion('bancos') as $b) {
+            $iban = strtoupper(preg_replace('/\s+/', '', (string) ($b['iban'] ?? '')));
+            if ($iban === '' || Cuenta::where('cliente_id', $c->id)->where('iban', $iban)->exists()) {
+                continue;
+            }
+            $max = Cuenta::where('cliente_id', $c->id)->where('codigo', 'like', '572%')->where('codigo', '!=', '572000000')->max('codigo');
+            $cod = $max ? str_pad((string) ((int) $max + 1), 9, '0', STR_PAD_LEFT) : '572000001';
+            $ent = trim((string) ($b['entidad'] ?? '')) ?: 'Cuenta';
+            Cuenta::create(['cliente_id' => $c->id, 'codigo' => $cod, 'nombre' => 'Bancos · '.$ent.' · ****'.substr($iban, -4), 'iban' => $iban]);
+        }
     }
 
     public static function cuentaPar(string $k): string
@@ -93,8 +114,14 @@ class Contabilidad
         if ($ej->bloqueo && $f->lt($ej->bloqueo) && ! in_array($tipo, ['Apertura', 'Regularización', 'Cierre'], true)) {
             throw new InvalidArgumentException('No se pueden registrar asientos con fecha anterior al '.Formato::fecha($ej->bloqueo).' (fecha de bloqueo).');
         }
-        $ls = collect($lineas)->map(fn ($l) => ['cuenta' => self::a9((string) $l[0]), 'debe' => round((float) $l[1], 2), 'haber' => round((float) $l[2], 2), 'concepto' => $l[3] ?? null])
+        $ls = collect($lineas)->map(fn ($l) => ['cuenta' => self::a9((string) $l[0]), 'debe' => round((float) $l[1], 2), 'haber' => round((float) $l[2], 2), 'concepto' => $l[3] ?? null, 'documento' => isset($l[4]) && $l[4] !== '' ? mb_substr((string) $l[4], 0, 40) : null])
             ->filter(fn ($l) => $l['debe'] != 0 || $l['haber'] != 0)->values();
+        $ocultas = self::ocultas($c);
+        foreach ($ls as $l) {
+            if (in_array($l['cuenta'], $ocultas, true)) {
+                throw new InvalidArgumentException('La cuenta '.$l['cuenta'].' está dada de baja en el PGC de la empresa. Reactívala en Contabilidad › PGC.');
+            }
+        }
         if ($ls->count() < 2) {
             throw new InvalidArgumentException('Un asiento necesita al menos dos apuntes con importe.');
         }
@@ -123,7 +150,7 @@ class Contabilidad
                     'tipo' => $tipo, 'origen' => $origen, 'origen_id' => $origenId, 'created_by' => $userId]);
             }
             foreach ($ls as $i => $l) {
-                Apunte::create(['asiento_id' => $a->id, 'cliente_id' => $c->id, 'orden' => $i, 'cuenta' => $l['cuenta'], 'concepto' => $l['concepto'], 'debe' => $l['debe'], 'haber' => $l['haber']]);
+                Apunte::create(['asiento_id' => $a->id, 'cliente_id' => $c->id, 'orden' => $i, 'cuenta' => $l['cuenta'], 'concepto' => $l['concepto'], 'documento' => $l['documento'], 'debe' => $l['debe'], 'haber' => $l['haber']]);
             }
 
             return $a;
@@ -243,7 +270,7 @@ class Contabilidad
     }
 
     /** Asiento del cobro de una factura emitida: banco/caja al debe, cliente (430…) al haber. La contabiliza antes si hace falta. */
-    public function contabilizarCobro(Factura $f, string $medio, ?int $userId = null): Asiento
+    public function contabilizarCobro(Factura $f, string $medio, ?int $userId = null, ?string $cuentaTes = null): Asiento
     {
         if ($f->cobro_asiento_id) {
             throw new InvalidArgumentException('El cobro de la factura '.$f->num.' ya está contabilizado.');
@@ -251,7 +278,7 @@ class Contabilidad
         if (! $f->cobrada || ! $f->cobrada_at) {
             throw new InvalidArgumentException('Marca antes la factura '.$f->num.' como cobrada.');
         }
-        return DB::transaction(function () use ($f, $medio, $userId) {
+        return DB::transaction(function () use ($f, $medio, $userId, $cuentaTes) {
             if (! $f->asiento_id) {
                 $this->contabilizarEmitida($f, $userId);
                 $f->refresh();
@@ -259,8 +286,9 @@ class Contabilidad
             $c = Cliente::findOrFail($f->cliente_id);
             $cli = Apunte::where('asiento_id', $f->asiento_id)->where('cuenta', 'like', '430%')->value('cuenta') ?? $this->cuentaCliente($c, $f->receptor_nif, $f->receptor_nombre);
             $imp = round((float) $f->total, 2);
-            $ls = $imp >= 0 ? [[self::cuentaMedio($medio), $imp, 0, 'Cobro fra. '.$f->num], [$cli, 0, $imp, $f->receptor_nombre]]
-                : [[$cli, -$imp, 0, $f->receptor_nombre], [self::cuentaMedio($medio), 0, -$imp, 'Devolución fra. '.$f->num]];
+            $tes = $cuentaTes ?: self::cuentaMedio($medio);
+            $ls = $imp >= 0 ? [[$tes, $imp, 0, 'Cobro fra. '.$f->num], [$cli, 0, $imp, $f->receptor_nombre]]
+                : [[$cli, -$imp, 0, $f->receptor_nombre], [$tes, 0, -$imp, 'Devolución fra. '.$f->num]];
             $a = $this->asentar($c, $f->cobrada_at->toDateString(), 'Cobro fra. '.$f->num.' · '.($f->receptor_nombre ?: 'simplificada').' · '.self::MEDIOS[$medio], $ls, 'Cobro', 'cobro', $f->id, $userId);
             $f->update(['cobro_asiento_id' => $a->id, 'cobro_medio' => $medio]);
 
@@ -269,7 +297,7 @@ class Contabilidad
     }
 
     /** Asiento del pago de una factura recibida: proveedor/acreedor al debe, banco/caja al haber. La contabiliza antes si hace falta. */
-    public function contabilizarPago(FacturaRecibida $f, string $medio, ?int $userId = null): Asiento
+    public function contabilizarPago(FacturaRecibida $f, string $medio, ?int $userId = null, ?string $cuentaTes = null): Asiento
     {
         if ($f->pago_asiento_id) {
             throw new InvalidArgumentException('El pago de la factura '.$f->num.' ya está contabilizado.');
@@ -278,7 +306,7 @@ class Contabilidad
             throw new InvalidArgumentException('Marca antes la factura '.$f->num.' como pagada.');
         }
 
-        return DB::transaction(function () use ($f, $medio, $userId) {
+        return DB::transaction(function () use ($f, $medio, $userId, $cuentaTes) {
             if (! $f->asiento_id) {
                 $this->contabilizarRecibida($f, $userId);
                 $f->refresh();
@@ -286,8 +314,9 @@ class Contabilidad
             $c = Cliente::findOrFail($f->cliente_id);
             $t = $f->tercero;
             $imp = round((float) $f->total, 2);
-            $ls = $imp >= 0 ? [[$t->cuenta, $imp, 0, $t->nombre], [self::cuentaMedio($medio), 0, $imp, 'Pago fra. '.$f->num]]
-                : [[self::cuentaMedio($medio), -$imp, 0, 'Abono fra. '.$f->num], [$t->cuenta, 0, -$imp, $t->nombre]];
+            $tes = $cuentaTes ?: self::cuentaMedio($medio);
+            $ls = $imp >= 0 ? [[$t->cuenta, $imp, 0, $t->nombre], [$tes, 0, $imp, 'Pago fra. '.$f->num]]
+                : [[$tes, -$imp, 0, 'Abono fra. '.$f->num], [$t->cuenta, 0, -$imp, $t->nombre]];
             $a = $this->asentar($c, $f->pagada_at->toDateString(), 'Pago fra. '.$f->num.' · '.$t->nombre.' · '.self::MEDIOS[$medio], $ls, 'Pago', 'pago', $f->id, $userId);
             $f->update(['pago_asiento_id' => $a->id, 'pago_medio' => $medio]);
 

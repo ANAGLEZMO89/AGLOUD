@@ -26,7 +26,7 @@ class CabecerasSeguridad
         $h->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
         $h->set('Cross-Origin-Opener-Policy', 'same-origin');
         if (! $h->has('Content-Security-Policy')) {
-            $h->set('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'self'");
+            $h->set('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; font-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'self'");
         }
         $h->remove('X-Powered-By');
 
