@@ -506,3 +506,29 @@ fieldset:disabled .inp,fieldset:disabled .sel,fieldset:disabled .txa{background:
 .cu-lin{display:grid;grid-template-columns:minmax(0,1fr) 70px 120px 120px 40px;gap:8px;align-items:center}
 .cu-head{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6A6A65}
 @media (max-width:640px){.cu-lin{grid-template-columns:minmax(0,1fr) 60px 100px}.cu-lin > :nth-child(4){grid-column:1/3}.cu-head{display:none}}
+
+/* ---------- Cobros y pagos ---------- */
+.cp-ter{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:9px;color:inherit;text-decoration:none;font-size:13px}
+.cp-ter:hover{background:#F4F4F0;color:inherit}
+.cp-ter.on{background:#0B0B0B;color:#fff}
+.cp-ter span:first-child{display:flex;flex-direction:column;min-width:0}
+.cp-ter small{font-size:11.5px;color:#6A6A65}
+.cp-ter.on small{color:#BDBDB7}
+.cp-row{display:grid;grid-template-columns:110px minmax(0,1fr) 84px 104px 150px 236px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F1F1EC}
+.cp-head{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6A6A65}
+.cp-chip{width:100%;height:32px;border-radius:16px;border:1.5px solid #0B0B0B;background:#fff;font:700 12px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}
+.cp-chip:hover{background:#C8F031}
+.cp-chip.venc{border-color:#B42318;color:#B42318}
+.cp-chip.ok{background:#E6F6A8;border-color:#E6F6A8;color:#2E3A00}
+.cp-chip.ok:disabled{cursor:default}
+.cp-envio{display:flex;gap:6px;align-items:center}
+.cp-envio .sel{height:32px;width:96px;padding:0 6px;font-size:12.5px;flex:none}
+.cp-envio .btn{height:32px;padding:0 10px;font-size:12px}
+.cp-conta{font-size:12px;font-weight:700;color:#2E3A00;text-decoration:none}
+@media (max-width:900px){.cp-row{grid-template-columns:minmax(0,1fr) 104px;row-gap:6px}.cp-head{display:none}.cp-row > :nth-child(3){display:none}}
+
+/* ---------- Productos ---------- */
+.pr-row{display:grid;grid-template-columns:90px minmax(0,1fr) 100px 110px 60px 110px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #F1F1EC;color:inherit;text-decoration:none;font-size:13px}
+a.pr-row:hover{background:#FAFAF7;color:inherit}
+.pr-head{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6A6A65}
+@media (max-width:700px){.pr-row{grid-template-columns:minmax(0,1fr) 100px}.pr-row > :nth-child(1),.pr-row > :nth-child(3),.pr-row > :nth-child(5),.pr-row > :nth-child(6){display:none}}

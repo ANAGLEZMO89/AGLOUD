@@ -3,7 +3,7 @@
 @section('content')
 <div class="page" style="gap:16px">
   <div class="page-h">
-    <div class="t"><span class="crumb">Gestión</span><h1 class="ttl">Clientes</h1></div>
+    <div class="t"><span class="crumb">Gestión</span><h1 class="ttl">Ventas</h1></div>
     @include('partials.empresa', ['volver' => '/clientes/facturas'])
   </div>
   @include('partials.tabs-modulo', ['modulo' => 'clientes', 'actual' => 'clientes.facturas'])

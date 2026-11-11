@@ -86,9 +86,10 @@ return [
     // Menú lateral AG Cloud (idéntico al prototipo). 'ruta' null = módulo en preparación.
     'menu' => [
         ['label' => 'Gestión', 'items' => [
-            ['clientes', 'Clientes', 'clientes.index'],
-            ['proveedores', 'Proveedores', 'proveedores.index'],
-            ['acreedores', 'Acreedores', 'acreedores.index'],
+            ['clientes', 'Ventas', 'clientes.index'],
+            ['proveedores', 'Compras', 'proveedores.index'],
+            ['acreedores', 'Gastos', 'acreedores.index'],
+            ['productos', 'Productos', 'productos.index'],
             ['calendario', 'Calendario', 'calendario'],
             ['tareas', 'Tareas y horario', 'tareas.index'],
         ]],

@@ -13,13 +13,14 @@ use Throwable;
 class Parametros
 {
     public const MODULOS = [
-        'clientes' => ['Clientes', 'Gestión', 'clientes.index'],
+        'clientes' => ['Ventas', 'Gestión', 'clientes.index'],
         'expedientes' => ['Expedientes', 'Gestión', 'expedientes.index'],
         'notificaciones' => ['Notificaciones', 'Comunicación', 'notificaciones.index'],
         'documentos' => ['Documentos', 'Comunicación', 'documentos.index'],
         'crm' => ['CRM', 'Áreas', 'crm.index'],
-        'proveedores' => ['Proveedores', 'Gestión', 'proveedores.index'],
-        'acreedores' => ['Acreedores', 'Gestión', 'acreedores.index'],
+        'proveedores' => ['Compras', 'Gestión', 'proveedores.index'],
+        'acreedores' => ['Gastos', 'Gestión', 'acreedores.index'],
+        'productos' => ['Productos', 'Gestión', 'productos.index'],
         'calendario' => ['Calendario', 'Gestión', 'calendario'],
         'tareas' => ['Tareas y horario', 'Gestión', 'tareas.index'],
         'contabilidad' => ['Contabilidad', 'Áreas', 'contabilidad.index'],
@@ -28,9 +29,9 @@ class Parametros
 
     /** Pestañas de cada módulo (además de «Parámetros») */
     public const PESTANAS = [
-        'clientes' => [['Clientes', 'clientes.index'], ['Facturas de clientes', 'clientes.facturas']],
-        'proveedores' => [['Proveedores', 'proveedores.index'], ['Facturas de proveedores', 'proveedores.facturas']],
-        'acreedores' => [['Acreedores', 'acreedores.index'], ['Facturas de acreedores', 'acreedores.facturas']],
+        'clientes' => [['Clientes', 'clientes.index'], ['Facturas de clientes', 'clientes.facturas'], ['Cobros', 'clientes.cobros']],
+        'proveedores' => [['Proveedores', 'proveedores.index'], ['Facturas de proveedores', 'proveedores.facturas'], ['Pagos', 'proveedores.pagos']],
+        'acreedores' => [['Acreedores', 'acreedores.index'], ['Facturas de acreedores', 'acreedores.facturas'], ['Pagos', 'acreedores.pagos'], ['Gastos no deducibles IVA', 'acreedores.nodeducibles']],
         'tareas' => [['Tareas', 'tareas.index'], ['Horario', 'tareas.horario']],
     ];
 
@@ -52,9 +53,10 @@ class Parametros
             'proveedores' => ['forma_pago' => 'Transferencia', 'pago_dias' => 30],
             'acreedores' => ['forma_pago' => 'Domiciliación SEPA', 'pago_dias' => 0, 'tipo' => 'Servicios', 'retencion' => 0],
             'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true, 'fiscal' => true],
+            'productos' => ['tipo' => 'Servicio', 'iva' => 21],
             'tareas' => ['jornada_semanal' => 40, 'jornada_diaria' => 8, 'vacaciones' => 22, 'prioridad' => 'Media'],
             'contabilidad' => ['ventas' => '705', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
-                'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572'],
+                'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572', 'caja' => '570'],
             'fiscal' => ['aviso_dias' => 10, 'umbral_347' => 3005.06, 'pct_130' => 20, 'pct_202_402' => 18, 'pct_202_403' => 17],
             default => [],
         };

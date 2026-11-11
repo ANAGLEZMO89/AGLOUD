@@ -157,6 +157,13 @@ class ParametrosController extends Controller
         return $out;
     }
 
+    private function datosProductos(Request $r): array
+    {
+        $d = $r->validate(['tipo' => ['required', Rule::in(ProductoController::TIPOS)], 'iva' => ['required', Rule::in(ProductoController::IVAS)]]);
+
+        return ['tipo' => $d['tipo'], 'iva' => (int) $d['iva']];
+    }
+
     private function datosFiscal(Request $r): array
     {
         $d = $r->validate([

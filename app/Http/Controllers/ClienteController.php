@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\Factura;
 use App\Models\User;
 use App\Services\AccesosPortal;
+use App\Services\VerificacionNif;
 use App\Services\Auditoria;
 use App\Support\Formato;
 use App\Support\Parametros;
@@ -229,9 +230,43 @@ class ClienteController extends Controller
         }
         $v['nif'] = $nif;
         $v['nombre'] = trim($v['nombre']);
+        $v += $this->verificarAeat($nif, $v['nombre'], $tipoNif, $c);
         $v['email'] = isset($v['email']) ? mb_strtolower(trim($v['email'])) : null;
 
         return $v;
+    }
+
+    /** Mensaje de la verificación en la AEAT para la pantalla */
+    private string $avisoAeat = '';
+
+    /**
+     * Verificación del NIF en la AEAT (si hay certificado configurado y activo). Solo se consulta si el NIF
+     * o el nombre han cambiado o aún no estaba identificado. NO IDENTIFICADO, BAJA o REVOCADO impiden guardar.
+     */
+    private function verificarAeat(string $nif, string $nombre, string $tipoNif, ?Cliente $c): array
+    {
+        $srv = app(VerificacionNif::class);
+        if (! $srv->activo() || ($c && $c->nif === $nif && $c->nombre === $nombre && $c->nif_aeat === 'IDENTIFICADO')) {
+            return [];
+        }
+        $r = $srv->comprobar($nif, $nombre);
+        // Personas físicas: la AEAT ordena «apellidos nombre»; si no lo identifica tal cual, se prueba así
+        $w = preg_split('/\s+/', $nombre) ?: [];
+        if ($r['estado'] === 'no' && in_array($tipoNif, ['DNI', 'NIE', 'NIF especial'], true) && count($w) > 1) {
+            $r2 = $srv->comprobar($nif, implode(' ', array_slice($w, 1)).' '.$w[0]);
+            $r = $r2['estado'] === 'error' ? $r : $r2;
+        }
+        if (in_array($r['estado'], ['no', 'baja', 'revocado'], true)) {
+            $this->fallo(match ($r['estado']) {
+                'no' => 'La AEAT no identifica el NIF '.$nif.' con el nombre «'.$nombre.'». Revisa el NIF y escribe el nombre o la razón social tal como figura en Hacienda.',
+                'baja' => 'El NIF '.$nif.' figura de BAJA en el censo de la AEAT'.($r['nombre'] ? ' ('.$r['nombre'].')' : '').'. Revísalo con el cliente.',
+                default => 'El NIF '.$nif.' está REVOCADO por la AEAT'.($r['nombre'] ? ' ('.$r['nombre'].')' : '').': no se puede usar.',
+            });
+        }
+        $ok = $r['estado'] === 'ok';
+        $this->avisoAeat = $ok ? 'NIF verificado en la AEAT'.($r['nombre'] ? ': '.$r['nombre'] : '').'.' : 'Ojo: '.$r['msg'].' El NIF se ha guardado sin verificar; se comprobará al volver a guardar.';
+
+        return ['nif_aeat' => $ok ? 'IDENTIFICADO' : 'PENDIENTE', 'nif_aeat_nombre' => $r['nombre'] ?: null, 'nif_aeat_at' => $ok ? now() : null];
     }
 
     private function tipoNif(string $nif): string
@@ -277,7 +312,7 @@ class ClienteController extends Controller
         });
         Auditoria::registrar('cliente.alta', 'Alta del cliente '.$c->nombre.' ('.$c->nif.')', $c, $c->id);
 
-        $msg = trim('Cliente creado. Completa ahora el resto de la ficha. '.$this->altaPortal($c, $accesos, $pass));
+        $msg = trim('Cliente creado. '.$this->avisoAeat.' Completa ahora el resto de la ficha. '.$this->altaPortal($c, $accesos, $pass));
 
         if ($request->input('ir') === 'cerrar') {
             return redirect()->route('clientes.show', $c)->with('ok', $msg);
@@ -347,7 +382,7 @@ class ClienteController extends Controller
         Auditoria::registrar('cliente.edicion', 'Datos generales actualizados de '.$cliente->nombre, $cliente, $cliente->id);
 
         $msg = 'Datos generales guardados.';
-        $msg = trim($msg.' '.$this->altaPortal($cliente, $accesos, $request->input('portal_pass')));
+        $msg = trim($msg.' '.$this->avisoAeat.' '.$this->altaPortal($cliente, $accesos, $request->input('portal_pass')));
         if ($antesTipo !== $cliente->tipo) {
             $msg .= ' Has cambiado el tipo de cliente: revisa las secciones de la ficha.';
         }

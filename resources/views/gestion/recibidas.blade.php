@@ -10,21 +10,22 @@
 @endphp
 @section('content')
 <div class="page" style="gap:16px">
-  @include('gestion._cabecera', ['tituloH' => $plural, 'volver' => '/'.$mod.'/facturas', 'modulo' => $mod, 'actual' => $mod.'.facturas'])
+  @include('gestion._cabecera', ['tituloH' => $plural, 'volver' => $nd ? '/acreedores/no-deducibles' : '/'.$mod.'/facturas', 'modulo' => $mod, 'actual' => $nd ? 'acreedores.nodeducibles' : $mod.'.facturas'])
+  @if($nd)<div class="msg" style="font-weight:600;background:#F4F4F0;color:#3C3C3C">Gastos con IVA no deducible (art. 95 y 96 LIVA: p. ej. atenciones a clientes, gastos no afectos, tiques sin factura completa). El IVA se suma al gasto y no entra en el modelo 303.</div>@endif
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
     @foreach($kpis as [$l, $val, $s])<div class="card" style="padding:16px 18px;gap:6px"><span style="font-size:13px;color:#6A6A65">{{ $l }}</span><span style="font:600 26px/1.1 var(--mono);letter-spacing:-.03em">{{ $val }}</span><span style="font-size:12.5px;color:#3C3C3C">{{ $s }}</span></div>@endforeach
   </div>
 
-  <form method="GET" action="{{ route($mod.'.facturas') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px" data-autoform>
+  <form method="GET" action="{{ route($nd ? 'acreedores.nodeducibles' : $mod.'.facturas') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px" data-autoform>
     @foreach(['y' => $y, 'per' => $per === 'Año' ? null : $per, 'chip' => $chip ?: null] as $k => $val)@if($val)<input type="hidden" name="{{ $k }}" value="{{ $val }}">@endif @endforeach
     <input class="inp" name="q" value="{{ $q }}" placeholder="Buscar" style="flex:1;min-width:180px;max-width:300px;height:38px" data-autosubmit>
     <select class="sel" style="width:auto;height:38px" data-nav>@foreach($anios as $a)<option value="{{ $url(['y' => $a]) }}" @selected($a === $y)>{{ $a }}</option>@endforeach</select>
     <div class="chipbar" style="border-radius:11px">@foreach(['Año', '1T', '2T', '3T', '4T'] as $p)<a class="{{ $per === $p ? 'on' : '' }}" style="padding:7px 12px;border-radius:8px" href="{{ $url(['per' => $p === 'Año' ? null : $p]) }}">{{ $p }}</a>@endforeach</div>
-    <div class="chipbar" style="border-radius:11px">@foreach($chips as $i => $l)<a class="{{ $chip === $i ? 'on' : '' }}" style="padding:7px 12px;border-radius:8px" href="{{ $url(['chip' => $i ?: null]) }}">{{ $l }}</a>@endforeach</div>
+    @unless($nd)<div class="chipbar" style="border-radius:11px">@foreach($chips as $i => $l)<a class="{{ $chip === $i ? 'on' : '' }}" style="padding:7px 12px;border-radius:8px" href="{{ $url(['chip' => $i ?: null]) }}">{{ $l }}</a>@endforeach</div>@endunless
     <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
       <div style="display:flex;align-items:center;gap:4px;padding:3px;border-radius:20px;background:#fff"><span style="padding:0 8px 0 10px;font-size:13px;font-weight:700">Exportar</span><a class="pillbtn" style="height:30px;font-size:12.5px" href="{{ $url(['exportar' => 'csv']) }}">Excel / CSV</a></div>
-      <a class="btn" href="{{ $url(['nuevo' => 1]) }}" style="background:#0B0B0B;color:#fff">+ Nueva factura {{ $acr ? 'de gasto' : 'de compra' }}</a>
+      <a class="btn" href="{{ $url(['nuevo' => 1]) }}" style="background:#0B0B0B;color:#fff">+ Nueva factura {{ $nd ? 'de gasto no deducible' : ($acr ? 'de gasto' : 'de compra') }}</a>
     </div>
   </form>
 
@@ -34,7 +35,8 @@
     @else
     <form method="POST" action="{{ $f ? route($mod.'.facturas.update', $f) : route($mod.'.facturas.store') }}" enctype="multipart/form-data" class="card" style="padding:18px 20px;gap:14px;border:1.5px solid #0B0B0B" data-rec-form data-ter='@json($terceros->mapWithKeys(fn ($t) => [$t->id => ['ret' => (float) $t->retencion, 'fp' => $t->forma_pago, 'dias' => $t->pago_dias]]))'>
       @csrf
-      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:700">{{ $f ? 'Editar factura '.$f->num : ($acr ? 'Nueva factura de gasto' : 'Nueva factura de compra') }}</span><a href="{{ $url() }}" style="font-weight:600;font-size:13.5px">Cancelar</a></div>
+      @if($nd)<input type="hidden" name="volver" value="nd">@endif
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:700">{{ $f ? 'Editar factura '.$f->num : ($nd ? 'Nuevo gasto con IVA no deducible' : ($acr ? 'Nueva factura de gasto' : 'Nueva factura de compra')) }}</span><a href="{{ $url() }}" style="font-weight:600;font-size:13.5px">Cancelar</a></div>
       @if($errors->has('form'))<div class="ferr">{{ $errors->first('form') }}</div>@endif
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px">
         <label class="lbl-s">{{ $sing }} *<select class="sel" name="tercero_id" data-rec-ter>@foreach($terceros as $t)<option value="{{ $t->id }}" @selected((string) $v('tercero_id') === (string) $t->id)>{{ $t->nombre }}</option>@endforeach</select></label>
@@ -45,7 +47,7 @@
         <label class="lbl-s">IVA %<select class="sel" name="iva_pct" data-rec-iva>@foreach(['21', '10', '5', '4', '0'] as $x)<option @selected((string) (0 + $v('iva_pct', 21)) === $x)>{{ $x }}</option>@endforeach</select></label>
         @if($acr)
           <label class="lbl-s">Retención IRPF %<select class="sel" name="ret_pct" data-rec-ret>@foreach(['0', '1', '7', '15', '19'] as $x)<option @selected((string) (0 + $v('ret_pct', 0)) === $x)>{{ $x }}</option>@endforeach</select></label>
-          <label class="chk" style="gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" name="deducible" value="1" @checked(old('deducible', $f ? $f->deducible : true)) style="accent-color:#0B0B0B">IVA deducible</label>
+          <label class="chk" style="gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" name="deducible" value="1" @checked(old('deducible', $f ? $f->deducible : ! $nd)) style="accent-color:#0B0B0B">IVA deducible</label>
         @endif
         <label class="lbl-s">Forma de pago<select class="sel" name="forma_pago" data-rec-fp>@foreach(TC::PAGOS as $x)<option @selected($v('forma_pago') === $x)>{{ $x }}</option>@endforeach</select></label>
         <label class="lbl-s">Vencimiento<input class="inp" type="date" name="vencimiento" value="{{ old('vencimiento', $f?->vencimiento?->toDateString()) }}"><span class="hint muted">Vacío = según el {{ mb_strtolower($sing) }}.</span></label>

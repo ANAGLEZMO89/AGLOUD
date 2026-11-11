@@ -129,10 +129,21 @@
         <span style="font-size:16px;font-weight:700">Cuentas que se usan al contabilizar las facturas</span>
         <span class="hint muted">Para todas las empresas. Puedes escribir la cuenta con 3 o 4 cifras (se completa con ceros) o una subcuenta de 9.</span>
         <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px">
-          @foreach(['ventas' => 'Ventas / prestación de servicios', 'compras' => 'Compras (facturas de proveedores)', 'gasto_servicios' => 'Gastos de acreedores «Servicios»', 'gasto_profesional' => 'Gastos de profesionales', 'gasto_arrendamiento' => 'Arrendamientos', 'iva_repercutido' => 'IVA repercutido', 'iva_soportado' => 'IVA soportado', 'ret_soportada' => 'Retenciones que nos practican', 'ret_practicada' => 'Retenciones que practicamos', 'suplidos' => 'Suplidos facturados', 'banco' => 'Banco por defecto'] as $k => $l)
+          @foreach(['ventas' => 'Ventas / prestación de servicios', 'compras' => 'Compras (facturas de proveedores)', 'gasto_servicios' => 'Gastos de acreedores «Servicios»', 'gasto_profesional' => 'Gastos de profesionales', 'gasto_arrendamiento' => 'Arrendamientos', 'iva_repercutido' => 'IVA repercutido', 'iva_soportado' => 'IVA soportado', 'ret_soportada' => 'Retenciones que nos practican', 'ret_practicada' => 'Retenciones que practicamos', 'suplidos' => 'Suplidos facturados', 'banco' => 'Banco por defecto (cobros y pagos)', 'caja' => 'Caja (cobros y pagos en efectivo)'] as $k => $l)
             <label class="lbl-s">{{ $l }}<input class="inp mono" name="{{ $k }}" value="{{ old($k, $p[$k]) }}" maxlength="9"><span class="hint muted">{{ \App\Services\Contabilidad::nombre(\App\Services\Contabilidad::a9((string) $p[$k])) }}</span></label>
           @endforeach
         </div>
+      </div>
+    @endif
+
+    @if($modulo === 'productos')
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Valores por defecto de los productos nuevos</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:12px">
+          <label class="lbl-s">Tipo<select class="sel" name="tipo">@foreach(\App\Http\Controllers\ProductoController::TIPOS as $x)<option @selected($p['tipo'] === $x)>{{ $x }}</option>@endforeach</select></label>
+          <label class="lbl-s">IVA %<select class="sel" name="iva">@foreach(\App\Http\Controllers\ProductoController::IVAS as $x)<option @selected((string) $p['iva'] === $x)>{{ $x }}</option>@endforeach</select></label>
+        </div>
+        <span class="hint muted">Cada empresa tiene su propio catálogo en Gestión › Productos; se usa al hacer facturas y presupuestos.</span>
       </div>
     @endif
 
@@ -175,5 +186,40 @@
     </fieldset>
     @if($puede)<div style="display:flex;justify-content:flex-end"><button class="btn" type="submit" style="background:#0B0B0B;color:#fff">Guardar</button></div>@endif
   </form>
+
+  @if($modulo === 'clientes')
+    @php $cert = app(\App\Services\VerificacionNif::class)->certificado(); @endphp
+    <div class="card" style="padding:18px 20px;gap:12px" id="aeat">
+      <span style="font-size:16px;font-weight:700">Verificación del NIF en la AEAT</span>
+      <span class="hint muted">Al guardar un cliente se consulta el censo de la AEAT (servicio «Verificación de NIF»): si no identifica el NIF con su nombre o razón social, o figura de baja o revocado, no deja guardar. Para consultar hace falta un certificado electrónico; se guarda cifrado y solo lo usa este servicio de consulta (no presenta nada).</span>
+      @if($errors->has('aeat'))<div class="ferr">{{ $errors->first('aeat') }}</div>@endif
+      @if($cert)
+        <div class="boxsoft" style="display:flex;flex-direction:column;gap:4px">
+          <b style="font-size:14px">{{ $cert['titular'] }}{{ $cert['nif'] ? ' · '.$cert['nif'] : '' }}</b>
+          <span style="font-size:12.5px;color:#3C3C3C">Emisor: {{ $cert['emisor'] ?: '—' }} · Caduca: {{ $cert['caduca'] ? \App\Support\Formato::fecha($cert['caduca']) : '—' }} · {{ $cert['activo'] ? 'Verificación activada' : 'Verificación desactivada' }}</span>
+        </div>
+        @if($puede)
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <form method="POST" action="{{ route('admin.aeat.activar') }}">@csrf<input type="hidden" name="activo" value="{{ $cert['activo'] ? 0 : 1 }}"><button class="btn soft sm" type="submit">{{ $cert['activo'] ? 'Desactivar la verificación' : 'Activar la verificación' }}</button></form>
+          <form method="POST" action="{{ route('admin.aeat.probar') }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">@csrf
+            <input class="inp mono" name="nif" placeholder="NIF (vacío: el del despacho)" style="width:200px;height:34px" maxlength="15">
+            <input class="inp" name="nombre" placeholder="Nombre o razón social" style="width:220px;height:34px" maxlength="120">
+            <button class="btn sm" type="submit">Probar conexión</button>
+          </form>
+          <form method="POST" action="{{ route('admin.aeat.quitar') }}" data-confirm="¿Eliminar el certificado? Dejará de verificarse el NIF en la AEAT.">@csrf @method('DELETE')<button class="lnk red" type="submit" style="font-size:12.5px">Eliminar certificado</button></form>
+        </div>
+        @endif
+      @endif
+      @if($puede)
+        <form method="POST" action="{{ route('admin.aeat.guardar') }}" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">@csrf
+          <label class="lbl-s" style="flex:1 1 240px">{{ $cert ? 'Sustituir el certificado' : 'Certificado del despacho (.p12 o .pfx)' }}<input class="inp" type="file" name="certificado" accept=".p12,.pfx,application/x-pkcs12" style="padding-top:8px" required></label>
+          <label class="lbl-s" style="flex:1 1 200px">Contraseña del certificado<input class="inp" type="password" name="pass" autocomplete="off" required></label>
+          <button class="btn lime" type="submit">Guardar certificado</button>
+        </form>
+      @else
+        <span class="hint muted">Solo la administración del despacho puede configurar el certificado.</span>
+      @endif
+    </div>
+  @endif
 </div>
 @endsection

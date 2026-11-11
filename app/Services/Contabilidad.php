@@ -142,6 +142,12 @@ class Contabilidad
             if ($a->origen === 'recibida') {
                 FacturaRecibida::whereKey($a->origen_id)->where('asiento_id', $a->id)->update(['asiento_id' => null]);
             }
+            if ($a->origen === 'cobro') {
+                Factura::whereKey($a->origen_id)->where('cobro_asiento_id', $a->id)->get()->each(fn ($f) => $f->update(['cobro_asiento_id' => null]));
+            }
+            if ($a->origen === 'pago') {
+                FacturaRecibida::whereKey($a->origen_id)->where('pago_asiento_id', $a->id)->update(['pago_asiento_id' => null]);
+            }
             $a->delete();
         });
     }
@@ -225,6 +231,68 @@ class Contabilidad
         $f->update(['asiento_id' => $a->id]);
 
         return $a;
+    }
+
+    // ------------------------------------------------- cobros y pagos
+    public const MEDIOS = ['banco' => 'Banco', 'caja' => 'Caja'];
+
+    /** Cuenta de tesorería del medio: banco (572) o caja (570) */
+    public static function cuentaMedio(string $medio): string
+    {
+        return self::cuentaPar($medio === 'caja' ? 'caja' : 'banco');
+    }
+
+    /** Asiento del cobro de una factura emitida: banco/caja al debe, cliente (430…) al haber. La contabiliza antes si hace falta. */
+    public function contabilizarCobro(Factura $f, string $medio, ?int $userId = null): Asiento
+    {
+        if ($f->cobro_asiento_id) {
+            throw new InvalidArgumentException('El cobro de la factura '.$f->num.' ya está contabilizado.');
+        }
+        if (! $f->cobrada || ! $f->cobrada_at) {
+            throw new InvalidArgumentException('Marca antes la factura '.$f->num.' como cobrada.');
+        }
+        return DB::transaction(function () use ($f, $medio, $userId) {
+            if (! $f->asiento_id) {
+                $this->contabilizarEmitida($f, $userId);
+                $f->refresh();
+            }
+            $c = Cliente::findOrFail($f->cliente_id);
+            $cli = Apunte::where('asiento_id', $f->asiento_id)->where('cuenta', 'like', '430%')->value('cuenta') ?? $this->cuentaCliente($c, $f->receptor_nif, $f->receptor_nombre);
+            $imp = round((float) $f->total, 2);
+            $ls = $imp >= 0 ? [[self::cuentaMedio($medio), $imp, 0, 'Cobro fra. '.$f->num], [$cli, 0, $imp, $f->receptor_nombre]]
+                : [[$cli, -$imp, 0, $f->receptor_nombre], [self::cuentaMedio($medio), 0, -$imp, 'Devolución fra. '.$f->num]];
+            $a = $this->asentar($c, $f->cobrada_at->toDateString(), 'Cobro fra. '.$f->num.' · '.($f->receptor_nombre ?: 'simplificada').' · '.self::MEDIOS[$medio], $ls, 'Cobro', 'cobro', $f->id, $userId);
+            $f->update(['cobro_asiento_id' => $a->id, 'cobro_medio' => $medio]);
+
+            return $a;
+        });
+    }
+
+    /** Asiento del pago de una factura recibida: proveedor/acreedor al debe, banco/caja al haber. La contabiliza antes si hace falta. */
+    public function contabilizarPago(FacturaRecibida $f, string $medio, ?int $userId = null): Asiento
+    {
+        if ($f->pago_asiento_id) {
+            throw new InvalidArgumentException('El pago de la factura '.$f->num.' ya está contabilizado.');
+        }
+        if (! $f->pagada_at) {
+            throw new InvalidArgumentException('Marca antes la factura '.$f->num.' como pagada.');
+        }
+
+        return DB::transaction(function () use ($f, $medio, $userId) {
+            if (! $f->asiento_id) {
+                $this->contabilizarRecibida($f, $userId);
+                $f->refresh();
+            }
+            $c = Cliente::findOrFail($f->cliente_id);
+            $t = $f->tercero;
+            $imp = round((float) $f->total, 2);
+            $ls = $imp >= 0 ? [[$t->cuenta, $imp, 0, $t->nombre], [self::cuentaMedio($medio), 0, $imp, 'Pago fra. '.$f->num]]
+                : [[self::cuentaMedio($medio), -$imp, 0, 'Abono fra. '.$f->num], [$t->cuenta, 0, -$imp, $t->nombre]];
+            $a = $this->asentar($c, $f->pagada_at->toDateString(), 'Pago fra. '.$f->num.' · '.$t->nombre.' · '.self::MEDIOS[$medio], $ls, 'Pago', 'pago', $f->id, $userId);
+            $f->update(['pago_asiento_id' => $a->id, 'pago_medio' => $medio]);
+
+            return $a;
+        });
     }
 
     /** Contraasiento al anular una factura ya contabilizada */

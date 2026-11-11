@@ -136,6 +136,9 @@ class FacturaController extends Controller
     {
         $this->propia($request, $factura);
         abort_if($factura->estado === 'Anulada', 422);
+        if ($factura->cobro_asiento_id) {
+            return back()->with('aviso', 'El cobro de '.$factura->num.' ya está contabilizado. Para deshacerlo, borra antes su asiento en Contabilidad › Libro diario.');
+        }
         $factura->cobrada = ! $factura->cobrada;
         $factura->cobrada_at = $factura->cobrada ? now()->toDateString() : null;
         $factura->save();
@@ -481,8 +484,6 @@ class FacturaController extends Controller
             'modo' => $request->input('modo'),
             'pie' => trim((string) $request->input('pie')),
             'series' => $series->all(),
-            'catalogo' => collect($request->input('cat', []))->filter(fn ($p) => trim((string) ($p['nombre'] ?? '')) !== '')
-                ->map(fn ($p) => ['nombre' => trim($p['nombre']), 'precio' => Formato::parseNum($p['precio'] ?? '0'), 'iva' => (int) ($p['iva'] ?? 21)])->values()->all(),
         ])->save();
         Auditoria::registrar('factura.configuracion', 'Configuración de facturación guardada', null, $c->id);
 

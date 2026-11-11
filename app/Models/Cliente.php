@@ -28,6 +28,7 @@ class Cliente extends Model
             'cuota_inicio' => 'date',
             'cuota_importe' => 'decimal:2',
             'cuota_lineas' => 'array',
+            'nif_aeat_at' => 'datetime',
             'datos' => 'encrypted:array',
         ];
     }

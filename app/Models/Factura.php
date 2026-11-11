@@ -22,7 +22,7 @@ class Factura extends Model
 
     public const FORMAS_PAGO = ['Transferencia', 'Domiciliación SEPA', 'Tarjeta', 'Bizum', 'Efectivo'];
 
-    private const MODIFICABLES = ['cobrada', 'cobrada_at', 'estado', 'asiento_id', 'updated_at'];
+    private const MODIFICABLES = ['cobrada', 'cobrada_at', 'cobro_medio', 'cobro_asiento_id', 'estado', 'asiento_id', 'updated_at'];
 
     protected $guarded = ['id'];
 

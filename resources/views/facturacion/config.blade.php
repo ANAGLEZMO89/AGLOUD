@@ -38,16 +38,7 @@
       </div>
     </div>
     <div class="card" style="padding:14px 18px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13.5px">El modelo, los colores, la tipografía, el logo y la firma están en la pestaña <b>Diseño de la factura</b>.</span><a class="pillbtn ink" href="{{ route('facturacion.diseno') }}">Ir al diseño</a></div>
-        <div class="card" style="padding:18px 20px;gap:10px">
-          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:700">Productos y servicios</span><button type="button" class="pillbtn" style="height:32px" data-cat-add>+ Añadir</button></div>
-          <span class="hint muted">Aparecen al escribir la descripción de una línea y rellenan el precio y el IVA.</span>
-          <div data-cat-box style="display:flex;flex-direction:column;gap:8px">
-            @foreach($cfg->catalogo ?? [] as $i => $p)
-              <div class="cat-row" data-cat-row><input class="inp" name="cat[{{ $i }}][nombre]" value="{{ $p['nombre'] }}" maxlength="120"><input class="inp mono" name="cat[{{ $i }}][precio]" value="{{ Formato::num($p['precio']) }}" inputmode="decimal"><select class="sel" name="cat[{{ $i }}][iva]">@foreach(FC::IVAS as $v)<option @selected((string) $p['iva'] === $v)>{{ $v }}</option>@endforeach</select><button type="button" class="lnk" style="font-size:18px;color:#6A6A65;text-decoration:none" data-cat-del>×</button></div>
-            @endforeach
-          </div>
-          <template data-cat-tpl><div class="cat-row" data-cat-row><input class="inp" name="cat[__][nombre]" maxlength="120" placeholder="Nombre"><input class="inp mono" name="cat[__][precio]" inputmode="decimal" placeholder="0,00"><select class="sel" name="cat[__][iva]">@foreach(FC::IVAS as $v)<option>{{ $v }}</option>@endforeach</select><button type="button" class="lnk" style="font-size:18px;color:#6A6A65;text-decoration:none" data-cat-del>×</button></div></template>
-        </div>
+        <div class="card" style="padding:14px 18px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13.5px">Los <b>productos y servicios</b> ({{ count($cfg->catalogo ?? []) }}) se gestionan en Gestión › Productos y se rellenan solos al escribir una línea.</span><a class="pillbtn ink" href="{{ route('productos.index') }}">Ir a Productos</a></div>
 
     <div class="card" style="padding:14px 20px;flex-direction:row;justify-content:flex-end;align-items:center;gap:12px;position:sticky;bottom:12px;box-shadow:0 6px 24px rgba(0,0,0,.08)">
       <span style="font-size:12.5px;color:#6E4300;display:none" data-dirty>Cambios sin guardar</span>

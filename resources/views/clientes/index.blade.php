@@ -3,7 +3,7 @@
 @section('content')
 <div class="page">
   <div class="page-h">
-    <div class="t"><span class="crumb">Gestión</span><h1 class="ttl">Clientes</h1></div>
+    <div class="t"><span class="crumb">Gestión</span><h1 class="ttl">Ventas</h1></div>
     <div class="row">
       <a class="btn white" href="{{ route('clientes.exportar', request()->query()) }}">Exportar</a>
       <a class="btn lime" href="{{ route('clientes.create') }}">+ Nuevo cliente</a>

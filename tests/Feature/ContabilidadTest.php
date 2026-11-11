@@ -186,9 +186,9 @@ class ContabilidadTest extends TestCase
             $this->en()->get(route($r))->assertOk()->assertSee('Parámetros');
         }
         $this->actingAs($this->admin)->post(route('parametros.guardar', 'contabilidad'), ['ventas' => '700', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
-            'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572'])->assertRedirect();
+            'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572', 'caja' => '570'])->assertRedirect();
         $this->actingAs($this->admin)->post(route('parametros.guardar', 'contabilidad'), ['ventas' => '999', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
-            'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572'])->assertSessionHasErrors('ventas');
+            'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572', 'caja' => '570'])->assertSessionHasErrors('ventas');
         Parametros::limpiar();
         $f = $this->emitida();
         app(Contabilidad::class)->contabilizarEmitida($f);

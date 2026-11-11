@@ -176,16 +176,23 @@ abstract class TerceroController extends Controller
     }
 
     // ===================================================== facturas recibidas
-    public function facturas(Request $request)
+    /** Gastos cuyo IVA no es deducible (pestaña propia en Gastos) */
+    public function noDeducibles(Request $request)
+    {
+        return $this->facturas($request, true);
+    }
+
+    public function facturas(Request $request, bool $nd = false)
     {
         $clase = $this->clase;
+        $nd = $nd && $clase === 'acreedor';
         $c = $this->ctx($request);
         $mod = $this->modulo($clase);
         if (! $c) {
             return $this->sinCtx('/'.$mod.'/facturas');
         }
         [$y, $per] = $this->periodo($request);
-        $chip = max(0, min(3, (int) $request->query('chip', 0)));
+        $chip = $nd ? 2 : max(0, min(3, (int) $request->query('chip', 0)));
         $q = trim((string) $request->query('q', ''));
         $tipo = Tercero::CLASES[$clase][3];
         $base = $this->enPeriodo(FacturaRecibida::where('cliente_id', $c->id)->where('clase', $tipo), $y, $per)->with(['tercero', 'documento']);
@@ -210,8 +217,8 @@ abstract class TerceroController extends Controller
         return view('gestion.recibidas', [
             'titulo' => 'Facturas de '.mb_strtolower(Tercero::CLASES[$clase][0]), 'activo' => $mod, 'c' => $c, 'clase' => $clase, 'mod' => $mod, 'y' => $y, 'per' => $per, 'chip' => $chip,
             'chips' => array_keys($chips), 'q' => $q, 'lista' => $lista, 'kpis' => $kpis, 'terceros' => $terceros, 'editar' => $editar,
-            'form' => $request->boolean('nuevo') || $editar, 'hoy' => $hoy, 'anios' => range($hoy->year, $hoy->year - 5),
-            'url' => fn (array $x = []) => route($mod.'.facturas', array_filter(array_merge(['y' => $y === $hoy->year ? null : $y, 'per' => $per === 'Año' ? null : $per, 'chip' => $chip ?: null, 'q' => $q ?: null], $x), fn ($v) => $v !== null && $v !== '')),
+            'form' => $request->boolean('nuevo') || $editar, 'hoy' => $hoy, 'anios' => range($hoy->year, $hoy->year - 5), 'nd' => $nd,
+            'url' => fn (array $x = []) => route($nd ? 'acreedores.nodeducibles' : $mod.'.facturas', array_filter(array_merge(['y' => $y === $hoy->year ? null : $y, 'per' => $per === 'Año' ? null : $per, 'chip' => $nd || ! $chip ? null : $chip, 'q' => $q ?: null], $x), fn ($v) => $v !== null && $v !== '')),
         ]);
     }
 
@@ -274,7 +281,9 @@ abstract class TerceroController extends Controller
         }
         Auditoria::registrar('gestion.factura_recibida', ($factura ? 'Modificada' : 'Registrada').' la factura '.$num.' de '.$t->nombre.' · '.Formato::eur($f->total), $f);
 
-        return redirect()->route($this->modulo($clase).'.facturas')->with('ok', 'Factura '.$num.' de '.$t->nombre.' guardada.');
+        $volver = $request->input('volver') === 'nd' && $clase === 'acreedor' ? 'acreedores.nodeducibles' : $this->modulo($clase).'.facturas';
+
+        return redirect()->route($volver)->with('ok', 'Factura '.$num.' de '.$t->nombre.' guardada'.($f->deducible ? '.' : ' · IVA no deducible: se suma al gasto.'));
     }
 
     public function pagar(Request $request, FacturaRecibida $factura)
@@ -282,6 +291,9 @@ abstract class TerceroController extends Controller
         $clase = $this->clase;
         $c = $this->ctx($request);
         abort_unless($c && $factura->cliente_id === $c->id && $factura->clase === Tercero::CLASES[$clase][3], 404);
+        if ($factura->pago_asiento_id) {
+            return back()->with('aviso', 'El pago de '.$factura->num.' ya está contabilizado. Para deshacerlo, borra antes su asiento en Contabilidad › Libro diario.');
+        }
         $factura->update(['pagada_at' => $factura->pagada_at ? null : now()->toDateString()]);
 
         return back()->with('ok', 'Factura '.$factura->num.($factura->pagada_at ? ' marcada como pagada.' : ': pago anulado.'));

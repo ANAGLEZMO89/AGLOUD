@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AcreedorController;
+use App\Http\Controllers\AeatController;
 use App\Http\Controllers\Admin\AuditoriaController;
 use App\Http\Controllers\Admin\CopiasController;
 use App\Http\Controllers\Admin\EquipoController;
@@ -14,7 +15,9 @@ use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\EscritorioController;
 use App\Http\Controllers\ExpedienteController;
+use App\Http\Controllers\CobrosPagosController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ParametrosController;
@@ -61,6 +64,22 @@ Route::middleware('auth')->group(function () {
 
         // Gestión de la empresa elegida: facturas de clientes, proveedores y acreedores
         Route::get('/clientes/facturas', [ProveedorController::class, 'facturasClientes'])->name('clientes.facturas');
+        // Cobros y pagos: marcar con un clic y enviar a contabilidad (banco o caja)
+        Route::get('/clientes/cobros', [CobrosPagosController::class, 'cobros'])->name('clientes.cobros');
+        Route::post('/cobros/{factura}/marcar', [CobrosPagosController::class, 'marcarCobro'])->whereNumber('factura')->name('cobros.marcar');
+        Route::post('/cobros/{factura}/contabilizar', [CobrosPagosController::class, 'contabilizarCobro'])->whereNumber('factura')->name('cobros.contabilizar');
+        Route::post('/cobros/contabilizar', [CobrosPagosController::class, 'contabilizarCobros'])->name('cobros.contabilizarTodos');
+        foreach (['proveedores' => 'Proveedor', 'acreedores' => 'Acreedor'] as $seg => $suf) {
+            Route::get('/'.$seg.'/pagos', [CobrosPagosController::class, 'pagos'.($suf === 'Proveedor' ? 'Proveedores' : 'Acreedores')])->name($seg.'.pagos');
+            Route::post('/'.$seg.'/pagos/contabilizar', [CobrosPagosController::class, 'contabilizarPagos'.($suf === 'Proveedor' ? 'Proveedores' : 'Acreedores')])->name($seg.'.pagos.contabilizarTodos');
+            Route::post('/'.$seg.'/pagos/{factura}/marcar', [CobrosPagosController::class, 'marcarPago'.$suf])->whereNumber('factura')->name($seg.'.pagos.marcar');
+            Route::post('/'.$seg.'/pagos/{factura}/contabilizar', [CobrosPagosController::class, 'contabilizarPago'.$suf])->whereNumber('factura')->name($seg.'.pagos.contabilizar');
+        }
+        Route::get('/acreedores/no-deducibles', [AcreedorController::class, 'noDeducibles'])->name('acreedores.nodeducibles');
+        // Productos y servicios de la empresa elegida (se usan al facturar)
+        Route::get('/productos', [ProductoController::class, 'index'])->name('productos.index');
+        Route::post('/productos', [ProductoController::class, 'guardar'])->name('productos.guardar');
+        Route::delete('/productos/{indice}', [ProductoController::class, 'borrar'])->whereNumber('indice')->name('productos.borrar');
         foreach (['proveedores' => ProveedorController::class, 'acreedores' => AcreedorController::class] as $seg => $ctl) {
             Route::prefix($seg)->name($seg.'.')->group(function () use ($ctl) {
                 Route::get('/', [$ctl, 'index'])->name('index');
@@ -218,6 +237,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/equipo/{usuario}/activo', [EquipoController::class, 'activo'])->name('equipo.activo');
         Route::post('/equipo/{usuario}/rol', [EquipoController::class, 'rol'])->name('equipo.rol');
         Route::post('/equipo/{usuario}/reenviar', [EquipoController::class, 'reenviar'])->name('equipo.reenviar');
+        Route::post('/aeat/certificado', [AeatController::class, 'guardar'])->name('aeat.guardar');
+        Route::post('/aeat/activar', [AeatController::class, 'activar'])->name('aeat.activar');
+        Route::delete('/aeat/certificado', [AeatController::class, 'quitar'])->name('aeat.quitar');
+        Route::post('/aeat/probar', [AeatController::class, 'probar'])->name('aeat.probar');
         Route::get('/auditoria', [AuditoriaController::class, 'index'])->name('auditoria');
         Route::get('/auditoria/exportar', [AuditoriaController::class, 'exportar'])->name('auditoria.exportar');
         Route::get('/copias', [CopiasController::class, 'index'])->middleware('password.confirm')->name('copias');

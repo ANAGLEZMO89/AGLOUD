@@ -52,6 +52,8 @@
             <div class="fld"><span>NIF / NIE / CIF *</span>
               <div class="nifwrap"><input class="inp mono upper" name="nif" value="{{ $old('nif', $c->nif) }}" placeholder="B21000000" data-nif required maxlength="15" autocomplete="off"><span class="nifmark" data-nif-mark></span></div>
               <span class="hint" data-nif-msg></span>
+              @if($c->exists && $c->nif_aeat === 'IDENTIFICADO')<span class="hint" style="color:#2E3A00;font-weight:600">✓ Verificado en la AEAT{{ $c->nif_aeat_at ? ' el '.Formato::fecha($c->nif_aeat_at) : '' }}{{ $c->nif_aeat_nombre ? ' · '.$c->nif_aeat_nombre : '' }}</span>
+              @elseif($c->exists && $c->nif_aeat === 'PENDIENTE')<span class="hint" style="color:#6E4300;font-weight:600">Pendiente de verificar en la AEAT (no se pudo conectar)</span>@endif
             </div>
             <label class="fld"><span>Nombre comercial</span><input class="inp" name="comercial" value="{{ $old('comercial', $c->comercial) }}"></label>
             <label class="fld"><span>Fecha de alta</span><input class="inp" type="date" name="fecha_alta" value="{{ $old('fecha_alta', $c->fecha_alta?->toDateString()) }}"></label>
