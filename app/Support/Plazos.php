@@ -17,7 +17,8 @@ use Carbon\CarbonImmutable;
  *
  * Festivos: los nacionales se calculan solos (incluido Viernes Santo). Los de
  * la comunidad autónoma (Andalucía: 28 de febrero y Jueves Santo) se añaden si
- * está configurada, y los locales o traslados por domingo van en FESTIVOS_EXTRA.
+ * está configurada, y los locales o traslados por domingo se añaden en los
+ * parámetros de Notificaciones. Cada empresa (despacho o cliente) tiene los suyos.
  */
 class Plazos
 {
@@ -36,7 +37,7 @@ class Plazos
     }
 
     /** Fecha fin del plazo para actuar, o null si no abre plazo. */
-    public static function vencimiento(CarbonImmutable|string|null $desde, int $n, string $tipo): ?CarbonImmutable
+    public static function vencimiento(CarbonImmutable|string|null $desde, int $n, string $tipo, ?int $empresa = null): ?CarbonImmutable
     {
         if (! $desde || $n <= 0) {
             return null;
@@ -46,7 +47,7 @@ class Plazos
             $k = 0;
             while ($k < $n) {
                 $d = $d->addDay();
-                if (self::esHabil($d)) {
+                if (self::esHabil($d, $empresa)) {
                     $k++;
                 }
             }
@@ -58,7 +59,7 @@ class Plazos
         } else {
             $fin = $d->addDays($n);
         }
-        while (! self::esHabil($fin)) {
+        while (! self::esHabil($fin, $empresa)) {
             $fin = $fin->addDay();
         }
 
@@ -78,9 +79,9 @@ class Plazos
         };
     }
 
-    public static function esHabil(CarbonImmutable $d): bool
+    public static function esHabil(CarbonImmutable $d, ?int $empresa = null): bool
     {
-        return ! $d->isWeekend() && ! isset(self::festivos((int) $d->format('Y'))[$d->format('Y-m-d')]);
+        return ! $d->isWeekend() && ! isset(self::festivos((int) $d->format('Y'), $empresa)[$d->format('Y-m-d')]);
     }
 
     /** Días naturales entre hoy y la fecha (negativo si ya pasó). */
@@ -90,10 +91,11 @@ class Plazos
     }
 
     /** @return array<string,string> fecha => nombre */
-    public static function festivos(int $y): array
+    public static function festivos(int $y, ?int $empresa = null): array
     {
-        // Los plazos de las notificaciones los lleva el despacho: se usan sus festivos
-        $par = Parametros::get('notificaciones', Parametros::despachoId());
+        // Cada empresa tiene sus festivos (comunidad autónoma y locales de su provincia y municipio):
+        // los de la empresa indicada o, si no se indica, los de la empresa elegida
+        $par = Parametros::get('notificaciones', $empresa ?? Parametros::empresaId());
         $ca = (string) $par['comunidad'];
         $extra = array_merge((array) config('agcloud.festivos_extra', []), array_map(fn ($f) => (string) ($f['fecha'] ?? ''), (array) $par['festivos']));
         $key = $y.'|'.$ca.'|'.implode(',', $extra);

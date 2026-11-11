@@ -11,6 +11,8 @@ use App\Models\Tercero;
 use App\Models\User;
 use App\Services\Contabilidad;
 use App\Services\Facturacion;
+use App\Support\Parametros;
+use App\Support\Plazos;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -109,5 +111,19 @@ class EmpresaElegidaTest extends TestCase
         $ver($this->desp)->get('/contabilidad')->assertSee('Área del despacho')->assertSee('Equipo y accesos');
         // Elegir otra empresa siempre se puede
         $ver($this->a)->post(route('escritorio.seleccionar', $this->b))->assertRedirect();
+    }
+
+    public function test_cada_empresa_tiene_sus_festivos(): void
+    {
+        $admin = $this->usuario(User::ADMIN);
+        $tipos = collect(Parametros::get('notificaciones', $this->a->id)['tipos'])->map(fn ($t) => ['org' => $t[0], 'canal' => $t[1], 'tipo' => $t[2], 'n' => $t[3], 't' => $t[4], 'accion' => $t[5]])->all();
+        // Festivo local solo de Café Las Colonias (Huelva → Andalucía por su provincia)
+        $this->assertSame('AN', Parametros::get('notificaciones', $this->a->id)['comunidad']);
+        $this->actingAs($admin)->withSession(['cliente_activo' => $this->a->id])->post(route('parametros.guardar', 'notificaciones'), ['dias' => '3', 'comunidad' => 'AN', 'festivos' => '12/11/2026 Fiesta local de prueba', 'tipos' => $tipos])->assertRedirect();
+        Parametros::limpiar();
+        Plazos::limpiarCache();
+        $this->assertSame('2026-11-19', Plazos::vencimiento('2026-11-04', 10, 'h', $this->a->id)->toDateString());
+        $this->assertSame('2026-11-18', Plazos::vencimiento('2026-11-04', 10, 'h', $this->b->id)->toDateString());
+        $this->assertSame('2026-11-18', Plazos::vencimiento('2026-11-04', 10, 'h', $this->desp->id)->toDateString());
     }
 }

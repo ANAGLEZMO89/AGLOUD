@@ -185,7 +185,7 @@ class TareaController extends Controller
         $teorico = 0;
         foreach (range(0, 4) as $i) {
             $d = $lunes->addDays($i);
-            $fest = Plazos::festivos($d->year)[$d->toDateString()] ?? null;
+            $fest = Plazos::festivos($d->year, Parametros::despachoId())[$d->toDateString()] ?? null;
             $c = $d->lte($hoy) ? self::calcular($this->marcasDia($u->id, $d), $d->isSameDay($hoy) ? $ahora : null) : ['min' => 0, 'pausa' => 0, 'entrada' => null, 'salida' => null];
             $total += $c['min'];
             $teorico += $fest ? 0 : $jornadaDia;
@@ -211,7 +211,7 @@ class TareaController extends Controller
     {
         $n = 0;
         for ($d = $a; $d->lte($b); $d = $d->addDay()) {
-            if (Plazos::esHabil($d)) {
+            if (Plazos::esHabil($d, Parametros::despachoId())) {
                 $n++;
             }
         }

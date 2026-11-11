@@ -38,6 +38,8 @@ class Parametros
 
     private static array $cache = [];
 
+    public const ANDALUCIA = ['Almería', 'Cádiz', 'Córdoba', 'Granada', 'Huelva', 'Jaén', 'Málaga', 'Sevilla'];
+
     public static function defecto(string $m): array
     {
         $a = json_decode((string) json_encode(config('agcloud')), true);
@@ -109,7 +111,17 @@ class Parametros
             // Sin base de datos (instalación): valores por defecto
         }
 
-        return self::$cache[$k] = array_merge(self::defecto($m), array_intersect_key($guardado, self::defecto($m)));
+        $def = self::defecto($m);
+        // Un cliente sin parámetros propios de notificaciones: la comunidad autónoma sale de su provincia
+        if ($m === 'notificaciones' && ! $guardado && $empresa && $empresa !== self::despachoId()) {
+            try {
+                $prov = (string) Cliente::whereKey($empresa)->value('provincia');
+                $def['comunidad'] = in_array($prov, self::ANDALUCIA, true) ? 'AN' : '';
+            } catch (Throwable) {
+            }
+        }
+
+        return self::$cache[$k] = array_merge($def, array_intersect_key($guardado, $def));
     }
 
     public static function put(string $m, array $v, ?int $empresa = null): void

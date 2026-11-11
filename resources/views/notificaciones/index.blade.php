@@ -79,7 +79,7 @@
         [$st, $bg, $fg] = $sel->estadoChip();
         $cli = $sel->cliente;
         $hoy = Plazos::hoy();
-        $prev = Plazos::vencimiento($hoy, (int) $sel->plazo_n, (string) $sel->plazo_tipo);
+        $prev = Plazos::vencimiento($hoy, (int) $sel->plazo_n, (string) $sel->plazo_tipo, $sel->cliente_id);
         $wa = $cli?->whatsapp();
       @endphp
       <div class="ntdet">

@@ -93,7 +93,7 @@ class Notificacion extends Model
 
     public function recalcular(): void
     {
-        $this->vence = $this->acceso ? Plazos::vencimiento($this->acceso, (int) $this->plazo_n, (string) $this->plazo_tipo) : null;
+        $this->vence = $this->acceso ? Plazos::vencimiento($this->acceso, (int) $this->plazo_n, (string) $this->plazo_tipo, $this->cliente_id) : null;
     }
 
     public function pendiente(): bool
