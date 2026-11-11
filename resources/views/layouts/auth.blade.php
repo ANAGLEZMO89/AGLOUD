@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>{{ $titulo ?? 'Acceso' }} · AG Cloud</title>
 <link rel="icon" href="{{ asset('img/logo-ga-128.png') }}">
-<link rel="stylesheet" href="{{ asset('css/agcloud.css') }}?v={{ config('app.version', '1') }}">
+<link rel="stylesheet" href="{{ asset('css/agcloud.css') }}?v={{ @filemtime(public_path('css/agcloud.css')) }}">
 </head>
 <body>
 <div class="auth">
@@ -15,6 +15,6 @@
     @yield('content')
   </div>
 </div>
-<script src="{{ asset('js/agcloud.js') }}?v={{ config('app.version', '1') }}"></script>
+<script src="{{ asset('js/agcloud.js') }}?v={{ @filemtime(public_path('js/agcloud.js')) }}"></script>
 </body>
 </html>

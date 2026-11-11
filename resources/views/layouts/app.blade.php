@@ -10,7 +10,7 @@
 <title>{{ $titulo ?? 'AG Cloud' }} · AG Cloud</title>
 <link rel="icon" href="{{ asset('img/logo-ga-128.png') }}">
 <link rel="preload" href="{{ asset('fonts/onest-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="{{ asset('css/agcloud.css') }}?v={{ config('app.version', '1') }}">
+<link rel="stylesheet" href="{{ asset('css/agcloud.css') }}?v={{ @filemtime(public_path('css/agcloud.css')) }}">
 </head>
 <body>
 @php
@@ -89,7 +89,7 @@
 </div>
 @yield('overlay')
 <script src="{{ asset('js/bancos.js') }}?v={{ config('app.version', '1') }}"></script>
-<script src="{{ asset('js/agcloud.js') }}?v={{ config('app.version', '1') }}"></script>
+<script src="{{ asset('js/agcloud.js') }}?v={{ @filemtime(public_path('js/agcloud.js')) }}"></script>
 @stack('scripts')
 </body>
 </html>
