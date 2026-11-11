@@ -3,12 +3,12 @@
  * - PDF con texto: pdf.js extrae el texto.
  * - Fotos y PDF escaneados: tesseract.js (español) reconoce el texto.
  * - Después, unas reglas leen NIF, número, fecha, base, IVA, retención y total (o las partidas de la nómina).
- * Librerías alojadas en /vendor/ocr (pdf.js y tesseract.js, licencia Apache 2.0).
+ * Librerías alojadas en /js/ocr (pdf.js y tesseract.js, licencia Apache 2.0).
  */
 (function () {
   'use strict';
   var BASE = (document.querySelector('meta[name="agc-base"]') || {}).content || '';
-  var V = BASE + '/vendor/ocr/';
+  var V = BASE + '/js/ocr/';
   var pdfLib = null, tessLoad = null;
 
   function cargarPdf() {
