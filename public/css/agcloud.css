@@ -696,3 +696,10 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 @media (max-width:720px){.ho-row{grid-template-columns:1fr}}
 .print-only{display:none}
 @media print{.print-only{display:block}}
+/* Área de trabajo (empresa elegida) en el menú lateral */
+.side-area{display:flex;flex-direction:column;gap:2px;margin:0 14px 10px;padding:10px 12px;border-radius:12px;text-decoration:none;color:#fff;background:#1E1E1E}
+.side-area small{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#BDBDB7}
+.side-area b{font-size:13.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-area span{font-size:11.5px;color:#C8F031}
+.side-area.cli{background:#C8F031;color:#0B0B0B}.side-area.cli small{color:#3C3C3C}.side-area.cli span{color:#0B0B0B;text-decoration:underline}
+.side-area:hover{filter:brightness(1.05)}

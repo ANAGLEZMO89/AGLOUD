@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Cliente;
 use Closure;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,6 +51,34 @@ class ContextoCliente
                 ->with('aviso', 'Elige primero con qué empresa vas a trabajar: el despacho o uno de tus clientes.');
         }
 
+        // Con un cliente elegido, la plataforma es solo de ese cliente: nada de otras empresas ni de la administración del despacho
+        if ($ctx && ! $ctx->es_despacho && $u?->esDespacho()) {
+            $raiz = explode('.', (string) $request->route()?->getName())[0];
+            if ($raiz === 'admin') {
+                return redirect()->route('escritorio', ['cambiar' => 1, 'tab' => 'desp'])
+                    ->with('aviso', 'Estás trabajando con '.$ctx->nombre.'. Para la administración del despacho, elige el despacho.');
+            }
+            if (in_array($raiz, self::MODULOS, true) && ! $this->esDeLaEmpresa($request, $ctx)) {
+                abort(404);
+            }
+        }
+
         return $next($request);
+    }
+
+    /** Todo lo que se abre por enlace (cliente, factura, expediente, documento…) tiene que ser de la empresa elegida */
+    private function esDeLaEmpresa(Request $request, Cliente $ctx): bool
+    {
+        foreach ($request->route()?->parameters() ?? [] as $p) {
+            if ($p instanceof Cliente) {
+                if ($p->id !== $ctx->id) {
+                    return false;
+                }
+            } elseif ($p instanceof Model && array_key_exists('cliente_id', $p->getAttributes()) && (int) $p->getAttribute('cliente_id') !== $ctx->id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

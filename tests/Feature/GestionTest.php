@@ -135,8 +135,8 @@ class GestionTest extends TestCase
         $this->en($this->desp)->get(route('clientes.facturas'))->assertOk()->assertSee('A-2026-0001')->assertSee('Vencida');
         $this->en($this->desp)->get(route('clientes.facturas', ['chip' => 3]))->assertOk()->assertDontSee('A-2026-0001');
         $this->en($this->a)->get(route('clientes.facturas'))->assertOk()->assertDontSee('A-2026-0001');
-        $this->actingAs($this->as)->get(route('clientes.show', [$this->a, 'tab' => 'fact']))->assertOk()->assertSee('A-2026-0001')->assertSee('Cuota septiembre')->assertSee('121,00');
-        $this->actingAs($this->as)->get(route('clientes.show', [$this->b, 'tab' => 'fact']))->assertOk()->assertDontSee('A-2026-0001');
+        $this->en($this->desp)->get(route('clientes.show', [$this->a, 'tab' => 'fact']))->assertOk()->assertSee('A-2026-0001')->assertSee('Cuota septiembre')->assertSee('121,00');
+        $this->en($this->desp)->get(route('clientes.show', [$this->b, 'tab' => 'fact']))->assertOk()->assertDontSee('A-2026-0001');
     }
 
     public function test_calendario_reune_eventos_de_todas_las_fuentes(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Cliente;
 use App\Models\Cuenta;
 use App\Models\Evento;
+use App\Models\Expediente;
 use App\Models\Tarea;
 use App\Models\Tercero;
 use App\Models\User;
@@ -87,5 +88,26 @@ class EmpresaElegidaTest extends TestCase
         $this->con($this->a)->get('/tareas')->assertSee('Tarea del café')->assertDontSee('Tarea de otra');
         $this->con($this->desp)->get('/calendario?vista=agenda')->assertSee('Cita del café')->assertSee('Cita de otra');
         $this->con($this->a)->get('/calendario?vista=agenda')->assertSee('Cita del café')->assertDontSee('Cita de otra');
+    }
+
+    public function test_con_un_cliente_elegido_lo_demas_queda_bloqueado(): void
+    {
+        $admin = $this->usuario(User::ADMIN);
+        $ver = fn ($c) => $this->actingAs($admin)->withSession(['cliente_activo' => $c->id]);
+        // Su propia ficha sí; la de otro cliente o la del despacho, no
+        $ver($this->a)->get(route('clientes.show', $this->a))->assertOk();
+        $ver($this->a)->get(route('clientes.show', $this->b))->assertNotFound();
+        $ver($this->a)->get(route('clientes.edit', $this->desp))->assertNotFound();
+        $exp = Expediente::create(['cliente_id' => $this->b->id, 'ref' => 'EXP-1', 'tramite' => 'Arraigo', 'categoria' => 'Extranjería', 'estado' => 'Abierto', 'apertura' => now()->toDateString()]);
+        $ver($this->a)->get(route('expedientes.show', $exp))->assertNotFound();
+        $ver($this->desp)->get(route('expedientes.show', $exp))->assertOk();
+        // La administración del despacho solo con el despacho elegido
+        $ver($this->a)->get(route('admin.equipo'))->assertRedirect();
+        $ver($this->desp)->get(route('admin.equipo'))->assertOk();
+        // El menú deja claro en qué área se está y no muestra la administración
+        $ver($this->a)->get('/contabilidad')->assertSee('Área del cliente')->assertSee('Café Las Colonias SL')->assertDontSee('Equipo y accesos');
+        $ver($this->desp)->get('/contabilidad')->assertSee('Área del despacho')->assertSee('Equipo y accesos');
+        // Elegir otra empresa siempre se puede
+        $ver($this->a)->post(route('escritorio.seleccionar', $this->b))->assertRedirect();
     }
 }

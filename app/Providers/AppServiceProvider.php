@@ -37,7 +37,8 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
             try {
-                $base = Notificacion::where('estado', 'Pendiente')->where('archivada', false);
+                $ctx = request()->attributes->get('ctx');
+                $base = Notificacion::where('estado', 'Pendiente')->where('archivada', false)->when($ctx && ! $ctx->es_despacho, fn ($q) => $q->where('cliente_id', $ctx->id));
                 $dias = NotificacionController::avisos()['dias'];
                 $view->with('nNotif', (clone $base)->count());
                 $view->with('nCaducan', (clone $base)->whereDate('puesta', '<=', Plazos::hoy()->subDays(Plazos::CADUCIDAD_DIAS - $dias)->toDateString())->count());

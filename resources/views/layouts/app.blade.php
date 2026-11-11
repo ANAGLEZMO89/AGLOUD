@@ -25,6 +25,11 @@
       <img src="{{ asset('img/logo-ga-128.png') }}" alt="GA">
       <div><b>AG CLOUD</b><small>{{ $portal ? 'Portal del cliente' : 'por GA AGOPYME' }}</small></div>
     </a>
+    @if(! $portal && ($ctx ?? null))
+      <a class="side-area {{ $ctx->es_despacho ? 'desp' : 'cli' }}" href="{{ route('escritorio', ['cambiar' => 1]) }}" title="Cambiar de empresa">
+        <small>{{ $ctx->es_despacho ? 'Área del despacho' : 'Área del cliente' }}</small><b>{{ $ctx->nombre }}</b><span>Cambiar empresa</span>
+      </a>
+    @endif
     <nav class="nav">
       @if($portal)
         <a class="nav-it home {{ $activo === 'inicio' ? 'on' : '' }}" href="{{ route('portal.inicio') }}"><span>Inicio</span></a>
@@ -53,7 +58,7 @@
           </div>
         @endif
       @endforeach
-      @if($u->esAdmin())
+      @if($u->esAdmin() && (! ($ctx ?? null) || $ctx->es_despacho))
         <div class="nav-grp">
           <div class="nav-lbl">Despacho</div>
           <a class="nav-it {{ $activo === 'equipo' ? 'on' : '' }}" href="{{ route('admin.equipo') }}"><span>Equipo y accesos</span></a>

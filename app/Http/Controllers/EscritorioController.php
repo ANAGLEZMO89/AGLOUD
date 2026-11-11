@@ -72,7 +72,9 @@ class EscritorioController extends Controller
 
     public static function nRevisar(): int
     {
-        return Documento::gestor()->vivos()->where('por_revisar', true)->count();
+        $ctx = request()->attributes->get('ctx');
+
+        return Documento::gestor()->vivos()->where('por_revisar', true)->when($ctx && ! $ctx->es_despacho, fn ($q) => $q->where('cliente_id', $ctx->id))->count();
     }
 
     private function facts(Cliente $c): array
