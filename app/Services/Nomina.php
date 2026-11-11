@@ -309,6 +309,12 @@ class Nomina
         $desT = isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' ? (float) $doc['tipos']['des_t'] / 100 : $des[0];
         $T = ['cc' => $base * self::TIPOS['cc'][0], 'mei' => $base * self::TIPOS['mei'][0], 'des' => $baseAT * $desT, 'fp' => $baseAT * self::TIPOS['fp'][0], 'hx' => $hx * self::TIPOS['cc'][0]];
         $E = ['cc' => $base * self::TIPOS['cc'][1], 'mei' => $base * self::TIPOS['mei'][1], 'des' => $baseAT * $des[1], 'fog' => $baseAT * self::TIPOS['fog'][1], 'fp' => $baseAT * self::TIPOS['fp'][1], 'at' => $baseAT * $at / 100, 'hx' => $hx * self::TIPOS['cc'][1]];
+        if (self::esAutonomo($w)) {
+            // Trabajador en el RETA: no cotiza al Régimen General por esta retribución; solo retención de IRPF
+            [$base, $baseAT, $prorB] = [0, 0, 0];
+            $T = array_map(fn () => 0, $T);
+            $E = array_map(fn () => 0, $E);
+        }
         $T = array_map(fn ($v) => round($v, 2), $T);
         $E = array_map(fn ($v) => round($v, 2), $E);
         $ssT = array_sum($T);
@@ -336,7 +342,7 @@ class Nomina
                 $out[$i] = 'No es por convenio: el convenio fija '.Formato::eur((float) $l['conv']).'.';
             }
         }
-        $g = [];
+        $g = self::esAutonomo($w) ? ['Trabajador en el RETA: esta nómina no lleva cotización al Régimen General (ni del trabajador ni de la empresa) y no va a los seguros sociales; solo retención de IRPF. Si la empresa le paga la cuota de autónomos, añádela como concepto salarial: es rendimiento del trabajo.'] : [];
         $des = (self::temporal($w) ? self::TIPOS['des_tmp'][0] : self::TIPOS['des_ind'][0]) * 100;
         if (isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' && abs((float) $doc['tipos']['des_t'] - $des) > 0.0001) {
             $g[] = 'Desempleo al '.Formato::num((float) $doc['tipos']['des_t']).' %: el tipo legal es el '.Formato::num($des).' %.';
@@ -500,7 +506,7 @@ class Nomina
     /** Nóminas del mes de los trabajadores en alta: [[w, n], ...] */
     public function mes(Cliente $c, int $anio, int $m, ?Collection $plantilla = null, ?array $incAnio = null, ?float $at = null): array
     {
-        $plantilla = ($plantilla ?? self::plantilla($c))->reject(fn ($w) => self::esAutonomo($w));
+        $plantilla ??= self::plantilla($c); // todos los trabajadores en alta, también los del RETA
         $incAnio ??= self::incidenciasAnio($c, $anio);
         $at ??= (float) self::config($c)['at'];
 

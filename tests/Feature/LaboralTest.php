@@ -273,11 +273,18 @@ class LaboralTest extends TestCase
         $this->assertStringContainsString('Alta en el RETA', LaboralMovimiento::where('trabajador_id', $a->id)->value('detalle'));
         $this->en()->get('/laboral')->assertSee('Agustín Pérez')->assertSee('RETA')->assertSee('310,00 €/mes');
         $this->en()->get('/laboral/trabajador/'.$a->id.'?sec=aut')->assertOk()->assertSee('Autónomo (RETA)')->assertSee('Cotiza por cese de actividad');
-        // No sale en nóminas, seguros sociales ni control horario
-        $this->en()->get('/laboral/nominas?anio=2026&mes=11')->assertSee('María López Ruiz')->assertDontSee('Agustín Pérez');
+        // Sale en el Integral de nóminas (solo IRPF, sin cotización al Régimen General), pero no en seguros sociales ni control horario
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11')->assertSee('María López Ruiz')->assertSee('Agustín Pérez');
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$a->id)->assertOk()->assertSee('Trabajador en el RETA')->assertSee('Emitir nómina')->assertDontSee('Contingencias comunes');
+        $this->en()->post('/laboral/nominas/'.$a->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'guardar', 'nl' => ['concepto' => 'Retribución administrador', 'importe' => '1.000,00', 'clase' => 'salarial'], 'tipos' => ['irpf' => '15,00']])->assertRedirect();
+        $n = app(Nomina::class)->nomina(Nomina::rellenar($a->fresh()->ficha(), $a->cliente), 2026, 11, Nomina::incidenciasAnio($a->cliente, 2026), 0);
+        $this->assertSame(0.0, (float) $n['ssT']);
+        $this->assertSame(0.0, (float) $n['ssE']);
+        $this->assertSame(150.0, (float) $n['irpf']);
+        $this->assertSame(850.0, (float) $n['liq']);
+        $this->en()->get('/laboral/nominas/'.$a->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Retribución administrador');
         $this->en()->get('/laboral/seguros-sociales?anio=2026&mes=11')->assertDontSee('Agustín Pérez');
         $this->en()->get('/control-horario')->assertDontSee('Agustín Pérez');
-        $this->en()->get('/laboral/nominas/'.$a->id.'/recibo?anio=2026&mes=11')->assertNotFound();
         // Validación: documento y afiliación también para autónomos
         $this->en()->post('/laboral/trabajador/nuevo', ['regimen' => 'Autónomo', 'nom1' => 'X', 'nif' => '1', 'naf' => '211111111111', 'autAlta' => '2026-03-01'])->assertSessionHasErrors('ficha');
     }

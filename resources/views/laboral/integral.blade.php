@@ -15,7 +15,7 @@
     <div class="card" style="flex:0 1 280px;padding:8px;gap:2px;min-width:0">
       <a class="lb-im {{ $sel ? '' : 'on' }}" href="{{ route('laboral.integral', $q) }}"><span class="t">Resumen de la empresa</span><span class="s">{{ count($noms) }} nóminas · {{ $mesL }}</span></a>
       @foreach($noms as $x)
-        <a class="lb-im {{ $sel && $sel['w']['id'] === $x['w']['id'] ? 'on' : '' }}" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}"><span class="t">{{ $x['w']['nombre'] }}</span><span class="s">{{ $x['w']['cat'] }} · líquido {{ $E($x['n']['liq']) }}</span></a>
+        <a class="lb-im {{ $sel && $sel['w']['id'] === $x['w']['id'] ? 'on' : '' }}" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}"><span class="t">{{ $x['w']['nombre'] }}</span><span class="s">{{ Nomina::esAutonomo($x['w']) ? 'RETA' : $x['w']['cat'] }} · líquido {{ $E($x['n']['liq']) }}</span></a>
       @endforeach
     </div>
     <div style="flex:1 1 560px;display:flex;flex-direction:column;gap:16px;min-width:0">
@@ -44,7 +44,7 @@
               </a>
             @endforeach
             <div class="lb-grid lb-nom" style="padding:12px 0 4px;font-weight:700"><span>Totales</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['dev'])) }}</span><span></span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssT'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['irpf'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['liq'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssE'])) }}</span></div>
-            @if(! $noms)<div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65;line-height:1.5">No hay trabajadores por cuenta ajena en alta este mes.@if($aut = $plantilla->filter(fn ($t) => \App\Services\Nomina::esAutonomo($t))->count())<br>{{ $aut }} {{ $aut === 1 ? 'persona está dada de alta como autónoma' : 'personas están dadas de alta como autónomas' }} (RETA): los autónomos no tienen nómina, pagan su cuota del RETA.@endif</div>@endif
+            @if(! $noms)<div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65;line-height:1.5">No hay trabajadores en alta este mes.</div>@endif
           </div>
         </div>
       @else

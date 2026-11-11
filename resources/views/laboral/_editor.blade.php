@@ -16,7 +16,7 @@
   $estado = $emitida ? ['Emitida '.Formato::fechaHora($g->emitida_at), '#E6F6A8', '#2E3A00'] : ($g ? ['Borrador guardado', '#FCEBCB', '#6E4300'] : ['Calculada desde el convenio', '#ECECE7', '#3C3C3C']);
 @endphp
 <div class="ne-top">
-  <div style="display:flex;flex-direction:column;gap:2px;min-width:0;margin-right:auto"><span style="font-size:18px;font-weight:700">{{ $w['nombre'] }}</span><span style="font-size:12.5px;color:#6A6A65">{{ Nomina::MESES[$mes - 1] }} {{ $anio }} · <span class="lb-pill" style="background:{{ $estado[1] }};color:{{ $estado[2] }}">{{ $estado[0] }}</span></span></div>
+  <div style="display:flex;flex-direction:column;gap:2px;min-width:0;margin-right:auto"><span style="font-size:18px;font-weight:700">{{ $w['nombre'] }}</span><span style="font-size:12.5px;color:#6A6A65">{{ Nomina::MESES[$mes - 1] }} {{ $anio }} · @if(Nomina::esAutonomo($w))<span class="lb-pill" style="background:#E3ECFF;color:#1D3A8A">RETA</span> @endif<span class="lb-pill" style="background:{{ $estado[1] }};color:{{ $estado[2] }}">{{ $estado[0] }}</span></span></div>
   @if($prev)<a class="btn white sm" href="{{ route('laboral.integral', $q + ['t' => $prev]) }}">← Anterior</a>@endif
   @if($next)<a class="btn white sm" href="{{ route('laboral.integral', $q + ['t' => $next]) }}">Siguiente →</a>@endif
 </div>
@@ -92,7 +92,11 @@
   @endunless
 
   <div class="ne-sep"></div>
-  @foreach([['Contingencias comunes', Formato::num(Nomina::TIPOS['cc'][0] * 100).' %', $n['T']['cc'], null], ['Desempleo', null, $n['T']['des'], 'des_t'], ['Formación profesional', Formato::num(Nomina::TIPOS['fp'][0] * 100).' %', $n['T']['fp'], null], ['IRPF', null, $n['irpf'], 'irpf'], ['Mecanismo de Equidad Intergeneracional (MEI)', Formato::num(Nomina::TIPOS['mei'][0] * 100).' %', $n['T']['mei'], null]] as [$l, $pct, $v, $campo])
+  @php
+    $filasDed = [['Contingencias comunes', Formato::num(Nomina::TIPOS['cc'][0] * 100).' %', $n['T']['cc'], null], ['Desempleo', null, $n['T']['des'], 'des_t'], ['Formación profesional', Formato::num(Nomina::TIPOS['fp'][0] * 100).' %', $n['T']['fp'], null], ['IRPF', null, $n['irpf'], 'irpf'], ['Mecanismo de Equidad Intergeneracional (MEI)', Formato::num(Nomina::TIPOS['mei'][0] * 100).' %', $n['T']['mei'], null]];
+    if (Nomina::esAutonomo($w)) { $filasDed = array_values(array_filter($filasDed, fn ($f) => $f[3] === 'irpf')); }
+  @endphp
+  @foreach($filasDed as [$l, $pct, $v, $campo])
     <div class="ne-grid ne-row">
       <span></span><span>{{ $l }}</span>
       <span>

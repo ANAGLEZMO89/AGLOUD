@@ -383,7 +383,7 @@ class LaboralController extends Controller
             return $volver->withErrors(['ficha' => 'Las nóminas de este mes ya están contabilizadas. Borra el asiento en Contabilidad para cambiarlas.']);
         }
         $w = Nomina::rellenar($trabajador->ficha(), $c);
-        abort_unless(Nomina::activo($w, $anio, $mes) && ! Nomina::esAutonomo($w), 404);
+        abort_unless(Nomina::activo($w, $anio, $mes), 404);
         $P = Nomina::config($c);
         $g = NominaMes::where('trabajador_id', $trabajador->id)->where('anio', $anio)->where('mes', $mes)->where('recibo', 'Nómina')->first();
         $accion = (string) $request->input('accion', 'guardar');
@@ -475,7 +475,7 @@ class LaboralController extends Controller
         abort_unless($c && $trabajador->cliente_id === $c->id, 404);
         [$anio, $mes] = $this->periodo($request);
         $w = Nomina::rellenar($trabajador->ficha(), $c);
-        abort_unless(Nomina::activo($w, $anio, $mes) && ! Nomina::esAutonomo($w), 404);
+        abort_unless(Nomina::activo($w, $anio, $mes), 404);
         $P = Nomina::config($c);
         $n = $this->nomina->nomina($w, $anio, $mes, Nomina::incidenciasAnio($c, $anio), (float) $P['at']);
         $ult = Carbon::create($anio, $mes, 1)->endOfMonth()->day;
@@ -543,7 +543,8 @@ class LaboralController extends Controller
             return $this->sinEmpresa();
         }
         $b = $this->base($request, $c, 'ss-cret');
-        $noms = $this->nomina->mes($c, $b['anio'], $b['mes'], null, null, (float) $b['P']['at']);
+        // Los trabajadores del RETA no van a la liquidación del Régimen General
+        $noms = array_values(array_filter($this->nomina->mes($c, $b['anio'], $b['mes'], null, null, (float) $b['P']['at']), fn ($x) => ! Nomina::esAutonomo($x['w'])));
         $mesRow = LaboralMes::where('cliente_id', $c->id)->where('anio', $b['anio'])->where('mes', $b['mes'])->first();
         $ini = Carbon::create($b['anio'], $b['mes'], 1);
         $plazo = $ini->copy()->addMonthNoOverflow()->endOfMonth();

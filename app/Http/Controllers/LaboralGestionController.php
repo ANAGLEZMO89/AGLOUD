@@ -39,7 +39,7 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
         $b = $this->base($request, $c, 'ss-cra');
-        $noms = $this->noms($c, $b['anio'], $b['mes'], $b['P']);
+        $noms = array_values(array_filter($this->noms($c, $b['anio'], $b['mes'], $b['P']), fn ($x) => ! Nomina::esAutonomo($x['w'])));
         $filas = [];
         foreach ($noms as $x) {
             foreach (Nomina::CRA as $k => $l) {
