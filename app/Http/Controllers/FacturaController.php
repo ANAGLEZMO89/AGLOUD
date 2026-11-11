@@ -413,13 +413,6 @@ class FacturaController extends Controller
             'series.*.nombre' => ['required', 'string', 'max:60'],
             'series.*.tf' => ['required', Rule::in(array_keys(Factura::TIPOS))],
             'nueva_serie' => ['nullable', 'regex:/^[A-Za-z0-9]{1,3}$/'],
-            'est.modelo' => ['required', Rule::in(['clasica', 'moderna', 'minimal'])],
-            'est.color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'est.forma' => ['required', Rule::in(['recta', 'suave', 'redondeada'])],
-            'est.cabecera' => ['required', Rule::in(['relleno', 'linea'])],
-            'est.margen' => ['required', Rule::in(['estrecho', 'normal', 'amplio'])],
-            'est.fuente' => ['required', Rule::in(['sans', 'serif'])],
-            'est.reg' => ['nullable', 'string', 'max:300'],
             'cat' => ['nullable', 'array', 'max:200'],
             'cat.*.nombre' => ['nullable', 'string', 'max:120'],
             'cat.*.precio' => ['nullable', 'string', 'max:20'],
@@ -445,13 +438,10 @@ class FacturaController extends Controller
         if ($series->pluck('cod')->duplicates()->count()) {
             return back()->withInput()->with('aviso', 'Hay códigos de serie repetidos.');
         }
-        $e = $request->input('est');
         $cfg->fill([
             'modo' => $request->input('modo'),
             'pie' => trim((string) $request->input('pie')),
             'series' => $series->all(),
-            'estilo' => ['modelo' => $e['modelo'], 'color' => strtoupper($e['color']), 'forma' => $e['forma'], 'cuadros' => $request->boolean('est.cuadros'), 'cabecera' => $e['cabecera'],
-                'margen' => $e['margen'], 'fuente' => $e['fuente'], 'logo' => $request->boolean('est.logo'), 'regShow' => $request->boolean('est.regShow'), 'reg' => trim((string) ($e['reg'] ?? ''))],
             'catalogo' => collect($request->input('cat', []))->filter(fn ($p) => trim((string) ($p['nombre'] ?? '')) !== '')
                 ->map(fn ($p) => ['nombre' => trim($p['nombre']), 'precio' => Formato::parseNum($p['precio'] ?? '0'), 'iva' => (int) ($p['iva'] ?? 21)])->values()->all(),
         ])->save();
@@ -460,12 +450,57 @@ class FacturaController extends Controller
         return redirect()->route('facturacion.config')->with('ok', 'Configuración y diseño de las facturas guardados.');
     }
 
-    /** Factura de muestra con el diseño actual (vista previa de la configuración) */
+    // ------------------------------------------------------- diseño de la factura
+    public function diseno(Request $request)
+    {
+        $c = $this->emisor($request);
+        if (! $c) {
+            return $this->sinEmisor();
+        }
+        $cfg = FacturacionConfig::de($c);
+
+        return view('facturacion.diseno', $this->base($c, 'diseno') + ['cfg' => $cfg, 'est' => $cfg->estiloCompleto()]);
+    }
+
+    /** Valida y normaliza el estilo enviado desde el formulario de diseño */
+    private function estiloDe(Request $request): array
+    {
+        $e = (array) $request->input('est', []);
+        $in = fn ($k, $ops, $def) => in_array($e[$k] ?? null, $ops, true) ? $e[$k] : $def;
+
+        return [
+            'modelo' => $in('modelo', ['clasica', 'moderna', 'minimal'], 'clasica'),
+            'color' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($e['color'] ?? '')) ? strtoupper($e['color']) : '#0B0B0B',
+            'forma' => $in('forma', ['recta', 'suave', 'redondeada'], 'suave'),
+            'cabecera' => $in('cabecera', ['relleno', 'linea'], 'relleno'),
+            'margen' => $in('margen', ['estrecho', 'normal', 'amplio'], 'normal'),
+            'fuente' => $in('fuente', ['sans', 'serif'], 'sans'),
+            'cuadros' => ! empty($e['cuadros']), 'logo' => ! empty($e['logo']), 'firma' => ! empty($e['firma']),
+            'regShow' => ! empty($e['regShow']), 'reg' => mb_substr(trim((string) ($e['reg'] ?? '')), 0, 300),
+        ];
+    }
+
+    public function guardarDiseno(Request $request)
+    {
+        $c = $this->emisor($request);
+        abort_unless($c, 403);
+        $cfg = FacturacionConfig::de($c);
+        $cfg->estilo = $this->estiloDe($request);
+        $cfg->save();
+        Auditoria::registrar('factura.diseno', 'Diseño de la factura guardado', null, $c->id);
+
+        return redirect()->route('facturacion.diseno')->with('ok', 'Diseño de la factura guardado. Se aplica a todas las facturas, también a las ya emitidas al descargarlas.');
+    }
+
+    /** Factura de muestra (vista previa del diseño; en POST, con el diseño aún sin guardar) */
     public function muestra(Request $request)
     {
         $c = $this->emisor($request);
         abort_unless($c, 403);
         $cfg = FacturacionConfig::de($c);
+        if ($request->isMethod('post')) {
+            $cfg->estilo = $this->estiloDe($request);
+        }
         $L = [['d' => 'Servicio de asesoría mensual', 'q' => 1, 'p' => 120, 'iva' => 21, 'sup' => false], ['d' => 'Presentación de modelos trimestrales', 'q' => 2, 'p' => 45, 'iva' => 21, 'sup' => false], ['d' => 'Suplido · tasa registral', 'q' => 1, 'p' => 14.5, 'iva' => 0, 'sup' => true]];
         $t = Facturacion::totales($L, 0);
         $f = new Factura(['num' => 'A-'.now()->format('Y').'-0001', 'tipo' => 'F1', 'serie' => 'A', 'fecha' => now()->toDateString(), 'receptor_nombre' => 'Cliente de muestra SL', 'receptor_nif' => 'B00000000',

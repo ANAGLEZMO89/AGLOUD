@@ -139,7 +139,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/registro/verificar', [FacturaController::class, 'verificar'])->name('verificar');
             Route::get('/configuracion', [FacturaController::class, 'config'])->name('config');
             Route::post('/configuracion', [FacturaController::class, 'guardarConfig'])->name('config.guardar');
-            Route::get('/muestra', [FacturaController::class, 'muestra'])->name('muestra');
+            Route::match(['get', 'post'], '/muestra', [FacturaController::class, 'muestra'])->name('muestra');
+            Route::get('/diseno', [FacturaController::class, 'diseno'])->name('diseno');
+            Route::post('/diseno', [FacturaController::class, 'guardarDiseno'])->name('diseno.guardar');
             Route::get('/{factura}', [FacturaController::class, 'show'])->whereNumber('factura')->name('show');
             Route::get('/{factura}/documento', [FacturaController::class, 'documento'])->whereNumber('factura')->name('documento');
             Route::get('/{factura}/facturae', [FacturaController::class, 'facturae'])->whereNumber('factura')->name('facturae');

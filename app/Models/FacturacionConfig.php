@@ -14,7 +14,7 @@ class FacturacionConfig extends Model
 
     protected $guarded = ['id'];
 
-    public const ESTILO = ['modelo' => 'clasica', 'color' => '#0B0B0B', 'forma' => 'suave', 'cuadros' => true, 'cabecera' => 'relleno', 'margen' => 'normal', 'fuente' => 'sans', 'logo' => true, 'regShow' => true, 'reg' => ''];
+    public const ESTILO = ['modelo' => 'clasica', 'color' => '#0B0B0B', 'forma' => 'suave', 'cuadros' => true, 'cabecera' => 'relleno', 'margen' => 'normal', 'fuente' => 'sans', 'logo' => true, 'firma' => false, 'regShow' => true, 'reg' => ''];
 
     public const SERIES = [['cod' => 'A', 'nombre' => 'Facturas ordinarias', 'tf' => 'F1'], ['cod' => 'S', 'nombre' => 'Facturas simplificadas', 'tf' => 'F2'], ['cod' => 'R', 'nombre' => 'Facturas rectificativas', 'tf' => 'R1']];
 

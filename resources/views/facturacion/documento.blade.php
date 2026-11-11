@@ -7,6 +7,7 @@
     $col = $st['color'];
     $mod = $st['modelo'];
     $logo = $st['logo'] && $c->logo_documento_id ? route('clientes.imagen.ver', [$c, 'logo']) : null;
+    $firma = ! empty($st['firma']) && $c->firma_documento_id ? route('clientes.imagen.ver', [$c, 'firma']) : null;
     $r0 = $c->seccion('regs')[0] ?? [];
     $regDef = ($c->tipo === 'Sociedad' && ! empty($r0['rm'])) ? 'Inscrita en el Registro Mercantil de '.$r0['rm'].(! empty($r0['tomo']) ? ', tomo '.$r0['tomo'] : '').(! empty($r0['folio']) ? ', folio '.$r0['folio'] : '').(! empty($r0['hoja']) ? ', hoja '.$r0['hoja'] : '').(! empty($r0['insc']) ? ', inscripción '.$r0['insc'] : '').'.' : '';
     $reg = $st['regShow'] ? ($st['reg'] ?: $regDef) : '';
@@ -83,5 +84,6 @@ table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;text-align:left;
 </div>
 @endif
 @if($f->observaciones)<p>{{ $f->observaciones }}</p>@endif
+@if($firma)<div style="margin-top:22px;text-align:right"><img src="{{ $firma }}" alt="Firma" style="max-height:70px;max-width:220px"><div style="font-size:9px;color:#777;margin-top:2px">{{ $c->nombre }}</div></div>@endif
 <div class="ft">@if($cfg->pie){{ $cfg->pie }}<br>@endif{{ $reg }}</div>
 </body></html>

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Facturacion;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -185,6 +186,25 @@ class FacturacionCrmTest extends TestCase
         $this->en($this->a)->get(route('crm.index', ['tab' => 'agenda']))->assertOk()->assertSee('Llamar para firmar')->assertSee('Agenda · 1');
     }
 
+    public function test_diseno_de_la_factura_con_logo_y_firma(): void
+    {
+        $this->emitir();
+        $f = Factura::first();
+        $this->en($this->a)->get(route('facturacion.diseno'))->assertOk()->assertSee('Subir logo')->assertSee('Subir firma')->assertSee('Minimal');
+        // Vista previa sin guardar
+        $this->en($this->a)->post(route('facturacion.muestra'), ['est' => ['modelo' => 'minimal', 'color' => '#7a2e2e', 'fuente' => 'serif']])->assertOk()->assertSee('#7A2E2E')->assertSee('Georgia', false);
+        $this->assertNull(FacturacionConfig::where('cliente_id', $this->a->id)->first());
+        // Logo y firma desde Facturación
+        $png = UploadedFile::fake()->image('firma.png', 300, 100);
+        $this->en($this->a)->from(route('facturacion.diseno'))->post(route('clientes.imagen', [$this->a, 'firma']), ['imagen' => $png])->assertRedirect(route('facturacion.diseno'));
+        $this->assertNotNull($this->a->fresh()->firma_documento_id);
+        $this->en($this->a)->post(route('facturacion.diseno.guardar'), ['est' => ['modelo' => 'moderna', 'color' => '#1f3a5f', 'forma' => 'redondeada', 'cabecera' => 'linea', 'margen' => 'amplio', 'fuente' => 'serif', 'firma' => '1', 'logo' => '1']])->assertRedirect(route('facturacion.diseno'));
+        $cfg = FacturacionConfig::where('cliente_id', $this->a->id)->first();
+        $this->assertSame('#1F3A5F', $cfg->estilo['color']);
+        $this->assertTrue($cfg->estilo['firma']);
+        $this->en($this->a)->get(route('facturacion.documento', $f))->assertOk()->assertSee('alt="Firma"', false)->assertSee('#1F3A5F');
+    }
+
     public function test_pantallas_cargan(): void
     {
         $this->emitir();
@@ -198,6 +218,5 @@ class FacturacionCrmTest extends TestCase
         $cfg = FacturacionConfig::where('cliente_id', $this->a->id)->first();
         $this->assertSame('F1', $cfg->serie('A')['tf']); // con facturas: no cambia de tipo
         $this->assertNotNull($cfg->serie('B'));
-        $this->assertSame('#1F3A5F', $cfg->estilo['color']);
     }
 }

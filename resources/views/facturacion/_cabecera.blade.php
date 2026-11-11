@@ -8,7 +8,7 @@
   <span style="font-size:13px;color:#BDBDB7">{{ $obligTxt }}</span>
 </div>
 <div class="chipbar" style="border-radius:11px">
-  @foreach([['lista', 'Facturas', 'facturacion.index'], ['nueva', 'Nueva factura', 'facturacion.create'], ['reg', 'Registro de facturación', 'facturacion.registro'], ['cfg', 'Parámetros', 'facturacion.config']] as [$id, $l, $r])
+  @foreach([['lista', 'Facturas', 'facturacion.index'], ['nueva', 'Nueva factura', 'facturacion.create'], ['reg', 'Registro de facturación', 'facturacion.registro'], ['diseno', 'Diseño de la factura', 'facturacion.diseno'], ['cfg', 'Parámetros', 'facturacion.config']] as [$id, $l, $r])
     <a class="{{ $tab === $id ? 'on' : '' }}" style="padding:7px 14px;border-radius:8px" href="{{ route($r) }}">{{ $l }}</a>
   @endforeach
 </div>

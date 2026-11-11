@@ -151,7 +151,7 @@ class ClienteSeccionController extends Controller
         }
         Auditoria::registrar('cliente.imagen', ($slot === 'logo' ? 'Logo' : 'Firma').' actualizado de '.$cliente->nombre, $cliente, $cliente->id);
 
-        return redirect()->route('clientes.edit', [$cliente, 'sec' => 'logo'])->with('ok', ($slot === 'logo' ? 'Logo' : 'Firma').' guardado.');
+        return back()->with('ok', ($slot === 'logo' ? 'Logo' : 'Firma').' guardado.');
     }
 
     public function quitarImagen(Cliente $cliente, string $slot, AlmacenDocumentos $almacen)
@@ -164,7 +164,7 @@ class ClienteSeccionController extends Controller
         $cliente->$col = null;
         $cliente->save();
 
-        return redirect()->route('clientes.edit', [$cliente, 'sec' => 'logo'])->with('ok', 'Imagen quitada.');
+        return back()->with('ok', 'Imagen quitada.');
     }
 
     public function verImagen(Cliente $cliente, string $slot, AlmacenDocumentos $almacen)

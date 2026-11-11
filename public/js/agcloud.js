@@ -410,6 +410,15 @@
     on(recForm, 'input', calcRec); on(recForm, 'change', calcRec); calcRec();
   }
 
+  // ---------- Facturación: diseño de la factura con vista previa en directo ----------
+  var disForm = $('[data-dis-form]');
+  if (disForm) {
+    var disBtn = $('[data-dis-prev]', disForm), disT = null;
+    var disRefresh = function () { var d = $('[data-dirty]', disForm); if (d) d.style.display = ''; clearTimeout(disT); disT = setTimeout(function () { disBtn.click(); }, 350); };
+    on(disForm, 'change', disRefresh);
+    on(disForm, 'input', function (e) { if (e.target.type === 'color' || e.target.tagName === 'TEXTAREA') disRefresh(); });
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

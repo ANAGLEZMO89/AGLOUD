@@ -37,20 +37,7 @@
         <span class="hint muted">La numeración de cada serie es correlativa por año y no admite fechas anteriores a la última factura emitida. Una serie con facturas no cambia de tipo ni se puede quitar.</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start">
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div class="card" style="padding:18px 20px;gap:12px">
-          <span style="font-size:16px;font-weight:700">Diseño de la factura</span>
-          <div class="cfgrow"><span>Modelo</span>{!! $seg('est[modelo]', $est['modelo'], ['clasica' => 'Clásica', 'moderna' => 'Moderna', 'minimal' => 'Minimal']) !!}</div>
-          <div class="cfgrow"><span>Color</span><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">@foreach(['#0B0B0B', '#1F3A5F', '#2F5D50', '#7A2E2E', '#5B4B8A', '#8A5A00'] as $col)<label style="cursor:pointer"><input type="radio" name="est[colorp]" value="{{ $col }}" class="hidden" data-color-pick @checked(strtoupper($est['color']) === $col)><span class="swatch" style="background:{{ $col }}"></span></label>@endforeach<input type="color" name="est[color]" value="{{ $est['color'] }}" title="Otro color" style="width:34px;height:28px;padding:0;border:1px solid #DADAD4;border-radius:6px;background:#fff;cursor:pointer" data-color-input></div></div>
-          <div class="cfgrow"><span>Esquinas</span>{!! $seg('est[forma]', $est['forma'], ['recta' => 'Rectas', 'suave' => 'Suaves', 'redondeada' => 'Redondeadas']) !!}</div>
-          <div class="cfgrow"><span>Cabecera de tabla</span>{!! $seg('est[cabecera]', $est['cabecera'], ['relleno' => 'Relleno', 'linea' => 'Línea']) !!}</div>
-          <div class="cfgrow"><span>Márgenes</span>{!! $seg('est[margen]', $est['margen'], ['estrecho' => 'Estrechos', 'normal' => 'Normales', 'amplio' => 'Amplios']) !!}</div>
-          <div class="cfgrow"><span>Tipografía</span>{!! $seg('est[fuente]', $est['fuente'], ['sans' => 'Sin serifa', 'serif' => 'Con serifa']) !!}</div>
-          <div class="cfgrow"><span>Cuadros</span><label class="chk" style="gap:8px"><input type="checkbox" name="est[cuadros]" value="1" @checked($est['cuadros']) style="accent-color:#0B0B0B">Enmarcar los datos del cliente y del pago</label></div>
-          <div class="cfgrow"><span>Logo</span><div style="display:flex;flex-direction:column;gap:6px"><label class="chk" style="gap:8px"><input type="checkbox" name="est[logo]" value="1" @checked($est['logo']) style="accent-color:#0B0B0B">Mostrar el logo en la factura</label><span class="hint muted">{{ $c->logo_documento_id ? 'Se usa el logo de la ficha de la empresa.' : 'Sube el logo en la ficha de la empresa (Editar ficha › Logo y firma).' }}</span></div></div>
-          <div class="cfgrow"><span>Datos registrales</span><div style="display:flex;flex-direction:column;gap:6px;flex:1"><label class="chk" style="gap:8px"><input type="checkbox" name="est[regShow]" value="1" @checked($est['regShow']) style="accent-color:#0B0B0B">Mostrar al pie de la factura</label><textarea class="txa" name="est[reg]" rows="2" maxlength="300" placeholder="Inscrita en el Registro Mercantil de Huelva, tomo, folio, hoja e inscripción (si lo dejas vacío se toma de los datos registrales de la ficha)">{{ $est['reg'] }}</textarea></div></div>
-        </div>
+    <div class="card" style="padding:14px 18px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13.5px">El modelo, los colores, la tipografía, el logo y la firma están en la pestaña <b>Diseño de la factura</b>.</span><a class="pillbtn ink" href="{{ route('facturacion.diseno') }}">Ir al diseño</a></div>
         <div class="card" style="padding:18px 20px;gap:10px">
           <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:700">Productos y servicios</span><button type="button" class="pillbtn" style="height:32px" data-cat-add>+ Añadir</button></div>
           <span class="hint muted">Aparecen al escribir la descripción de una línea y rellenan el precio y el IVA.</span>
@@ -61,12 +48,7 @@
           </div>
           <template data-cat-tpl><div class="cat-row" data-cat-row><input class="inp" name="cat[__][nombre]" maxlength="120" placeholder="Nombre"><input class="inp mono" name="cat[__][precio]" inputmode="decimal" placeholder="0,00"><select class="sel" name="cat[__][iva]">@foreach(FC::IVAS as $v)<option>{{ $v }}</option>@endforeach</select><button type="button" class="lnk" style="font-size:18px;color:#6A6A65;text-decoration:none" data-cat-del>×</button></div></template>
         </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <span style="font-size:14px;font-weight:700">Vista previa del diseño <small style="font-weight:400;color:#6A6A65">(con el diseño guardado)</small></span>
-        <iframe src="{{ route('facturacion.muestra') }}" title="Vista previa del diseño" style="width:100%;height:1000px;border:0;background:#fff;border-radius:6px;box-shadow:0 1px 0 #E2E2DC,0 10px 30px rgba(11,11,11,.08)"></iframe>
-      </div>
-    </div>
+
     <div class="card" style="padding:14px 20px;flex-direction:row;justify-content:flex-end;align-items:center;gap:12px;position:sticky;bottom:12px;box-shadow:0 6px 24px rgba(0,0,0,.08)">
       <span style="font-size:12.5px;color:#6E4300;display:none" data-dirty>Cambios sin guardar</span>
       <button class="btn" type="submit" style="background:#0B0B0B;color:#fff">Guardar</button>
