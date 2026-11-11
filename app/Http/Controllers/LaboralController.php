@@ -28,17 +28,17 @@ class LaboralController extends Controller
 {
     public function __construct(private Nomina $nomina) {}
 
-    private function ctx(Request $r): ?Cliente
+    protected function ctx(Request $r): ?Cliente
     {
         return $r->attributes->get('ctx');
     }
 
-    private function sinEmpresa(): RedirectResponse
+    protected function sinEmpresa(): RedirectResponse
     {
         return redirect()->route('escritorio', ['cambiar' => 1, 'volver' => '/laboral'])->with('aviso', 'Elige primero la empresa cuyas nóminas y seguros sociales vas a gestionar.');
     }
 
-    private function periodo(Request $r): array
+    protected function periodo(Request $r): array
     {
         $hoy = Plazos::hoy();
         $anio = (int) $r->query('anio', $hoy->year);
@@ -48,7 +48,7 @@ class LaboralController extends Controller
     }
 
     /** Datos comunes de todas las pestañas */
-    private function base(Request $r, Cliente $c, string $tab): array
+    protected function base(Request $r, Cliente $c, string $tab): array
     {
         [$anio, $mes] = $this->periodo($r);
         $P = Nomina::config($c);
@@ -58,7 +58,7 @@ class LaboralController extends Controller
             'pendMov' => LaboralMovimiento::where('cliente_id', $c->id)->where('estado', 'Pendiente')->count()];
     }
 
-    private function trabajador(Cliente $c, int $id): Trabajador
+    protected function trabajador(Cliente $c, int $id): Trabajador
     {
         return Trabajador::where('cliente_id', $c->id)->findOrFail($id);
     }
@@ -86,7 +86,8 @@ class LaboralController extends Controller
         $hoy = Plazos::hoy()->toDateString();
         if ($id === 'nuevo') {
             $ct = $P['conv']['cats'][0] ?? null;
-            $d = Nomina::rellenar(['alta' => $hoy, 'altaSS' => $hoy, 'ccc' => $P['cccs'][0] ?? '', 'claus' => $P['claus'], 'vac' => $P['conv']['vacaciones'] ?: '30',
+            $hab0 = $P['hab'][0] ?? '100';
+            $d = Nomina::rellenar(['alta' => $hoy, 'altaSS' => $hoy, 'ccc' => $P['cccs'][0] ?? '', 'contrato' => Nomina::contratoCompleto($hab0), 'claus' => Nomina::clausulasDe($P, $hab0), 'vac' => $P['conv']['vacaciones'] ?: '30',
                 'pagas' => (int) ($P['conv']['pagas'] ?: 14) === 12 ? 12 : 14,
                 'salBase' => $ct ? (float) $ct['base'] : 0, 'plus' => $ct ? (float) ($ct['plus'] ?? 0) : 0, 'grupo' => $ct ? (int) $ct['grupo'] : 7, 'convCat' => $ct['cat'] ?? ''], $c);
             $t = null;
@@ -95,7 +96,7 @@ class LaboralController extends Controller
             $d = Nomina::rellenar($t->ficha(), $c);
         }
         if ($old = $request->old('_ficha')) {
-            $d = array_replace($d, $this->leerFicha($request->old(), $d));
+            $d = array_replace($d, $this->leerFicha($request->old(), $d, $P));
         }
         $n = Trabajador::where('cliente_id', $c->id)->count();
         $incAnio = Nomina::incidenciasAnio($c, (int) substr($hoy, 0, 4));
@@ -107,7 +108,7 @@ class LaboralController extends Controller
     }
 
     /** Campos de la ficha enviados en el formulario */
-    private function leerFicha(array $in, array $d): array
+    private function leerFicha(array $in, array $d, array $P): array
     {
         $txt = ['nom1', 'ape1', 'ape2', 'tipoDoc', 'nif', 'fnac', 'sexo', 'nac', 'ecivil', 'dom', 'cp', 'mun', 'prov', 'tel', 'email', 'nivForm', 'iban', 'disc',
             'naf', 'ccc', 'altaSS', 'cno', 'epig', 'relEsp', 'contrato', 'alta', 'fin', 'causa', 'sustituido', 'horas', 'horario', 'centro', 'convCat', 'prueba', 'vac', 'irpfModo'];
@@ -126,7 +127,8 @@ class LaboralController extends Controller
         $o['pagas'] = (int) ($in['pagas'] ?? 14) === 12 ? 12 : 14;
         $o['prorr'] = ! empty($in['prorr']);
         $o['contrato'] = Nomina::contratoCompleto(Nomina::codigo($o['contrato'] ?? $d['contrato']));
-        $o['claus'] = array_values(array_intersect(array_keys(Nomina::CLAUSULAS), (array) ($in['claus'] ?? [])));
+        $o['claus'] = array_values(array_intersect(array_keys(Nomina::clausulas($P)), (array) ($in['claus'] ?? [])));
+        $o['agrario'] = ! empty($in['agrario']);
         $m = (array) ($in['m145'] ?? []);
         $disc = ['No', '33 % a 64 %', '65 % o más'];
         $o['m145'] = ['sit' => in_array($m['sit'] ?? '3', ['1', '2', '3'], true) ? $m['sit'] : '3', 'nifCony' => mb_substr(strtoupper(trim((string) ($m['nifCony'] ?? ''))), 0, 12),
@@ -148,7 +150,8 @@ class LaboralController extends Controller
         }
         $t = $id === 'nuevo' ? null : $this->trabajador($c, (int) $id);
         $prev = $t ? Nomina::rellenar($t->ficha(), $c) : Nomina::rellenar([], $c);
-        $d = array_replace($prev, $this->leerFicha($request->all(), $prev));
+        $P = Nomina::config($c);
+        $d = array_replace($prev, $this->leerFicha($request->all(), $prev, $P));
         $d['nif'] = strtoupper(preg_replace('/\s/', '', (string) $d['nif']));
         $d['naf'] = preg_replace('/\D/', '', (string) $d['naf']);
         $d['iban'] = strtoupper(preg_replace('/\s/', '', (string) $d['iban']));
@@ -218,7 +221,7 @@ class LaboralController extends Controller
         abort_unless(isset($L[$k]), 404);
         $P = Nomina::config($c);
         $isRed = in_array($k, ['idc', 'ta', 'alta', 'var'], true);
-        $volver = redirect()->route('laboral.ficha', [$trabajador->id, 'sec' => 'ss']);
+        $volver = $request->input('volver') === 'comunica' ? redirect()->route('laboral.comunica') : redirect()->route('laboral.ficha', [$trabajador->id, 'sec' => 'ss']);
         if (! ($isRed ? Nomina::redOk($P) : Nomina::sepeOk($P))) {
             return $volver->withErrors(['ficha' => 'Configura la conexión '.($isRed ? 'con el Sistema RED' : 'con el SEPE').' en Parámetros de laboral (autorizado, correo y certificado digital).']);
         }
@@ -409,7 +412,7 @@ class LaboralController extends Controller
         if (! $c) {
             return $this->sinEmpresa();
         }
-        $b = $this->base($request, $c, 'ss');
+        $b = $this->base($request, $c, 'ss-cret');
         $noms = $this->nomina->mes($c, $b['anio'], $b['mes'], null, null, (float) $b['P']['at']);
         $mesRow = LaboralMes::where('cliente_id', $c->id)->where('anio', $b['anio'])->where('mes', $b['mes'])->first();
         $ini = Carbon::create($b['anio'], $b['mes'], 1);
@@ -467,7 +470,7 @@ class LaboralController extends Controller
         if (! $c) {
             return $this->sinEmpresa();
         }
-        $b = $this->base($request, $c, 'mov');
+        $b = $this->base($request, $c, 'ss-mov');
 
         return view('laboral.movimientos', $b + ['movs' => LaboralMovimiento::where('cliente_id', $c->id)->with('trabajador')->orderByDesc('fecha')->orderByDesc('id')->get(),
             'activos' => Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get()->sortBy(fn ($t) => $t->datos['nombre'] ?? '')->values(),
@@ -523,7 +526,7 @@ class LaboralController extends Controller
         return view('laboral.parametros', $b + ['logo' => (bool) $c->logo_documento_id, 'firma' => (bool) $c->firma_documento_id]);
     }
 
-    private function guardarConfig(Cliente $c, array $patch): void
+    protected function guardarConfig(Cliente $c, array $patch): void
     {
         $cfg = LaboralConfig::firstOrNew(['cliente_id' => $c->id]);
         $cfg->datos = array_replace($cfg->datos ?? [], $patch);
@@ -539,14 +542,6 @@ class LaboralController extends Controller
         $request->validate(['red_cert' => ['nullable', 'file', 'max:64'], 'sepe_cert' => ['nullable', 'file', 'max:64']]);
         $P = Nomina::config($c);
         $s = fn ($k, $max = 160) => mb_substr(trim((string) $request->input($k, '')), 0, $max);
-        $cats = [];
-        foreach ((array) $request->input('cats', []) as $x) {
-            if (! is_array($x) || trim((string) ($x['cat'] ?? '')) === '') {
-                continue;
-            }
-            $cats[] = ['cat' => mb_substr(trim($x['cat']), 0, 120), 'grupo' => (string) max(1, min(7, (int) ($x['grupo'] ?? 7))),
-                'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2)];
-        }
         $certCad = $s('red_certCad', 10);
         if ($certCad !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $certCad)) {
             return back()->withInput()->withErrors(['ficha' => 'Revisa la fecha de caducidad del certificado.']);
@@ -558,17 +553,11 @@ class LaboralController extends Controller
         // Del certificado solo se guarda el nombre del fichero, como en el diseño (la firma se hace en la sede oficial)
         $redCert = $request->file('red_cert')?->getClientOriginalName() ?? ($request->boolean('red_cert_quitar') ? '' : $P['red']['cert']);
         $sepeCert = $request->file('sepe_cert')?->getClientOriginalName() ?? ($request->boolean('sepe_cert_quitar') ? '' : $P['sepe']['cert']);
-        $cccs = collect(explode(',', $s('cccs', 400)))->map(fn ($x) => preg_replace('/\s/', '', $x))->filter()->unique()->values()->all();
         $this->guardarConfig($c, [
-            'conv' => ['nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
-                'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14', 'cats' => $cats],
             'modelo' => in_array((int) $request->input('modelo'), [1, 2, 3], true) ? (int) $request->input('modelo') : 1,
             'useImg' => $request->boolean('useImg'),
             'red' => ['email' => $email, 'aut' => $s('red_aut', 40), 'cert' => mb_substr(basename((string) $redCert), 0, 120), 'certCad' => $certCad],
             'sepe' => ['aut' => $s('sepe_aut', 60), 'mismoCert' => $request->boolean('sepe_mismoCert'), 'cert' => mb_substr(basename((string) $sepeCert), 0, 120)],
-            'cccs' => $cccs,
-            'hab' => array_values(array_intersect(array_map(fn ($x) => Nomina::codigo($x), Nomina::CONTRATOS), (array) $request->input('hab', []))),
-            'claus' => array_values(array_intersect(array_keys(Nomina::CLAUSULAS), (array) $request->input('claus', []))),
         ]);
         Auditoria::registrar('laboral.parametros', 'Parámetros de laboral de '.$c->nombre.' guardados', null, $c->id);
 
@@ -576,7 +565,7 @@ class LaboralController extends Controller
     }
 
     // --------------------------------------------------------------- exportar
-    private function csv(string $fmt, string $nombre, string $titulo, array $cab, array $filas)
+    protected function csv(string $fmt, string $nombre, string $titulo, array $cab, array $filas)
     {
         $sep = $fmt === 'excel' ? ';' : ',';
 

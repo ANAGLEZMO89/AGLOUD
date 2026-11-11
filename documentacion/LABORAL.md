@@ -2,12 +2,13 @@
 
 Módulo construido a partir del prototipo («Laboral y SS»). Trabaja sobre la empresa elegida.
 
-## Pestañas
-- **Trabajadores**: plantilla y ficha (datos personales, afiliación, contrato con comprobación legal y cláusulas, retribución, IRPF · modelo 145, Seguridad Social y SEPE).
-- **Integral de nóminas**: nóminas del mes, variables (horas extra, otros devengos, dietas, kilometraje, anticipos, embargos), recibo en 3 modelos, contabilizar el mes y enlace al modelo 111.
-- **Seguros sociales**: bases y cuotas (RLC/RNT), tipo de AT y EP, confirmar la liquidación en el SLD.
-- **Altas y bajas**: movimientos de afiliación pendientes/comunicados y baja de trabajadores.
-- **Parámetros de laboral**: convenio y tablas salariales, modelo de nómina, conexión RED y SEPE, CCC, contratos habilitados y cláusulas por defecto.
+## Menú
+- **Trabajadores** · **Integral de nóminas**
+- **Seguridad Social ▾**: Cret@ - Sistema de Liquidación Directa (seguros sociales), CRA - Conceptos Retributivos Abonados (con los códigos CRA que asigne el despacho), AFI - Régimen Especial Agrario Jornadas (trabajadores marcados en su ficha), AFI - Reduc. contribuciones planes de pensiones, AFI - Altas, bajas y variaciones.
+- **Gestión ▾**: Remesa transferencia de nóminas (fichero SEPA pain.001.001.03, categoría SALA), CCC, Comunic@ (comunicación de contratos al SEPE, plazo de 10 días), Convenios (convenio y tablas salariales), Cálculo de nóminas (todas las nóminas con filtros, exportación e impresión en bloque).
+- **Modelos tributarios ▾**: 145 (por trabajador), 111 (casillas 01-03 por trimestre desde las nóminas), 190 (resumen anual por perceptor, clave A; Excel, sin fichero oficial).
+- **Parámetros laboral**: modelo de nómina, firma, conexión RED y SEPE.
+- **Parámetros contrato**: texto del contrato por modalidad con marcadores {así} y **negrita**, cláusulas por defecto por modalidad, cláusulas propias, contratos que usa la empresa. Cada trabajador puede tener su propio texto (ficha › Seguridad Social y SEPE › Editar el texto del contrato).
 
 ## Cálculo (`App\Services\Nomina`)
 - Tipos de cotización 2026 del diseño: CC 23,60 + 4,70 %; MEI 0,75 + 0,15 %; desempleo 5,50 + 1,55 % (indefinidos) o 6,70 + 1,60 % (temporales); FOGASA 0,20 %; FP 0,60 + 0,10 %; AT y EP según parámetro.

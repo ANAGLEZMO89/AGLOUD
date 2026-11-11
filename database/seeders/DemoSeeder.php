@@ -109,7 +109,7 @@ class DemoSeeder extends Seeder
             ['Lucía', 'Romero', 'Díaz', '29778899V', '211234567892', '200', 7, 'Ayudante de cocina', 640, 0, '2023-02-01', 50, '']] as [$n1, $a1, $a2, $nif, $naf, $ct, $g, $cat, $sb, $pl, $alta, $jor, $fin]) {
             $d = Nomina::rellenar(['nom1' => $n1, 'ape1' => $a1, 'ape2' => $a2, 'nombre' => "$n1 $a1 $a2", 'nif' => $nif, 'naf' => $naf, 'contrato' => Nomina::contratoCompleto($ct),
                 'grupo' => $g, 'cat' => $cat, 'convCat' => $cat, 'salBase' => $sb, 'plus' => $pl, 'alta' => $alta, 'altaSS' => $alta, 'jor' => $jor, 'horas' => (string) round(40 * $jor / 100), 'fin' => $fin,
-                'causa' => $fin ? 'Aumento de la actividad por la temporada de verano y Navidad en la cafetería' : '', 'fnac' => '1990-05-12', 'ccc' => '21123456789'], $cafe);
+                'causa' => $fin ? 'Aumento de la actividad por la temporada de verano y Navidad en la cafetería' : '', 'fnac' => '1990-05-12', 'ccc' => '21123456789', 'iban' => 'ES9121000418450200051332'], $cafe);
             $d['sal'] = Nomina::anual($d);
             $t = Trabajador::create(['cliente_id' => $cafe->id, 'estado' => 'Alta', 'alta' => $alta, 'contrato' => $ct, 'datos' => $d]);
             LaboralMovimiento::create(['cliente_id' => $cafe->id, 'trabajador_id' => $t->id, 'fecha' => $alta, 'tipo' => 'Alta', 'detalle' => $d['contrato'], 'estado' => 'Comunicado']);

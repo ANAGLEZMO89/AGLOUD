@@ -17,6 +17,6 @@ class LaboralMes extends Model
 
     protected function casts(): array
     {
-        return ['incidencias' => 'encrypted:array', 'ss_confirmada_at' => 'datetime'];
+        return ['incidencias' => 'encrypted:array', 'afi' => 'encrypted:array', 'ss_confirmada_at' => 'datetime', 'remesa_at' => 'datetime'];
     }
 }

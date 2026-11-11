@@ -53,6 +53,19 @@ class Nomina
 
     public const INCIDENCIAS = ['hx' => 'Horas extraordinarias (€)', 'otros' => 'Otros devengos salariales (€)', 'dietas' => 'Dietas (€)', 'km' => 'Kilometraje (€)', 'anticipo' => 'Anticipos (€)', 'embargo' => 'Embargos (€)'];
 
+    /** Conceptos retributivos abonados (CRA): concepto de la nómina => etiqueta. El código de la tabla CRA de la TGSS se asigna en la pantalla CRA. */
+    public const CRA = ['sb' => 'Salario base', 'pl' => 'Complementos salariales', 'extra' => 'Pagas extraordinarias', 'pror' => 'Prorrata de pagas extraordinarias', 'hx' => 'Horas extraordinarias', 'otr' => 'Otros devengos salariales', 'die' => 'Dietas', 'km' => 'Plus de distancia y kilometraje'];
+
+    /** Texto por defecto del cuerpo del contrato. **negrita** y marcadores {así} */
+    public const PLANTILLA_CONTRATO = "**Primera.** El trabajador prestará sus servicios como {categoria} en el centro de trabajo {centro}.\n\n**Segunda.** {duracion}\n\n**Tercera.** La jornada será de {horas} horas semanales con la siguiente distribución: {horario}. Se llevará registro diario de la jornada.\n\n**Cuarta.** El trabajador percibirá una retribución bruta anual de {retribucion} distribuida en {pagas} pagas, conforme a {convenio}.\n\n**Quinta.** Se establece un periodo de prueba de {prueba} (art. 14 ET).\n\n**Sexta.** Las vacaciones serán de {vacaciones} días naturales por año trabajado.\n\n**Séptima.** En lo no previsto se estará a lo dispuesto en {convenio}, en el Estatuto de los Trabajadores y demás normativa aplicable.";
+
+    public const MARCADORES = ['empresa' => 'Nombre de la empresa', 'cif' => 'CIF de la empresa', 'ccc' => 'Código de cuenta de cotización', 'trabajador' => 'Nombre del trabajador', 'nif' => 'Documento del trabajador',
+        'naf' => 'Nº de afiliación', 'categoria' => 'Categoría', 'grupo' => 'Grupo de cotización', 'centro' => 'Centro de trabajo', 'inicio' => 'Fecha de inicio', 'fin' => 'Fecha de fin', 'duracion' => 'Frase de duración (indefinido o temporal con causa)',
+        'causa' => 'Causa de la temporalidad', 'horas' => 'Horas semanales', 'jornada' => 'Jornada %', 'horario' => 'Distribución del horario', 'retribucion' => 'Retribución bruta anual', 'salario' => 'Salario base mensual', 'pagas' => 'Número de pagas',
+        'convenio' => 'Convenio colectivo', 'prueba' => 'Periodo de prueba', 'vacaciones' => 'Días de vacaciones', 'municipio' => 'Municipio de la empresa', 'contrato' => 'Modalidad del contrato'];
+
+    public const ORDINALES = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta', 'Sexta', 'Séptima', 'Octava', 'Novena', 'Décima', 'Undécima', 'Duodécima', 'Decimotercera', 'Decimocuarta', 'Decimoquinta', 'Decimosexta', 'Decimoséptima', 'Decimoctava', 'Decimonovena', 'Vigésima', 'Vigesimoprimera', 'Vigesimosegunda', 'Vigesimotercera', 'Vigesimocuarta', 'Vigesimoquinta'];
+
     /** Escala de retenciones y límites excluidos (situación 1, 2, 3 × 0, 1, 2+ hijos) */
     private const ESCALA = [[12450, 19], [20200, 24], [35200, 30], [60000, 37], [300000, 45], [INF, 47]];
 
@@ -146,7 +159,7 @@ class Nomina
         return ['conv' => ['nombre' => '', 'codigo' => '', 'ambito' => '', 'vigencia' => '', 'jornada' => '1780', 'vacaciones' => '30', 'pagas' => '14', 'cats' => []],
             'modelo' => 1, 'useImg' => true, 'at' => 1.5,
             'red' => ['email' => '', 'aut' => '', 'cert' => '', 'certCad' => ''], 'sepe' => ['aut' => '', 'mismoCert' => true, 'cert' => ''],
-            'cccs' => $cccs, 'hab' => array_map(fn ($x) => self::codigo($x), self::CONTRATOS), 'claus' => ['conf', 'datos', 'desc', 'reg']];
+            'cccs' => $cccs, 'cccsDet' => [], 'contratos' => [], 'clausExtra' => [], 'cra' => [], 'hab' => array_map(fn ($x) => self::codigo($x), self::CONTRATOS), 'claus' => ['conf', 'datos', 'desc', 'reg']];
     }
 
     public static function config(Cliente $c): array
@@ -156,6 +169,9 @@ class Nomina
         $P = array_replace($def, $d);
         foreach (['conv', 'red', 'sepe'] as $k) {
             $P[$k] = array_replace($def[$k], $d[$k] ?? []);
+        }
+        if ($P['cccsDet']) {
+            $P['cccs'] = array_values(array_unique(array_column($P['cccsDet'], 'ccc')));
         }
         if (! $P['cccs']) {
             $P['cccs'] = $def['cccs'];
@@ -353,6 +369,56 @@ class Nomina
 
         return $plantilla->filter(fn ($w) => self::activo($w, $anio, $m))
             ->map(fn ($w) => ['w' => $w, 'n' => $this->nomina($w, $anio, $m, $incAnio, $at)])->values()->all();
+    }
+
+    // -------------------------------------------------------------- contratos
+    /** Cláusulas disponibles: las del diseño más las añadidas en Parámetros de contrato. [k => [título, texto]] */
+    public static function clausulas(array $P): array
+    {
+        $o = self::CLAUSULAS;
+        foreach ($P['clausExtra'] ?? [] as $x) {
+            $o[$x['k']] = [$x['l'], $x['txt']];
+        }
+
+        return $o;
+    }
+
+    /** Cláusulas por defecto de una modalidad */
+    public static function clausulasDe(array $P, string $codigo): array
+    {
+        return $P['contratos'][$codigo]['claus'] ?? $P['claus'];
+    }
+
+    /** Plantilla del cuerpo del contrato para una modalidad */
+    public static function plantillaDe(array $P, string $codigo): string
+    {
+        $t = trim((string) ($P['contratos'][$codigo]['texto'] ?? ''));
+
+        return $t !== '' ? $t : self::PLANTILLA_CONTRATO;
+    }
+
+    public static function valoresContrato(array $w, Cliente $c, array $P): array
+    {
+        $temp = self::temporal($w);
+        $conv = $P['conv']['nombre'] ?: 'el convenio colectivo aplicable';
+
+        return ['empresa' => $c->nombre, 'cif' => (string) $c->nif, 'ccc' => (string) $w['ccc'], 'trabajador' => (string) $w['nombre'], 'nif' => (string) $w['nif'], 'naf' => (string) $w['naf'],
+            'categoria' => (string) ($w['convCat'] ?: $w['cat']), 'grupo' => (string) $w['grupo'], 'centro' => (string) ($w['centro'] ?: 'indicado'), 'inicio' => Formato::fecha($w['alta']), 'fin' => $temp ? Formato::fecha($w['fin']) : 'Indefinido',
+            'duracion' => $temp ? 'El contrato se concierta por duración determinada desde el '.Formato::fecha($w['alta']).' hasta el '.Formato::fecha($w['fin']).' por la siguiente causa: '.$w['causa'].' (art. 15 ET).' : 'El contrato se concierta por tiempo indefinido desde el '.Formato::fecha($w['alta']).'.',
+            'causa' => (string) $w['causa'], 'horas' => (string) $w['horas'], 'jornada' => Formato::num($w['jor'], 0).' %', 'horario' => (string) $w['horario'], 'retribucion' => Formato::eur(self::anual($w)), 'salario' => Formato::eur(self::n($w['salBase'])),
+            'pagas' => (string) $w['pagas'], 'convenio' => $conv, 'prueba' => (string) $w['prueba'], 'vacaciones' => (string) $w['vac'], 'municipio' => (string) ($c->municipio ?: $c->provincia), 'contrato' => (string) $w['contrato']];
+    }
+
+    /** Texto del contrato a HTML: escapa, sustituye {marcadores}, **negrita** y párrafos. Devuelve [html, nº de cláusulas numeradas] */
+    public static function renderContrato(string $texto, array $vals): array
+    {
+        $h = e($texto);
+        $h = preg_replace_callback('/\{(\w+)\}/', fn ($m) => array_key_exists($m[1], $vals) ? e($vals[$m[1]] !== '' ? $vals[$m[1]] : '—') : $m[0], $h);
+        $n = preg_match_all('/\*\*[^*]+\*\*/', $texto);
+        $h = preg_replace('/\*\*(.+?)\*\*/s', '<b>$1</b>', $h);
+        $ps = preg_split('/\R{2,}/', trim($h));
+
+        return [implode('', array_map(fn ($p) => '<p>'.nl2br(trim($p)).'</p>', $ps)), $n];
     }
 
     // ------------------------------------------------------ comprobación legal

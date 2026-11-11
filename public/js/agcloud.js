@@ -646,6 +646,33 @@
     }).catch(function () { st('No se ha podido leer el PDF del convenio. Introduce los datos a mano.'); });
   });
 
+  // Laboral: marcadores del texto del contrato
+  var lbTexto = $('[data-lb-texto]');
+  $$('[data-lb-marca]').forEach(function (b) {
+    on(b, 'click', function () {
+      if (!lbTexto) return;
+      var m = b.getAttribute('data-lb-marca'), s = lbTexto.selectionStart || 0, e2 = lbTexto.selectionEnd || s;
+      lbTexto.value = lbTexto.value.slice(0, s) + m + lbTexto.value.slice(e2); lbTexto.focus(); lbTexto.selectionStart = lbTexto.selectionEnd = s + m.length;
+    });
+  });
+  // Laboral: remesa de nóminas (marcar todos y total)
+  var rem = $('form[data-lb-remesa]');
+  if (rem) {
+    var chks = $$('input[name="t[]"]:not([disabled])', rem), tot = $('[data-lb-remtot]', rem);
+    var suma = function () { var s = 0; chks.forEach(function (c) { if (c.checked) s += +c.getAttribute('data-liq') || 0; }); if (tot) tot.textContent = eu(s) + ' €'; };
+    on($('[data-lb-todos]', rem), 'change', function (e) { chks.forEach(function (c) { c.checked = e.target.checked; }); suma(); });
+    chks.forEach(function (c) { on(c, 'change', suma); });
+  }
+  // Laboral: cláusulas por defecto según la modalidad al dar de alta
+  var lbForm = $('#lbf');
+  if (lbForm && lbForm.getAttribute('data-lb-clausdef')) {
+    var cdef = {}; try { cdef = JSON.parse(lbForm.getAttribute('data-lb-clausdef')); } catch (e) {}
+    on(lbForm.querySelector('[name="contrato"]'), 'change', function (e) {
+      var k = e.target.value.split(' · ')[0], l = cdef[k]; if (!l) return;
+      $$('input[name="claus[]"]', lbForm).forEach(function (c) { c.checked = l.indexOf(c.value) >= 0; });
+    });
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

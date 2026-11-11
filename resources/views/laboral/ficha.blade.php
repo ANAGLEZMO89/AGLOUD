@@ -37,7 +37,7 @@
   $legalOk = collect($legal)->every(fn ($x) => $x['ok']);
   $ss = [['TGSS · Sistema RED', $redOk, [['idc', 'Descargar el IDC', 'Informe de datos para la cotización'], ['ta', 'Descargar la resolución de alta (TA)', 'Alta del NAF en el CCC de la empresa'], ['alta', 'Comunicar el alta', 'Antes del inicio de la actividad'], ['var', 'Cambiar datos de afiliación', 'Contrato, jornada, grupo u ocupación']]],
     ['SEPE · Contrat@ y Certific@2', $sepeOk, [['contrata', 'Comunicar el contrato', 'Plazo de 10 días desde la firma'], ['comunicacion', 'Descargar la comunicación del contrato', 'Resumen de los datos enviados'], ['copia', 'Copia básica del contrato', 'Para la representación legal y el SEPE'], ['cert', 'Certificado de empresa', 'Tras la baja · prestación por desempleo']]],
-    ['Documentos', true, [['contrato', 'Contrato de trabajo en PDF', 'Con las cláusulas y la firma de la empresa'], ['m145', 'Modelo 145 en PDF', 'Comunicación de datos al pagador']]]];
+    ['Documentos', true, [['texto', 'Editar el texto del contrato', ! empty($d['contratoTexto']) ? 'Texto propio de este trabajador' : 'Parte de la plantilla de su modalidad'], ['contrato', 'Contrato de trabajo en PDF', 'Con las cláusulas y la firma de la empresa'], ['m145', 'Modelo 145 en PDF', 'Comunicación de datos al pagador']]]];
   $locales = ['comunicacion', 'copia', 'contrato', 'm145'];
 @endphp
 @section('content')
@@ -56,7 +56,7 @@
       @endif
     </div>
     <div style="flex:1 1 560px;display:flex;flex-direction:column;gap:16px;min-width:0">
-      <form id="lbf" method="POST" action="{{ route('laboral.guardar', $nuevo ? 'nuevo' : $t->id) }}" style="display:contents" data-lb-cats='@json($catsData)'>
+      <form id="lbf" method="POST" action="{{ route('laboral.guardar', $nuevo ? 'nuevo' : $t->id) }}" style="display:contents" data-lb-cats='@json($catsData)' @if($nuevo) data-lb-clausdef='@json(collect($P['hab'])->mapWithKeys(fn ($h) => [$h => Nomina::clausulasDe($P, $h)]))' @endif>
         @csrf
         <input type="hidden" name="_ficha" value="1"><input type="hidden" name="_sec" value="{{ $sec }}" data-lb-secin>
 
@@ -76,6 +76,7 @@
           {{ $fb('cno', 'Código de ocupación (CNO-11)', 'text', false, '4 dígitos') }}
           {{ $fb('epig', 'Ocupación a efectos de AT y EP', ['Tarifa general por CNAE', 'a · Personal en trabajos exclusivos de oficina', 'd · Conductores de vehículos de transporte de mercancías', 'f · Conductores de vehículos de transporte de personas', 'g · Personal de limpieza', 'h · Vigilantes y guardas']) }}
           {{ $fb('relEsp', 'Relación laboral', ['Común', 'Especial de alta dirección', 'Especial de servicio del hogar', 'Otra relación laboral especial']) }}
+          {{ $fb('agrario', 'Sistema Especial Agrario (jornadas reales)', 'bool', true) }}
         </div></div>
 
         {{-- Contrato --}}
@@ -98,7 +99,7 @@
           </div>
           <div class="card">
             <span style="font-size:15px;font-weight:700">Cláusulas del contrato</span>
-            @foreach(Nomina::CLAUSULAS as $k => [$l, $txt])
+            @foreach(Nomina::clausulas($P) as $k => [$l, $txt])
               <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" name="claus[]" value="{{ $k }}" @checked(in_array($k, $d['claus'] ?? [], true)) style="width:18px;height:18px;margin:2px 0 0;accent-color:#0B0B0B;flex:none"><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">{{ $l }}</span><span style="font-size:12.5px;color:#6A6A65;line-height:1.45">{{ $txt }}</span></span></label>
             @endforeach
           </div>
@@ -178,7 +179,9 @@
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:10px">
               @foreach($items as [$k, $l, $sb])
                 @php $last = collect($docs)->firstWhere('k', $k); $sub = $last ? $last['l'].' el '.Formato::fecha($last['fecha']) : $sb; @endphp
-                @if(in_array($k, $locales, true))
+                @if($k === 'texto')
+                  <a class="lb-act" href="{{ route('laboral.contrato.texto', $t->id) }}"><span class="lb-act-t">{{ $l }}</span><span class="lb-act-s">{{ $sb }}</span></a>
+                @elseif(in_array($k, $locales, true))
                   <a class="lb-act" href="{{ route('laboral.documento', [$t->id, $k === 'comunicacion' ? 'comunicacion' : $k]) }}" target="_blank" rel="noopener"><span class="lb-act-t">{{ $l }}</span><span class="lb-act-s">{{ $sub }}</span></a>
                 @else
                   <form method="POST" action="{{ route('laboral.accion', [$t->id, $k]) }}" @if(in_array($k, ['idc', 'ta', 'alta', 'var'], true) ? $redOk : $sepeOk) data-abrir="{{ in_array($k, ['idc', 'ta', 'alta', 'var'], true) ? Nomina::URL['red'] : Nomina::URL['sepe'] }}" @endif>@csrf

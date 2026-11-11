@@ -151,10 +151,12 @@ class LaboralTest extends TestCase
         $t = Trabajador::firstOrFail();
         // Sin conexión, las acciones RED se rechazan
         $this->en()->post('/laboral/trabajador/'.$t->id.'/accion/alta')->assertSessionHasErrors('ficha');
-        $this->en()->post('/laboral/parametros', ['conv_nombre' => 'Convenio de hostelería de Huelva', 'conv_pagas' => '14', 'modelo' => 3, 'useImg' => 1,
-            'cats' => [['cat' => 'Camarero', 'grupo' => '7', 'base' => '1.300,00', 'plus' => '50']], 'red_email' => 'red@gestoria.es', 'red_aut' => '12345',
-            'red_cert' => UploadedFile::fake()->create('autorizado.p12', 3), 'sepe_aut' => 'USR01', 'sepe_mismoCert' => 1, 'cccs' => '21 123456789, 21987654321',
-            'hab' => ['100', '402'], 'claus' => ['conf']])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/parametros', ['modelo' => 3, 'useImg' => 1, 'red_email' => 'red@gestoria.es', 'red_aut' => '12345',
+            'red_cert' => UploadedFile::fake()->create('autorizado.p12', 3), 'sepe_aut' => 'USR01', 'sepe_mismoCert' => 1])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/gestion/convenios', ['conv_nombre' => 'Convenio de hostelería de Huelva', 'conv_pagas' => '14',
+            'cats' => [['cat' => 'Camarero', 'grupo' => '7', 'base' => '1.300,00', 'plus' => '50']]])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/gestion/ccc', ['f' => [['ccc' => '21 123456789', 'denom' => 'Cafetería', 'regimen' => 'General'], ['ccc' => '21987654321', 'regimen' => 'Sistema Especial Agrario']]])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/gestion/ccc', ['f' => [['ccc' => '2112345']]])->assertSessionHasErrors('ficha');
         $P = Nomina::config($this->a);
         $this->assertSame('autorizado.p12', $P['red']['cert']);
         $this->assertSame(['21123456789', '21987654321'], $P['cccs']);
@@ -191,5 +193,66 @@ class LaboralTest extends TestCase
         $this->en()->delete('/laboral/trabajador/'.$t->id.'/eliminar')->assertForbidden();
         $this->en($this->usuario(User::ADMIN))->delete('/laboral/trabajador/'.$t->id.'/eliminar')->assertRedirect();
         $this->assertSame(0, Trabajador::count());
+    }
+
+    public function test_menu_gestion_modelos_y_parametros_de_contrato(): void
+    {
+        $this->a->setSeccion('bancos', [['iban' => 'ES9121000418450200051332', 'bic' => 'CAIXESBBXXX', 'entidad' => 'CaixaBank', 'principal' => true]]);
+        $this->a->save();
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['iban' => 'ES91 2100 0418 4502 0005 1332', 'agrario' => '1']));
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['nom1' => 'Juan', 'nif' => '29445566T', 'naf' => '211111111111', 'contrato' => '200', 'jor' => '50', 'salBase' => '700']));
+        [$t1, $t2] = Trabajador::orderBy('id')->get()->all();
+        foreach (['/laboral/seguridad-social/cra', '/laboral/seguridad-social/agrario', '/laboral/seguridad-social/planes-de-pensiones', '/laboral/gestion/remesa', '/laboral/gestion/ccc',
+            '/laboral/gestion/comunica', '/laboral/gestion/convenios', '/laboral/gestion/calculo', '/laboral/modelos/145', '/laboral/modelos/111', '/laboral/modelos/190', '/laboral/parametros-contrato?c=402',
+            '/laboral/trabajador/'.$t1->id.'/texto-contrato'] as $u) {
+            $this->en()->get($u)->assertOk()->assertSee('Cret@ - Sistema de Liquidación Directa')->assertSee('Remesa transferencia de nóminas')->assertSee('Modelo 190')->assertSee('Parámetros contrato');
+        }
+        // CRA y AFI
+        $this->en()->post('/laboral/seguridad-social/cra', ['cra' => ['sb' => '0001']])->assertSessionHasNoErrors();
+        $this->en()->get('/laboral/seguridad-social/cra?anio=2026&mes=11')->assertSee('0001')->assertSee('Salario base');
+        $this->en()->post('/laboral/seguridad-social/afi/agr', ['anio' => 2026, 'mes' => 11, 'v' => [$t1->id => '40']])->assertSessionHasErrors('ficha');
+        $this->en()->post('/laboral/seguridad-social/afi/agr', ['anio' => 2026, 'mes' => 11, 'v' => [$t1->id => '18']])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/seguridad-social/afi/pp', ['anio' => 2026, 'mes' => 11, 'v' => [$t2->id => '30,00']])->assertSessionHasNoErrors();
+        $afi = LaboralMes::where('anio', 2026)->where('mes', 11)->firstOrFail()->afi;
+        $this->assertSame(18, $afi['agr'][$t1->id]);
+        $this->assertSame(30.0, (float) $afi['pp'][$t2->id]);
+        $this->en()->get('/laboral/seguridad-social/agrario?anio=2026&mes=11')->assertSee('María López Ruiz')->assertDontSee('Juan López Ruiz');
+        // Remesa SEPA: el trabajador sin IBAN bloquea; con IBAN se genera el XML
+        $this->en()->post('/laboral/gestion/remesa', ['anio' => 2026, 'mes' => 11, 'cuenta' => 0, 'fecha' => '2026-11-30', 't' => [$t2->id]])->assertSessionHasErrors('ficha');
+        $r = $this->en()->post('/laboral/gestion/remesa', ['anio' => 2026, 'mes' => 11, 'cuenta' => 0, 'fecha' => '2026-11-30', 'concepto' => 'Nómina noviembre 2026', 't' => [$t1->id]]);
+        $r->assertOk();
+        $xml = $r->getContent();
+        $this->assertStringContainsString('pain.001.001.03', $xml);
+        $this->assertStringContainsString('<Cd>SALA</Cd>', $xml);
+        $this->assertStringContainsString('<IBAN>ES9121000418450200051332</IBAN>', $xml);
+        $this->assertStringContainsString('<NbOfTxs>1</NbOfTxs>', $xml);
+        $this->assertNotFalse(simplexml_load_string($xml));
+        $this->assertNotNull(LaboralMes::where('mes', 11)->first()->remesa_at);
+        // Cálculo masivo con filtros y recibos en bloque
+        $this->en()->get('/laboral/gestion/calculo?anio=2026&mes=11&tipo=parcial')->assertSee('Juan López Ruiz')->assertDontSee('María López Ruiz</span>', false);
+        $this->en()->get('/laboral/gestion/calculo/recibos?anio=2026&mes=11')->assertOk()->assertSee('Juan López Ruiz')->assertSee('María López Ruiz');
+        $this->en()->get('/laboral/gestion/calculo?anio=2026&mes=11&exportar=csv')->assertOk();
+        // Modelos 111 y 190
+        $this->en()->get('/laboral/modelos/111?anio=2026&t=4')->assertSee('Nº de perceptores');
+        $csv = $this->en()->get('/laboral/modelos/190?anio=2026&exportar=excel');
+        $this->assertStringContainsString('29112233Y', $csv->streamedContent());
+        // Parámetros de contrato: cláusula propia, plantilla de la modalidad y texto del trabajador
+        $this->en()->post('/laboral/parametros-contrato', ['c' => '100', 'texto' => '**Primera.** Contrato de {trabajador} con {empresa}.', 'claus' => ['conf'], 'hab' => ['100', '200'], 'clausDef' => ['reg'],
+            'extra' => [['l' => 'Uniforme', 'txt' => 'La empresa facilitará el uniforme de trabajo.']]])->assertSessionHasNoErrors();
+        $P = Nomina::config($this->a);
+        $this->assertCount(1, $P['clausExtra']);
+        $kx = $P['clausExtra'][0]['k'];
+        $this->assertSame(['conf'], Nomina::clausulasDe($P, '100'));
+        $this->assertSame(['reg'], Nomina::clausulasDe($P, '200'));
+        $this->en()->get('/laboral/trabajador/'.$t1->id.'/documento/contrato')->assertSee('Contrato de María López Ruiz con Café Las Colonias SL', false);
+        $this->en()->get('/laboral/trabajador/nuevo')->assertSee('Uniforme');
+        $this->en()->post('/laboral/trabajador/'.$t1->id.'/texto-contrato', ['texto' => '**Primera.** Texto especial para {trabajador}.'])->assertSessionHasNoErrors();
+        $this->en()->get('/laboral/trabajador/'.$t1->id.'/documento/contrato')->assertSee('Texto especial para María López Ruiz')->assertDontSee('Contrato de María');
+        $this->en()->post('/laboral/trabajador/'.$t1->id.'/texto-contrato', ['restablecer' => 1, 'texto' => 'x'])->assertSessionHasNoErrors();
+        $this->assertSame('', $t1->fresh()->datos['contratoTexto']);
+        // El marcador escapa el contenido
+        [$h] = Nomina::renderContrato('{trabajador}', ['trabajador' => '<b>x</b>']);
+        $this->assertStringNotContainsString('<b>x</b>', $h);
+        $this->assertNotEmpty($kx);
     }
 }
