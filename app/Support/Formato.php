@@ -32,7 +32,11 @@ class Formato
         if ($s === '') {
             return 0.0;
         }
-        $s = str_replace([' ', '€'], '', $s);
+        $s = str_replace([' ', '€', "\u{A0}", '−'], ['', '', '', '-'], $s);
+        // «1.200» o «12.500.000» sin coma: puntos de miles (formato español)
+        if (! str_contains($s, ',') && preg_match('/^-?\d{1,3}(\.\d{3})+$/', $s)) {
+            $s = str_replace('.', '', $s);
+        }
         if (str_contains($s, ',')) {
             $s = str_replace('.', '', $s);
             $s = str_replace(',', '.', $s);

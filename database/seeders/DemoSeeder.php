@@ -6,8 +6,10 @@ use App\Models\Cliente;
 use App\Models\Documento;
 use App\Models\Expediente;
 use App\Models\Notificacion;
+use App\Models\Oportunidad;
 use App\Models\User;
 use App\Services\AlmacenDocumentos;
+use App\Services\Facturacion;
 use App\Support\Plazos;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
@@ -86,6 +88,16 @@ class DemoSeeder extends Seeder
             $e = Expediente::create(['cliente_id' => $cl->id, 'ref' => Expediente::siguienteRef(), 'tramite' => $tr, 'categoria' => $t['cat'], 'responsable_id' => $cl->asesor_id, 'estado' => $est, 'apertura' => $hoy->subDays(12)->toDateString(), 'plazo' => $dias ? $hoy->addDays($dias)->toDateString() : null,
                 'pasos' => array_map(fn ($l, $i) => ['l' => $l, 'ok' => $i < $hechos], $t['pasos'], array_keys($t['pasos'])), 'docs' => array_map(fn ($l, $i) => ['l' => $l, 'ok' => $i < $dok], $t['docs'], array_keys($t['docs'])), 'honorarios' => $t['hon']]);
             $e->evento('Expediente abierto (datos de prueba)');
+        }
+
+        // Facturas y CRM de prueba (fase 3) · emiten el despacho y Café Las Colonias
+        $fac = app(Facturacion::class);
+        foreach ([[$cafe, 'Hotel Costa Luz SL', 'B21345678', 'Servicio de catering', 850], [$cafe, 'Academia Columbus SL', 'B21987654', 'Desayunos de empresa', 320], [$desp, 'Transportes Costa de la Luz SL', 'B21112230', 'Cuota de asesoría · noviembre', 240]] as [$em, $rn, $rnif, $d, $p]) {
+            $fac->emitir($em, ['serie' => 'A', 'tf' => 'F1', 'fecha' => $hoy->toDateString(), 'receptor_nombre' => $rn, 'receptor_nif' => $rnif, 'receptor_dir' => 'Huelva',
+                'lineas' => [['d' => $d, 'q' => 1, 'p' => $p, 'iva' => 21, 'sup' => false]], 'ret_pct' => 0, 'forma_pago' => 'Transferencia', 'pago_dias' => 30], $admin->id);
+        }
+        foreach ([['Hotel Costa Luz SL', 'Contabilidad y fiscal', 2400, 'Contactado'], ['Clínica Dental Odiel', 'Nóminas (6 trabajadores)', 1800, 'Presupuesto enviado'], ['Frutas Lepe SL', 'Constitución de SL', 350, 'Ganado']] as [$n, $t, $i, $e]) {
+            Oportunidad::create(['cliente_id' => $desp->id, 'nombre' => $n, 'titulo' => $t, 'importe' => $i, 'etapa' => $e, 'fecha' => $hoy->addDays(20)->toDateString(), 'origen' => 'Recomendación', 'responsable_id' => $admin->id]);
         }
 
         $this->command?->info('Datos de prueba creados. Contraseña de todos los usuarios: '.$pass);

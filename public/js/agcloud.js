@@ -104,7 +104,7 @@
     return m === 1;
   }
   $$('[data-iban]').forEach(function (i) {
-    var f = i.form, hint = $('[data-iban-hint]', i.closest('.fld'));
+    var f = i.form, hint = $('[data-iban-hint]', i.closest('.fld') || i.parentNode);
     var run = function () {
       var s = i.value.replace(/\s+/g, ''), b = bankOf(s);
       if (b && f) { var e = f.querySelector('[name="d[entidad]"]'), bic = f.querySelector('[name="d[bic]"]'); if (e && !e.value) e.value = b[0]; if (bic && !bic.value) bic.value = b[1]; }
@@ -270,6 +270,106 @@
     };
     on(stp, 'change', function () { pinta(true); });
     pinta(false);
+  }
+
+
+  // ---------- Facturación: nueva factura y presupuestos ----------
+  var lineasForm = function (form, opts) {
+    var box = $('[data-fc-lines]', form), tpl = $(opts.tpl);
+    var cat = []; try { cat = JSON.parse(form.getAttribute('data-catalogo') || '[]'); } catch (e) {}
+    var renum = function () {
+      $$('[data-fc-line]', box).forEach(function (row, i) {
+        $$('[data-k]', row).forEach(function (el) { el.name = 'lineas[' + i + '][' + el.getAttribute('data-k') + ']'; });
+      });
+    };
+    var calc = function () {
+      var base = 0, cuota = 0, sup = 0, ivas = {};
+      $$('[data-fc-line]', box).forEach(function (row) {
+        var q = pnum($('[data-k="q"]', row).value), p = pnum($('[data-k="p"]', row).value), cb = $('[data-k="sup"]', row);
+        var s = cb && cb.checked, imp = Math.round(q * p * 100) / 100, iva = s ? 0 : pnum(($('[data-k="iva"]', row) || {}).value || 0);
+        var out = $('[data-imp]', row); if (out) out.textContent = eu(imp);
+        if (s) { sup += imp; return; }
+        base += imp; ivas[iva] = (ivas[iva] || 0) + imp;
+      });
+      Object.keys(ivas).forEach(function (t) { cuota += Math.round(ivas[t] * t) / 100; });
+      var retSel = $('[name="ret_pct"]', form), ret = retSel ? Math.round(base * pnum(retSel.value)) / 100 : 0;
+      var tot = $('[data-fc-tot]', form);
+      if (tot) tot.textContent = 'Base ' + eu(base) + ' · IVA ' + eu(cuota) + (ret ? ' · Retención −' + eu(ret) : '') + (sup ? ' · Suplidos ' + eu(sup) : '') + ' · Total ' + eu(base + cuota - ret + sup) + ' €';
+    };
+    var wire = function (row) {
+      on($('[data-fc-del]', row), 'click', function () { if ($$('[data-fc-line]', box).length > 1) { row.remove(); renum(); calc(); refresh(); } });
+      var cb = $('[data-k="sup"]', row);
+      on(cb, 'change', function () { var s = cb.checked, iv = $('[data-k="iva"]', row), ns = $('.fc-nosuj', row); if (iv) iv.style.display = s ? 'none' : ''; if (ns) ns.style.display = s ? '' : 'none'; calc(); });
+      on($('[data-k="d"]', row), 'change', function (e) {
+        var v = e.target.value.trim().toLowerCase(), pr = cat.filter(function (x) { return String(x.nombre).toLowerCase() === v; })[0];
+        if (pr) { $('[data-k="p"]', row).value = eu(+pr.precio); var iv = $('[data-k="iva"]', row); if (iv) iv.value = String(pr.iva); calc(); }
+      });
+    };
+    var add = function (sup) {
+      var row = tpl.content.firstElementChild.cloneNode(true);
+      box.appendChild(row); wire(row);
+      if (sup) { var cb = $('[data-k="sup"]', row); cb.checked = true; cb.dispatchEvent(new Event('change')); $('[data-k="d"]', row).value = 'Suplido · '; }
+      renum(); calc(); $('[data-k="d"]', row).focus();
+    };
+    $$('[data-fc-line]', box).forEach(wire);
+    on($('[data-fc-add]', form), 'click', function () { add(false); });
+    on($('[data-fc-add-sup]', form), 'click', function () { add(true); });
+    on(form, 'input', calc); on(form, 'change', calc);
+    var prevBtn = $('[data-fc-prev]', form), tmr = null;
+    var refresh = function () { if (!prevBtn) return; clearTimeout(tmr); tmr = setTimeout(function () { prevBtn.click(); }, 500); };
+    on(form, 'change', refresh);
+    renum(); calc(); refresh();
+  };
+
+  var fcf = $('[data-fc-form]');
+  if (fcf) {
+    lineasForm(fcf, { tpl: '[data-fc-tpl]' });
+    var recs = [], prox = {};
+    try { recs = JSON.parse(fcf.getAttribute('data-receptores') || '[]'); prox = JSON.parse(fcf.getAttribute('data-proximos') || '{}'); } catch (e) {}
+    var cli = $('[data-fc-cli]', fcf), nuevo = $('[data-fc-cli-nuevo]', fcf), isel = $('[data-fc-iban-sel]', fcf), iban = $('[data-fc-iban]', fcf);
+    var find = function (n) { n = String(n || '').trim().toLowerCase(); return recs.filter(function (x) { return x.nombre.toLowerCase() === n; })[0]; };
+    var fillIbans = function (r) {
+      while (isel.options.length > 1) isel.remove(1);
+      isel.options[0].text = r && r.ibans.length ? 'Elegir una cuenta del cliente…' : 'El cliente no tiene cuentas guardadas';
+      (r ? r.ibans : []).forEach(function (ib) { var o = document.createElement('option'); o.value = ib; o.text = ib.replace(/(.{4})/g, '$1 ').trim(); isel.add(o); });
+    };
+    var onCli = function (fill) {
+      var r = find(cli.value);
+      if (nuevo) nuevo.style.display = cli.value.trim() && !r ? '' : 'none';
+      if (r && fill) { $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir; if (!iban.value && r.ibans[0]) iban.value = r.ibans[0]; }
+      fillIbans(r);
+    };
+    on(cli, 'change', function () { onCli(true); }); onCli(false);
+    on(isel, 'change', function () { if (isel.value) { iban.value = isel.value; iban.dispatchEvent(new Event('input')); } });
+    var fp = $('[data-fc-fp]', fcf);
+    var onFp = function () {
+      var v = fp.value, bank = v === 'Transferencia' || v === 'Domiciliación SEPA';
+      $('[data-fc-bank]', fcf).style.display = bank ? '' : 'none';
+      $('[data-fc-em]', fcf).style.display = v === 'Transferencia' ? '' : 'none';
+      $('[data-fc-dias]', fcf).style.display = ['Tarjeta', 'Bizum', 'Efectivo'].indexOf(v) >= 0 ? 'none' : '';
+    };
+    on(fp, 'change', onFp); onFp();
+    var ser = $('[data-fc-serie]', fcf), nx = $('[data-fc-next]', fcf);
+    on(ser, 'change', function () { if (nx) nx.textContent = 'Próximo número: ' + (prox[ser.value] || ''); });
+  }
+  var prf = $('[data-pr-form]');
+  if (prf) lineasForm(prf, { tpl: '[data-pr-tpl]' });
+
+  // ---------- Facturación: configuración ----------
+  $$('[data-color-pick]').forEach(function (r) { on(r, 'change', function () { var ci = $('[data-color-input]'); if (ci) ci.value = r.value; }); });
+  on($('[data-color-input]'), 'input', function () { $$('[data-color-pick]').forEach(function (r) { r.checked = false; }); });
+  var catBox = $('[data-cat-box]');
+  if (catBox) {
+    var catN = 1000;
+    var catWire = function (row) { on($('[data-cat-del]', row), 'click', function () { row.remove(); var d = $('[data-dirty]'); if (d) d.style.display = ''; }); };
+    $$('[data-cat-row]', catBox).forEach(catWire);
+    on($('[data-cat-add]'), 'click', function () {
+      var row = $('[data-cat-tpl]').content.firstElementChild.cloneNode(true), k = catN++;
+      $$('[name]', row).forEach(function (el) { el.name = el.name.replace('__', k); });
+      catBox.appendChild(row); catWire(row); $('input', row).focus();
+    });
+    var cf = catBox.closest('form');
+    on(cf, 'change', function () { var d = $('[data-dirty]'); if (d) d.style.display = ''; });
   }
 
   // ---------- 2FA: código de recuperación ----------

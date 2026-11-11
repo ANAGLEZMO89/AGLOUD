@@ -97,8 +97,8 @@ return [
             ['contabilidad', 'Contabilidad', null],
             ['fiscal', 'Fiscal', null],
             ['laboral', 'Laboral y SS', null],
-            ['facturacion', 'Facturación', null],
-            ['crm', 'CRM', null],
+            ['facturacion', 'Facturación', 'facturacion.index'],
+            ['crm', 'CRM', 'crm.index'],
             ['horario', 'Control horario', null],
         ]],
         ['label' => 'Comunicación', 'items' => [

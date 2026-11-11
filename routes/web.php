@@ -6,10 +6,12 @@ use App\Http\Controllers\Admin\EquipoController;
 use App\Http\Controllers\ClienteAccesoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ClienteSeccionController;
+use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\EscritorioController;
 use App\Http\Controllers\ExpedienteController;
+use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\Portal\PortalController;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +88,36 @@ Route::middleware('auth')->group(function () {
             Route::post('/adjuntar', [NotificacionController::class, 'adjuntar'])->name('adjuntar');
             Route::get('/calendario.ics', [NotificacionController::class, 'ics'])->name('ics');
             Route::delete('/', [NotificacionController::class, 'destroy'])->name('destroy');
+        });
+
+        // Facturación (modo No VERI*FACTU: sin envío a la AEAT)
+        Route::prefix('facturacion')->name('facturacion.')->group(function () {
+            Route::get('/', [FacturaController::class, 'index'])->name('index');
+            Route::get('/nueva', [FacturaController::class, 'create'])->name('create');
+            Route::post('/', [FacturaController::class, 'store'])->name('store');
+            Route::post('/borrador', [FacturaController::class, 'borrador'])->name('borrador');
+            Route::get('/registro', [FacturaController::class, 'registro'])->name('registro');
+            Route::post('/registro/verificar', [FacturaController::class, 'verificar'])->name('verificar');
+            Route::get('/configuracion', [FacturaController::class, 'config'])->name('config');
+            Route::post('/configuracion', [FacturaController::class, 'guardarConfig'])->name('config.guardar');
+            Route::get('/muestra', [FacturaController::class, 'muestra'])->name('muestra');
+            Route::get('/{factura}', [FacturaController::class, 'show'])->whereNumber('factura')->name('show');
+            Route::get('/{factura}/documento', [FacturaController::class, 'documento'])->whereNumber('factura')->name('documento');
+            Route::post('/{factura}/cobro', [FacturaController::class, 'cobro'])->whereNumber('factura')->name('cobro');
+            Route::post('/{factura}/anular', [FacturaController::class, 'anular'])->whereNumber('factura')->name('anular');
+        });
+
+        // CRM
+        Route::prefix('crm')->name('crm.')->group(function () {
+            Route::get('/', [CrmController::class, 'index'])->name('index');
+            Route::post('/oportunidades', [CrmController::class, 'guardarOportunidad'])->name('op.store');
+            Route::post('/oportunidades/{oportunidad}/etapa', [CrmController::class, 'etapa'])->whereNumber('oportunidad')->name('op.etapa');
+            Route::delete('/oportunidades/{oportunidad}', [CrmController::class, 'borrarOportunidad'])->whereNumber('oportunidad')->name('op.destroy');
+            Route::post('/presupuestos', [CrmController::class, 'guardarPresupuesto'])->name('pres.store');
+            Route::post('/presupuestos/{presupuesto}/estado', [CrmController::class, 'estadoPresupuesto'])->whereNumber('presupuesto')->name('pres.estado');
+            Route::get('/presupuestos/{presupuesto}/documento', [CrmController::class, 'documentoPresupuesto'])->whereNumber('presupuesto')->name('pres.documento');
+            Route::post('/actividades', [CrmController::class, 'guardarActividad'])->name('act.store');
+            Route::post('/actividades/{actividad}/hecha', [CrmController::class, 'hecha'])->whereNumber('actividad')->name('act.hecha');
         });
 
         // Expedientes
