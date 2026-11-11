@@ -9,6 +9,7 @@ use App\Services\Fiscal;
 use App\Support\Formato;
 use App\Support\Parametros;
 use App\Support\Plazos;
+use App\Support\Validacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -104,7 +105,7 @@ class FiscalController extends Controller
             'iban' => ['nullable', 'string', 'max:40'], 'formaPago' => ['nullable', 'in:Ingreso,Domiciliación'],
         ], ['comuneros.min' => 'Una comunidad de bienes tiene al menos 2 comuneros.']);
         $iban = strtoupper(preg_replace('/\s+/', '', (string) $request->input('iban')));
-        if ($iban !== '' && ! \App\Support\Validacion::iban($iban)) {
+        if ($iban !== '' && ! Validacion::iban($iban)) {
             return back()->withErrors(['iban' => 'El IBAN no es válido. Revisa los dígitos de control.'])->withInput()->with('abrir', 1);
         }
         $this->fiscal->guardarParametros($c, $request->all(), $request->user()->id);

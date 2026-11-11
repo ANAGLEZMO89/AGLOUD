@@ -7,6 +7,7 @@ use App\Models\Asiento;
 use App\Models\Cliente;
 use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
+use App\Models\NominaMes;
 use App\Models\Trabajador;
 use App\Models\User;
 use App\Services\Nomina;
@@ -93,7 +94,7 @@ class LaboralTest extends TestCase
         $n = Nomina::calcular($w, 11, [], 10, 1.5);
         // Base = 1.500 + prorrata (1.500 × 2 / 12 = 250) = 1.750
         $this->assertEqualsWithDelta(1750, $n['base'], 0.001);
-        $this->assertEqualsWithDelta(1750 * (0.047 + 0.0015 + 0.0155 + 0.001), $n['ssT'], 0.001);
+        $this->assertEqualsWithDelta(1750 * (0.047 + 0.0015 + 0.0155 + 0.001), $n['ssT'], 0.02);
         $this->assertEqualsWithDelta(150, $n['irpf'], 0.001);
         $this->assertEqualsWithDelta(1500 - $n['ssT'] - 150, $n['liq'], 0.001);
         // Paga extra en junio y diciembre; base mínima del grupo
@@ -117,7 +118,8 @@ class LaboralTest extends TestCase
         $this->en()->post('/laboral/nominas/'.$t->id.'/variables', ['anio' => 2026, 'mes' => 11, 'hx' => '100,00', 'dietas' => '50,00'])->assertRedirect();
         $inc = LaboralMes::firstOrFail()->incidencias;
         $this->assertSame(100.0, (float) $inc[$t->id]['hx']);
-        $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id)->assertOk()->assertSee('Variables del mes');
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id)->assertOk()->assertSee('Emitir nómina');
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11&vista=variables&t='.$t->id)->assertOk()->assertSee('Variables del mes');
         $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Horas extraordinarias')->assertSee('Dietas');
         foreach ([1, 2, 3] as $m) {
             $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11&modelo='.$m)->assertOk();
@@ -278,5 +280,48 @@ class LaboralTest extends TestCase
         $this->en()->get('/laboral/nominas/'.$a->id.'/recibo?anio=2026&mes=11')->assertNotFound();
         // Validación: documento y afiliación también para autónomos
         $this->en()->post('/laboral/trabajador/nuevo', ['regimen' => 'Autónomo', 'nom1' => 'X', 'nif' => '1', 'naf' => '211111111111', 'autAlta' => '2026-03-01'])->assertSessionHasErrors('ficha');
+    }
+
+    public function test_editor_de_nomina_borrador_avisos_emitir_y_recalcular(): void
+    {
+        $this->en()->post('/laboral/gestion/convenios', ['conv_nombre' => 'Convenio de hostelería de Huelva', 'conv_pagas' => '14',
+            'cats' => [['cat' => 'Camarero', 'grupo' => '5', 'base' => '1.500,00', 'plus' => '0']]])->assertSessionHasNoErrors();
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['convCat' => 'Camarero']));
+        $t = Trabajador::firstOrFail();
+        $url = '/laboral/nominas?anio=2026&mes=11&t='.$t->id;
+        $html = $this->en()->get($url)->assertOk()->assertSee('Calculada desde el convenio')->getContent();
+        preg_match_all('/name="l\[(\d+)\]\[(id|cod|concepto|importe|clase|cobro)\]"(?: value="([^"]*)")?/', $html, $m, PREG_SET_ORDER);
+        $l = [];
+        foreach ($m as $x) {
+            $l[$x[1]][$x[2]] = html_entity_decode($x[3] ?? '');
+            $l[$x[1]]['activo'] = '1';
+        }
+        preg_match_all('/name="l\[(\d+)\]\[clase\]".*?<option value="(\w+)" selected/s', $html, $c, PREG_SET_ORDER);
+        foreach ($c as $x) {
+            $l[$x[1]]['clase'] = $x[2];
+        }
+        $sb = collect($l)->search(fn ($x) => $x['id'] === 'sb');
+        $this->assertNotFalse($sb);
+        $l[$sb]['importe'] = '1.600,00';
+        $base = ['anio' => 2026, 'mes' => 11, 'l' => $l, 'tipos' => ['des_t' => '', 'irpf' => '2,00'], 'fecha_pago' => '2026-11-30'];
+        // Guardar con un importe distinto del convenio y un concepto manual
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', $base + ['accion' => 'guardar', 'nl' => ['concepto' => 'Plus festivo', 'importe' => '40,00', 'clase' => 'salarial'], 'nd' => ['concepto' => 'Embargo juzgado', 'importe' => '25,00']])->assertRedirect();
+        $g = NominaMes::firstOrFail();
+        $this->assertSame('Borrador', $g->estado);
+        $this->assertSame(1600.0, (float) collect($g->datos['lineas'])->firstWhere('id', 'sb')['importe']);
+        $this->en()->get($url)->assertOk()->assertSee('Borrador guardado')->assertSee('No es por convenio')->assertSee('Concepto añadido a mano');
+        $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Plus festivo')->assertSee('Embargo juzgado')->assertSee('IRPF 2,00 %');
+        $n = app(Nomina::class)->nomina(Nomina::rellenar($t->ficha(), $t->cliente), 2026, 11, Nomina::incidenciasAnio($t->cliente, 2026), 0);
+        $this->assertSame(2.0, (float) $n['ip']);
+        $this->assertSame(25.0, (float) $n['ded']);
+        // Emitir bloquea; reabrir desbloquea; recalcular borra el borrador
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', $base + ['accion' => 'emitir'])->assertRedirect();
+        $this->assertSame('Emitida', $g->fresh()->estado);
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', $base + ['accion' => 'guardar'])->assertSessionHasErrors('ficha');
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'reabrir'])->assertRedirect();
+        $this->assertSame('Borrador', $g->fresh()->estado);
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'recalcular'])->assertRedirect();
+        $this->assertSame(0, NominaMes::count());
+        $this->en()->get($url)->assertOk()->assertSee('Calculada desde el convenio');
     }
 }

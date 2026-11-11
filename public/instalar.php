@@ -11,6 +11,9 @@
 */
 
 declare(strict_types=1);
+use App\Models\User;
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\Schema;
 
 $base = dirname(__DIR__);
 header('X-Frame-Options: DENY');
@@ -71,12 +74,12 @@ if (strlen($token) < 16) {
 
 require $base.'/vendor/autoload.php';
 $app = require $base.'/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
 try {
-    $yaInstalado = Illuminate\Support\Facades\Schema::hasTable('users')
-        && App\Models\User::where('role', App\Models\User::ADMIN)->exists();
+    $yaInstalado = Schema::hasTable('users')
+        && User::where('role', User::ADMIN)->exists();
 } catch (Throwable $e) {
     pagina('<h1>No conecto con la base de datos</h1><div class="ferr">'.h($e->getMessage()).'</div><span class="hint muted">Revisa DB_DATABASE, DB_USERNAME y DB_PASSWORD en el .env (con el prefijo u123…_ de Hostinger) y recarga.</span>');
 }

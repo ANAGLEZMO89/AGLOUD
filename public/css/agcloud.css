@@ -710,3 +710,35 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .band-del{border:0;background:none;color:#8A1C1C;font:600 12.5px inherit;cursor:pointer;padding:6px 8px;border-radius:8px;white-space:nowrap;font-family:inherit}
 .band-del:hover{background:#FDE7E7}
 .lb-sec[hidden]{display:none}
+/* Integral de nóminas · editor */
+.ne-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.ne{gap:12px;overflow-x:auto}
+.ne-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ne-aviso{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:12px;background:#FFF4D6;color:#6E4300;font-size:13px;line-height:1.45}
+.ne-head{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px;padding:12px 14px;border-radius:12px;background:#F4F4F0}
+.ne-head>div,.ne-f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ne-head span{font-size:11.5px;color:#6A6A65}
+.ne-head b{font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.ne-grid{display:grid;grid-template-columns:52px minmax(220px,1fr) 250px 120px 120px 44px;gap:8px;align-items:center;min-width:820px}
+.ne-hd{font-size:11.5px;font-weight:700;color:#6A6A65;text-transform:uppercase;letter-spacing:.04em;padding:0 0 2px}
+.ne-grid .r{text-align:right}
+.ne-grid .m{font-family:var(--mono);font-size:13.5px}
+.ne-row{padding:4px 6px;border-radius:10px}
+.ne-row .sel{width:100%;min-width:0}
+.ne-warn{background:#FFF4D6}
+.ne-av{font-size:11.5px;color:#8A5200;font-weight:600}
+.ne-off{opacity:.5}
+.ne-new{border:1px dashed #D6D6CF}
+.ne-sep{height:1px;background:#ECECE7;min-width:820px}
+.ne-sw{display:inline-flex;justify-content:center;cursor:pointer}
+.ne-sw input{width:18px;height:18px;accent-color:var(--ink)}
+.ne-sw i{display:none}
+.ne .lb-del{width:30px;height:30px;border-radius:15px;border:0;background:#F4F4F0;font-size:17px;cursor:pointer}
+.ne-tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:12px 14px;border-radius:12px;background:#F4F4F0}
+.ne-tot>div{display:flex;flex-direction:column;gap:3px}
+.ne-tot span{font-size:11.5px;color:#6A6A65}
+.ne-tot b{font:600 15px var(--mono)}
+.ne-tot2{background:var(--ink);color:#fff}
+.ne-tot2 span{color:#BDBDB6}
+.ne-tot2 .liq b{color:var(--lime);font-size:18px}
+@media print{.ne-bar{display:none!important}}

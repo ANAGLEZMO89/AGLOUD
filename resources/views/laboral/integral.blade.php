@@ -48,35 +48,7 @@
           </div>
         </div>
       @else
-        @php
-          $w = $sel['w']; $n = $sel['n'];
-          $prev = $idx > 0 ? $noms[$idx - 1]['w']['id'] : null; $next = $idx < count($noms) - 1 ? $noms[$idx + 1]['w']['id'] : null;
-          $irTxt = $ir['fijo'] ? 'Tipo fijo del '.Formato::num($ir['tipo']).' % indicado en la ficha.'
-            : 'Tipo calculado con el algoritmo de la AEAT: '.Formato::num($ir['tipoAnual']).' % anual'.(abs($ir['tipo'] - $ir['tipoAnual']) > 0.001 ? ', regularizado al '.Formato::num($ir['tipo']).' % este mes por lo ya retenido ('.$E($ir['retPrev']).').' : '.').' Retribución anual prevista: '.$E($ir['RT']).'.';
-        @endphp
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
-          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;margin-right:auto"><span style="font-size:18px;font-weight:700">{{ $w['nombre'] }}</span><span style="font-size:12.5px;color:#6A6A65">{{ $w['contrato'] }} · {{ $w['cat'] }} · grupo {{ $w['grupo'] }}</span></div>
-          @if($prev)<a class="btn white" href="{{ route('laboral.integral', $q + ['t' => $prev]) }}">← Anterior</a>@endif
-          @if($next)<a class="btn white" href="{{ route('laboral.integral', $q + ['t' => $next]) }}">Siguiente →</a>@endif
-          <a class="btn" href="{{ route('laboral.recibo', [$w['id']] + $q + ['imprimir' => 1]) }}" target="_blank" rel="noopener">Descargar nómina en PDF</a>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-          @foreach([['Devengado', $n['dev']], ['Seguridad Social', $n['ssT']], ['IRPF '.Formato::num($n['ip']).' %', $n['irpf']], ['Líquido', $n['liq']]] as [$l, $v])
-            <div class="card" style="gap:4px;padding:14px 16px;border-radius:16px"><span style="font-size:12.5px;color:#6A6A65">{{ $l }}</span><span style="font:600 20px var(--mono)">{{ $E($v) }}</span></div>
-          @endforeach
-        </div>
-        <form class="card" method="POST" action="{{ route('laboral.incidencias', $w['id']) }}">
-          @csrf<input type="hidden" name="anio" value="{{ $anio }}"><input type="hidden" name="mes" value="{{ $mes }}">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700">Variables del mes</span>@if(! $asiento)<button class="btn sm" type="submit">Guardar variables</button>@endif</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:12px">
-            @foreach(Nomina::INCIDENCIAS as $k => $l)
-              <label class="lb-f"><span class="lb-l">{{ $l }}</span><input class="inp lb-in mono" name="{{ $k }}" value="{{ isset($inc[$k]) ? Formato::num($inc[$k]) : '' }}" placeholder="0,00" inputmode="decimal" style="text-align:right" @disabled($asiento)></label>
-            @endforeach
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:#F4F4F0"><span style="font-size:13px;line-height:1.45;flex:1 1 300px">{{ $irTxt }}</span><a class="btn white sm" href="{{ route('laboral.ficha', [$w['id'], 'sec' => 'irpf']) }}">IRPF y modelo 145</a></div>
-          @if($asiento)<span style="font-size:12.5px;color:#6A6A65">Las nóminas del mes ya están contabilizadas: para cambiar las variables, borra el asiento {{ $asiento->numero }} en Contabilidad.</span>@endif
-        </form>
-        <iframe class="lb-recibo" title="Nómina" src="{{ route('laboral.recibo', [$w['id']] + $q) }}"></iframe>
+        @include('laboral._editor')
       @endif
     </div>
   </div>

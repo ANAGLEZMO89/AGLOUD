@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\LaboralConfig;
 use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
+use App\Models\NominaMes;
 use App\Models\Trabajador;
 use App\Services\Auditoria;
 use App\Services\Contabilidad;
@@ -326,8 +327,18 @@ class LaboralController extends Controller
             }
         }
         $ir = $sel ? $this->nomina->tipoIrpf($sel['w'], $b['anio'], $b['mes'], $inc) : null;
+        $ed = null;
+        if ($sel) {
+            $w = $sel['w'];
+            $g = Nomina::guardada((int) $w['id'], $b['anio'], $b['mes']);
+            $doc = $g ? $g->datos : Nomina::conceptos($w, $b['mes'], $inc[$b['mes']][$w['id']] ?? [], $b['P']);
+            $ed = ['g' => $g, 'doc' => $doc, 'avisos' => Nomina::avisos($w, $doc, (float) $ir['tipo']),
+                'tab' => in_array($request->query('vista'), ['borrador', 'variables', 'convenio', 'nominas'], true) ? $request->query('vista') : 'borrador',
+                'cat' => collect($b['P']['conv']['cats'])->firstWhere('cat', $w['convCat'] ?? ''),
+                'anio' => collect(range(1, 12))->filter(fn ($x) => Nomina::activo($w, $b['anio'], $x))->map(fn ($x) => ['m' => $x, 'n' => $this->nomina->nomina($w, $b['anio'], $x, $inc, (float) $b['P']['at'])])->values()->all()];
+        }
 
-        return view('laboral.integral', $b + ['plantilla' => $plantilla, 'noms' => $noms, 'asiento' => $asiento, 'sel' => $sel, 'idx' => $idx, 'ir' => $ir,
+        return view('laboral.integral', $b + ['plantilla' => $plantilla, 'noms' => $noms, 'asiento' => $asiento, 'sel' => $sel, 'idx' => $idx, 'ir' => $ir, 'ed' => $ed,
             'inc' => $sel ? ($inc[$b['mes']][$sel['w']['id']] ?? []) : []]);
     }
 
@@ -357,6 +368,104 @@ class LaboralController extends Controller
         $m->save();
 
         return redirect()->route('laboral.integral', ['anio' => $anio, 'mes' => $mes, 't' => $trabajador->id])->with('ok', 'Variables de '.Nomina::MESES[$mes - 1].' guardadas para '.($trabajador->datos['nombre'] ?? '').'.');
+    }
+
+    /** Editor de la nómina del mes: guardar borrador, emitir, reabrir o volver a calcular desde el convenio */
+    public function guardarNomina(Request $request, Trabajador $trabajador)
+    {
+        $c = $this->ctx($request);
+        abort_unless($c && $trabajador->cliente_id === $c->id, 404);
+        [$anio, $mes] = [(int) $request->input('anio'), (int) $request->input('mes')];
+        abort_unless($anio >= 2000 && $mes >= 1 && $mes <= 12, 422);
+        $volver = redirect()->route('laboral.integral', ['anio' => $anio, 'mes' => $mes, 't' => $trabajador->id]);
+        $lm = LaboralMes::where('cliente_id', $c->id)->where('anio', $anio)->where('mes', $mes)->first();
+        if ($lm?->asiento_id && Asiento::find($lm->asiento_id)) {
+            return $volver->withErrors(['ficha' => 'Las nóminas de este mes ya están contabilizadas. Borra el asiento en Contabilidad para cambiarlas.']);
+        }
+        $w = Nomina::rellenar($trabajador->ficha(), $c);
+        abort_unless(Nomina::activo($w, $anio, $mes) && ! Nomina::esAutonomo($w), 404);
+        $P = Nomina::config($c);
+        $g = NominaMes::where('trabajador_id', $trabajador->id)->where('anio', $anio)->where('mes', $mes)->where('recibo', 'Nómina')->first();
+        $accion = (string) $request->input('accion', 'guardar');
+        $nombre = $w['nombre'];
+        if ($accion === 'reabrir') {
+            $g?->update(['estado' => 'Borrador', 'emitida_at' => null, 'updated_by' => $request->user()->id]);
+            Auditoria::registrar('laboral.nomina', 'Nómina de '.$nombre.' de '.Nomina::MESES[$mes - 1].' '.$anio.' reabierta', $trabajador, $c->id);
+            Nomina::olvidarGuardadas();
+
+            return $volver->with('ok', 'Nómina reabierta: puedes volver a modificarla.');
+        }
+        if ($g?->emitida()) {
+            return $volver->withErrors(['ficha' => 'La nómina ya está emitida. Pulsa «Reabrir» para modificarla.']);
+        }
+        if ($accion === 'recalcular') {
+            $g?->delete();
+            Nomina::olvidarGuardadas();
+            Auditoria::registrar('laboral.nomina', 'Nómina de '.$nombre.' de '.Nomina::MESES[$mes - 1].' '.$anio.' recalculada desde el convenio', $trabajador, $c->id);
+
+            return $volver->with('ok', 'Nómina calculada de nuevo desde el convenio y la ficha del trabajador.');
+        }
+        // Conceptos del formulario; la referencia del convenio no se toma del formulario: se recalcula
+        $auto = collect(Nomina::conceptos($w, $mes, Nomina::incidenciasAnio($c, $anio)[$mes][$trabajador->id] ?? [], $P)['lineas'])->keyBy('id');
+        $num = fn ($v) => round(Formato::parseNum((string) $v), 2);
+        $L = [];
+        foreach ((array) $request->input('l', []) as $x) {
+            if (! is_array($x) || trim((string) ($x['concepto'] ?? '')) === '') {
+                continue;
+            }
+            $id = (string) ($x['id'] ?? '');
+            $a = $auto->get($id);
+            $L[] = ['id' => $id ?: 'm'.count($L), 'cod' => mb_substr((string) ($x['cod'] ?? ''), 0, 4), 'concepto' => mb_substr(trim($x['concepto']), 0, 120), 'importe' => $num($x['importe'] ?? 0),
+                'clase' => array_key_exists($x['clase'] ?? '', Nomina::CLASES) ? $x['clase'] : 'salarial', 'cobro' => ($x['cobro'] ?? '') === 'prorrateada' ? 'prorrateada' : (($x['clase'] ?? '') === 'extra' ? 'en_su_mes' : null),
+                'origen' => $a ? $a['origen'] : 'manual', 'conv' => $a['conv'] ?? null, 'activo' => ! empty($x['activo'])];
+        }
+        if (trim((string) $request->input('nl.concepto', '')) !== '') {
+            $L[] = ['id' => 'm'.(count($L) + 1).substr(md5((string) microtime(true)), 0, 4), 'cod' => '', 'concepto' => mb_substr(trim($request->input('nl.concepto')), 0, 120), 'importe' => $num($request->input('nl.importe')),
+                'clase' => array_key_exists($request->input('nl.clase'), Nomina::CLASES) ? $request->input('nl.clase') : 'salarial', 'cobro' => null, 'origen' => 'manual', 'conv' => null, 'activo' => true];
+        }
+        $D = [];
+        foreach ((array) $request->input('d', []) as $x) {
+            if (is_array($x) && trim((string) ($x['concepto'] ?? '')) !== '') {
+                $D[] = ['id' => in_array($x['id'] ?? '', ['ant', 'emb'], true) ? $x['id'] : 'od', 'concepto' => mb_substr(trim($x['concepto']), 0, 120), 'importe' => $num($x['importe'] ?? 0)];
+            }
+        }
+        if (trim((string) $request->input('nd.concepto', '')) !== '') {
+            $D[] = ['id' => 'od', 'concepto' => mb_substr(trim($request->input('nd.concepto')), 0, 120), 'importe' => $num($request->input('nd.importe'))];
+        }
+        foreach (array_merge($L, $D) as $x) {
+            if ($x['importe'] < 0 && ($x['clase'] ?? '') !== 'salarial') {
+                return $volver->withInput()->withErrors(['ficha' => 'Los importes no pueden ser negativos (salvo un ajuste salarial).']);
+            }
+        }
+        $tipos = [];
+        foreach (['des_t', 'irpf'] as $k) {
+            $v = trim((string) $request->input('tipos.'.$k, ''));
+            if ($v !== '') {
+                $n = Formato::parseNum($v);
+                if ($n < 0 || $n > 60) {
+                    return $volver->withInput()->withErrors(['ficha' => 'Revisa los tipos de desempleo e IRPF.']);
+                }
+                $tipos[$k] = round($n, 2);
+            }
+        }
+        $fp = (string) $request->input('fecha_pago');
+        $doc = ['lineas' => $L, 'deducciones' => $D, 'tipos' => $tipos];
+        $g ??= new NominaMes(['cliente_id' => $c->id, 'trabajador_id' => $trabajador->id, 'anio' => $anio, 'mes' => $mes, 'recibo' => 'Nómina']);
+        $g->datos = $doc;
+        $g->fecha_pago = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fp) ? $fp : null;
+        $g->updated_by = $request->user()->id;
+        if ($accion === 'emitir') {
+            $g->estado = 'Emitida';
+            $g->emitida_at = now();
+        }
+        $g->save();
+        Nomina::olvidarGuardadas();
+        $inc = Nomina::incidenciasAnio($c, $anio);
+        $avisos = Nomina::avisos($w, $doc, (float) $this->nomina->tipoIrpf($w, $anio, $mes, $inc)['tipo']);
+        $nAv = count($avisos['lineas']) + count($avisos['generales']);
+        Auditoria::registrar('laboral.nomina', 'Nómina de '.$nombre.' de '.Nomina::MESES[$mes - 1].' '.$anio.($accion === 'emitir' ? ' emitida' : ' guardada').($nAv ? ' con '.$nAv.' conceptos fuera de convenio' : ''), $trabajador, $c->id);
+
+        return $volver->with('ok', ($accion === 'emitir' ? 'Nómina emitida.' : 'Borrador guardado.').($nAv ? ' Atención: '.$nAv.' '.($nAv === 1 ? 'concepto no es' : 'conceptos no son').' por convenio.' : ''));
     }
 
     /** Recibo de salarios imprimible (3 modelos) */

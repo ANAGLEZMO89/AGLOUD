@@ -4,13 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Apunte;
 use App\Models\Asiento;
+use App\Models\BandejaDocumento;
 use App\Models\Cliente;
 use App\Models\Cuenta;
+use App\Models\Documento;
 use App\Models\Ejercicio;
 use App\Models\Factura;
 use App\Models\FacturaRecibida;
+use App\Models\Tercero;
+use App\Services\AlmacenDocumentos;
 use App\Services\Auditoria;
 use App\Services\Contabilidad;
+use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
 use App\Support\Parametros;
 use App\Support\Plazos;
@@ -57,7 +62,7 @@ class ContabilidadController extends Controller
                 'url' => route($f->clase === 'compra' ? 'proveedores.facturas' : 'acreedores.facturas', ['editar' => $f->id])]);
 
         // Documentos subidos a la bandeja (pendientes de revisar con OCR)
-        $docs = \App\Models\BandejaDocumento::with('documento')->where('cliente_id', $c->id)->get()
+        $docs = BandejaDocumento::with('documento')->where('cliente_id', $c->id)->get()
             ->map(fn ($d) => ['k' => 'd'.$d->id, 'tipo' => 'Documento', 'id' => $d->id, 'num' => '—', 'fecha' => $d->created_at->toImmutable()->startOfDay(), 'ter' => $d->documento?->nombre_original ?: 'Documento', 'nif' => '',
                 'base' => 0.0, 'iva' => 0.0, 'ret' => 0.0, 'total' => 0.0, 'cuenta' => '', 'origen' => $d->origen, 'url' => route('contabilidad.bandeja', ['revisar' => 'd'.$d->id])]);
 
@@ -221,7 +226,7 @@ class ContabilidadController extends Controller
                 'nomina' => collect(self::NOMINA)->mapWithKeys(fn ($r) => [$r[0] => $a9($r[2])])->all()],
             'tipo' => old('tipo', $request->query('tipo', 'Manual')),
             // NIF → subcuenta (proveedores, acreedores y clientes) para que el OCR proponga el tercero
-            'terceros' => \App\Models\Tercero::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('cuenta', 'nif')->merge(Cuenta::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('codigo', 'nif'))->all()]);
+            'terceros' => Tercero::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('cuenta', 'nif')->merge(Cuenta::where('cliente_id', $b['c']->id)->whereNotNull('nif')->pluck('codigo', 'nif'))->all()]);
     }
 
     /** Cuentas para el autocompletado: PGC (a 9 dígitos) y subcuentas propias */
@@ -275,13 +280,13 @@ class ContabilidadController extends Controller
         // Justificante (factura o nómina) al gestor documental
         if ($request->hasFile('archivo')) {
             $file = $request->file('archivo');
-            $g = app(\App\Services\AlmacenDocumentos::class)->guardar($file, $c->id);
+            $g = app(AlmacenDocumentos::class)->guardar($file, $c->id);
             $nom = $tipo === 'Nómina' ? ['laboral/nominas', 'nom'] : ['contable/recibidas', 'fra'];
             $ext = strtolower($file->getClientOriginalExtension() ?: 'pdf');
-            $doc = \App\Models\Documento::create([
+            $doc = Documento::create([
                 'cliente_id' => $c->id, 'ambito' => 'gestor', 'borrador' => false, 'carpeta' => $nom[0], 'tipo' => $nom[1],
-                'nombre' => \App\Support\ClasificadorDocumentos::nombreSeguro($a->fecha->format('Ymd').'_'.$nom[1].'_asiento-'.$a->numero.'.'.$ext),
-                'nombre_original' => \App\Support\ClasificadorDocumentos::nombreSeguro($file->getClientOriginalName()), 'fecha' => $a->fecha->toDateString(),
+                'nombre' => ClasificadorDocumentos::nombreSeguro($a->fecha->format('Ymd').'_'.$nom[1].'_asiento-'.$a->numero.'.'.$ext),
+                'nombre_original' => ClasificadorDocumentos::nombreSeguro($file->getClientOriginalName()), 'fecha' => $a->fecha->toDateString(),
                 'mime' => $g['mime'], 'tamano' => $g['tamano'], 'ruta' => $g['ruta'], 'sha256' => $g['sha256'], 'origen' => 'Despacho', 'subido_por' => $request->user()->id,
             ]);
             $a->update(['documento_id' => $doc->id]);

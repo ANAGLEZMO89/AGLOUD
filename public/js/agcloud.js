@@ -687,6 +687,16 @@
     });
   }
 
+  // ---------- Integral de nóminas: editor ----------
+  $$('[data-confirm-btn]').forEach(function (b) { on(b, 'click', function (e) { if (!window.confirm(b.getAttribute('data-confirm-btn'))) e.preventDefault(); }); });
+  $$('[data-ne-del]').forEach(function (b) {
+    on(b, 'click', function () {
+      var row = b.closest('.ne-row'); if (!row) return;
+      row.querySelectorAll('input').forEach(function (i) { if (i.type !== 'hidden') i.value = ''; });
+      row.hidden = true;
+    });
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

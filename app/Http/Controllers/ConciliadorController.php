@@ -12,6 +12,7 @@ use App\Services\Auditoria;
 use App\Services\Contabilidad;
 use App\Support\ExtractoBancario;
 use App\Support\Formato;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -135,8 +136,8 @@ class ConciliadorController extends ContabilidadController
         $n = 0;
         foreach (MovimientoBanco::where('cliente_id', $c->id)->where('cuenta', $cta)->whereNull('apunte_id')->orderBy('fecha')->get() as $m) {
             $libres = $this->apuntesLibres($c, $cta, $m->fecha->year)
-                ->filter(fn ($a) => abs($this->importeApunte($a) - $m->importe) < 0.005 && abs(\Carbon\CarbonImmutable::parse($a->fecha)->diffInDays($m->fecha, false)) <= self::DIAS)
-                ->sortBy(fn ($a) => abs(\Carbon\CarbonImmutable::parse($a->fecha)->diffInDays($m->fecha, false)));
+                ->filter(fn ($a) => abs($this->importeApunte($a) - $m->importe) < 0.005 && abs(CarbonImmutable::parse($a->fecha)->diffInDays($m->fecha, false)) <= self::DIAS)
+                ->sortBy(fn ($a) => abs(CarbonImmutable::parse($a->fecha)->diffInDays($m->fecha, false)));
             if ($a = $libres->first()) {
                 $m->update(['apunte_id' => $a->id, 'como' => 'automatica']);
                 $n++;

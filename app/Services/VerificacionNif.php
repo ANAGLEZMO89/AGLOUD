@@ -82,7 +82,7 @@ class VerificacionNif
      * Consulta un NIF.
      *
      * @return array{estado: string, resultado: string, nombre: string, msg: string}
-     *                estado: ok | no | baja | revocado | error
+     *                                                                               estado: ok | no | baja | revocado | error
      */
     public function comprobar(string $nif, string $nombre): array
     {

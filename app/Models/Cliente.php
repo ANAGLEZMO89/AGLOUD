@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Formato;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -133,7 +134,7 @@ class Cliente extends Model
     }
 
     /** Texto del periodo que se factura: «noviembre 2026», «4T 2026», «2026»… */
-    public static function periodoCuota(string $periodicidad, \Carbon\CarbonInterface $f): string
+    public static function periodoCuota(string $periodicidad, CarbonInterface $f): string
     {
         $mes = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][$f->month - 1];
 

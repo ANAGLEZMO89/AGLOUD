@@ -620,7 +620,8 @@ class Fiscal
                     $X('', 'Actividad', fn () => $c->actividadPrincipal(), 'txt'), $X('', 'Régimen de IVA', fn ($d) => (string) $d['ivaReg'], 'txt'),
                     $X('', 'Régimen de tributación directa', fn () => match ($c->tipo) {
                         'Sociedad' => 'Impuesto sobre Sociedades', 'Autónomo' => 'IRPF · '.mb_strtolower((string) ($P['edMet'] ?: 'Estimación directa simplificada')),
-                        'Comunidad de bienes' => 'Atribución de rentas', default => 'IRPF' }, 'txt')];
+                        'Comunidad de bienes' => 'Atribución de rentas', default => 'IRPF'
+                    }, 'txt')];
         }
 
         return [];
