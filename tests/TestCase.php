@@ -31,6 +31,25 @@ abstract class TestCase extends BaseTestCase
         parent::tearDown();
     }
 
+    /**
+     * Personal del despacho: si la prueba no ha elegido empresa, entra con el despacho elegido
+     * (en la aplicación se elige en el Escritorio antes de abrir cualquier módulo).
+     */
+    public function actingAs($user, $guard = null)
+    {
+        parent::actingAs($user, $guard);
+        if ($user instanceof User && $user->esDespacho() && ! session()->has('cliente_activo')) {
+            $d = Cliente::where('es_despacho', true)->first();
+            if (! $d) {
+                $d = Cliente::create(['tipo' => 'Sociedad', 'nombre' => 'Despacho de pruebas SL', 'nif' => 'B00000000', 'estado' => 'Activo', 'provincia' => 'Huelva']);
+                $d->forceFill(['es_despacho' => true])->save();
+            }
+            $this->withSession(['cliente_activo' => $d->id]);
+        }
+
+        return $this;
+    }
+
     protected function usuario(string $rol, ?Cliente $c = null, array $extra = []): User
     {
         static $n = 0;

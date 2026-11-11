@@ -7,6 +7,7 @@ use App\Models\Factura;
 use App\Models\FacturacionConfig;
 use App\Models\Presupuesto;
 use App\Models\RegistroFacturacion;
+use App\Models\Tercero;
 use App\Services\Auditoria;
 use App\Services\Contabilidad;
 use App\Services\Facturacion;
@@ -14,6 +15,7 @@ use App\Services\Facturae;
 use App\Support\Formato;
 use App\Support\Plazos;
 use App\Support\Validacion;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -221,7 +223,7 @@ class FacturaController extends Controller
         if ($request->query('cuota') && $c->es_despacho) {
             $cli = Cliente::where('es_despacho', false)->findOrFail((int) $request->query('cuota'));
             $fecha = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('fecha')) && $request->query('fecha') <= $hoy ? (string) $request->query('fecha') : $hoy;
-            $per = Cliente::periodoCuota((string) $cli->cuota_periodicidad, \Carbon\CarbonImmutable::parse($fecha));
+            $per = Cliente::periodoCuota((string) $cli->cuota_periodicidad, CarbonImmutable::parse($fecha));
             $obs = trim(($per ? 'Periodo facturado: '.$per.'.' : '').($cli->cuota_incluye ? ' Incluye: '.preg_replace('/\s*\R\s*/', ', ', trim($cli->cuota_incluye)) : ''));
             $banco = $cli->seccion('bancos')[(int) $cli->cuota_cuenta] ?? (collect($cli->seccion('bancos'))->first(fn ($b) => ! empty($b['principal'])) ?? []);
             $dr = array_merge($dr, ['fecha' => $fecha, 'receptor_nombre' => $cli->nombre, 'receptor_nif' => (string) $cli->nif,
@@ -260,6 +262,11 @@ class FacturaController extends Controller
                     'ibans' => collect($x->seccion('bancos'))->pluck('iban')->filter()->values()->all(),
                     'cuota' => $x->lineasCuota() ? route('facturacion.create', ['cuota' => $x->id]) : null];
             }
+        }
+        // Clientes dados de alta en Ventas por la empresa elegida
+        foreach (Tercero::where('cliente_id', $c->id)->where('clase', 'cliente')->orderBy('nombre')->get() as $t) {
+            $out[mb_strtolower($t->nombre)] ??= ['nombre' => $t->nombre, 'nif' => (string) $t->nif, 'dir' => (string) $t->domicilio, 'cp' => (string) $t->cp, 'municipio' => (string) $t->municipio, 'provincia' => (string) $t->provincia,
+                'ibans' => array_values(array_filter([$t->iban]))];
         }
         foreach (Factura::where('cliente_id', $c->id)->whereNotNull('receptor_nombre')->orderByDesc('id')->limit(500)->get() as $f) {
             $out[mb_strtolower($f->receptor_nombre)] ??= ['nombre' => $f->receptor_nombre, 'nif' => (string) $f->receptor_nif, 'dir' => (string) $f->receptor_dir, 'cp' => (string) ($f->datos_fe['cp'] ?? ''), 'municipio' => (string) ($f->datos_fe['municipio'] ?? ''), 'provincia' => (string) ($f->datos_fe['provincia'] ?? ''), 'ibans' => array_values(array_filter([$f->iban]))];

@@ -9,7 +9,7 @@
 @endphp
 @section('content')
 <div class="page" style="gap:16px">
-  @include('gestion._cabecera', ['tituloH' => $plural, 'volver' => '/'.$mod, 'modulo' => $mod, 'actual' => $mod.'.index'])
+  @include('gestion._cabecera', ['tituloH' => $plural, 'volver' => $clase === 'cliente' ? '/clientes' : '/'.$mod, 'modulo' => $clase === 'cliente' ? 'clientes' : $mod, 'actual' => $clase === 'cliente' ? 'clientes.index' : $mod.'.index'])
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
     @foreach($kpis as [$l, $val, $s])<div class="card" style="padding:16px 18px;gap:6px"><span style="font-size:13px;color:#6A6A65">{{ $l }}</span><span style="font:600 26px/1.1 var(--mono);letter-spacing:-.03em">{{ $val }}</span><span style="font-size:12.5px;color:#3C3C3C">{{ $s }}</span></div>@endforeach
@@ -19,10 +19,12 @@
     <input class="inp" name="q" value="{{ $q }}" placeholder="Buscar por nombre, NIF, cuenta o municipio" style="flex:1;min-width:220px;max-width:380px;height:38px" data-autosubmit>
     <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
       <div style="display:flex;align-items:center;gap:4px;padding:3px;border-radius:20px;background:#fff"><span style="padding:0 8px 0 10px;font-size:13px;font-weight:700">Exportar</span><a class="pillbtn" style="height:30px;font-size:12.5px" href="{{ route($mod.'.index', ['exportar' => 'csv']) }}">Excel / CSV</a></div>
+      @if($clase === 'cliente' && ($sinAlta ?? 0))<button class="btn white" type="submit" form="ter-importar">Añadir {{ $sinAlta }} {{ $sinAlta === 1 ? 'cliente' : 'clientes' }} de sus facturas</button>@endif
       <a class="btn" href="{{ route($mod.'.index', ['nuevo' => 1]) }}" style="background:#0B0B0B;color:#fff">+ Nuevo {{ mb_strtolower($sing) }}</a>
     </div>
   </form>
 
+  @if($clase === 'cliente' && ($sinAlta ?? 0))<form id="ter-importar" method="POST" action="{{ route('ventas.importar') }}">@csrf</form>@endif
   @if($form)
   <form method="POST" action="{{ $t ? route($mod.'.update', $t) : route($mod.'.store') }}" class="card" style="padding:18px 20px;gap:14px;border:1.5px solid #0B0B0B" data-tercero-form data-siguiente="{{ $siguiente }}">
     @csrf
@@ -67,7 +69,7 @@
 
   <div class="card" style="padding:6px 18px 10px;overflow-x:auto">
     <div style="min-width:920px">
-      <div class="ter-cols" style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65;padding:12px 0 10px;border-bottom:1px solid #E6E6E0"><span>Cuenta</span><span>Nombre</span><span>NIF</span><span>{{ $clase === 'acreedor' ? 'Tipo' : 'Email' }}</span><span>{{ $clase === 'acreedor' ? 'Retención' : 'Municipio' }}</span><span>Forma de pago</span><span style="text-align:right">{{ $clase === 'acreedor' ? 'Gastos' : 'Compras' }} {{ $anio }}</span></div>
+      <div class="ter-cols" style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65;padding:12px 0 10px;border-bottom:1px solid #E6E6E0"><span>Cuenta</span><span>Nombre</span><span>NIF</span><span>{{ $clase === 'acreedor' ? 'Tipo' : 'Email' }}</span><span>{{ $clase === 'acreedor' ? 'Retención' : 'Municipio' }}</span><span>Forma de pago</span><span style="text-align:right">{{ $clase === 'acreedor' ? 'Gastos' : ($clase === 'cliente' ? 'Ventas' : 'Compras') }} {{ $anio }}</span></div>
       @forelse($lista as $x)
         <a class="ter-cols rowhov" href="{{ route($mod.'.index', ['editar' => $x->id]) }}" style="padding:11px 8px;margin:0 -8px;border-radius:8px;border-bottom:1px solid #F1F1EC;font-size:13.5px;text-decoration:none;color:var(--ink)">
           <span class="mono" style="font-size:12.5px">{{ $x->cuenta }}</span><span class="ell" style="font-weight:600">{{ $x->nombre }}</span><span class="mono" style="font-size:12.5px">{{ $x->nif }}</span>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cliente;
+use App\Models\Cuenta;
 use App\Models\Documento;
 use App\Models\Factura;
 use App\Models\FacturaRecibida;
@@ -46,7 +47,7 @@ abstract class TerceroController extends Controller
 
     private function modulo(string $clase): string
     {
-        return $clase === 'proveedor' ? 'proveedores' : 'acreedores';
+        return ['proveedor' => 'proveedores', 'acreedor' => 'acreedores', 'cliente' => 'ventas'][$clase];
     }
 
     /** Periodo: año y trimestre (Año, 1T…4T) */
@@ -83,24 +84,38 @@ abstract class TerceroController extends Controller
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('nombre', 'like', "%$q%")->orWhere('nif', 'like', "%$q%")->orWhere('cuenta', 'like', "%$q%")->orWhere('municipio', 'like', "%$q%")))
             ->orderBy('nombre')->get();
         $y = Plazos::hoy()->year;
-        $fr = FacturaRecibida::where('cliente_id', $c->id)->where('clase', Tercero::CLASES[$clase][3])->get();
-        $delAno = $fr->filter(fn ($f) => $f->fecha->year === $y);
-        $pend = $fr->whereNull('pagada_at');
-        $kpis = $clase === 'proveedor'
+        if ($clase === 'cliente') {
+            // Clientes de la empresa elegida: lo facturado sale de Facturación (por NIF)
+            $fr = Factura::where('cliente_id', $c->id)->where('estado', 'Emitida')->get();
+            $delAno = $fr->filter(fn ($f) => $f->fecha->year === $y);
+            $pend = $fr->where('cobrada', false);
+            $porNif = $delAno->groupBy(fn ($f) => strtoupper((string) $f->receptor_nif))->map->sum('total');
+            $porTercero = $lista->mapWithKeys(fn ($t) => [$t->id => $t->nif ? ($porNif[strtoupper($t->nif)] ?? 0) : 0]);
+            $kpis = [['Clientes', Formato::entero($lista->count()), 'Subcuentas 430'], ['Ventas '.$y, Formato::eur($delAno->sum('total')), 'Facturado (total)'], ['Pendiente de cobro', Formato::eur($pend->sum('total')), Formato::entero($pend->count()).' facturas']];
+        } else {
+            $fr = FacturaRecibida::where('cliente_id', $c->id)->where('clase', Tercero::CLASES[$clase][3])->get();
+            $delAno = $fr->filter(fn ($f) => $f->fecha->year === $y);
+            $pend = $fr->whereNull('pagada_at');
+            $porTercero = $delAno->groupBy('tercero_id')->map->sum('total');
+        }
+        if ($clase !== 'cliente') {
+            $kpis = $clase === 'proveedor'
             ? [['Proveedores', Formato::entero($lista->count()), 'Subcuentas 400'], ['Compras '.$y, Formato::eur($delAno->sum('total')), 'Importe a pagar'], ['Pendiente de pago', Formato::eur($pend->sum('total')), Formato::entero($pend->count()).' facturas']]
             : [['Acreedores', Formato::entero($lista->count()), 'Subcuentas 410'], ['Gastos '.$y, Formato::eur($delAno->sum('total')), 'Importe a pagar'], ['Con retención', Formato::entero($lista->where('retencion', '>', 0)->count()), 'Profesionales y arrendadores']];
+        }
         if ($request->query('exportar') === 'csv') {
             return $this->csv($mod.'-'.$c->nif.'.csv', ['Cuenta', 'Nombre', 'NIF', 'Email', 'Teléfono', 'Domicilio', 'CP', 'Municipio', 'Provincia', 'Tipo', 'Retención %', 'Forma de pago'],
                 $lista->map(fn ($t) => [$t->cuenta, $t->nombre, $t->nif, $t->email, $t->telefono, $t->domicilio, $t->cp, $t->municipio, $t->provincia, $t->tipo, Formato::num($t->retencion), $t->forma_pago])->all());
         }
         $editar = $request->query('editar') ? $lista->firstWhere('id', (int) $request->query('editar')) : null;
-        $par = Parametros::get($mod);
+        $par = $clase === 'cliente' ? ['forma_pago' => 'Transferencia', 'pago_dias' => 30] : Parametros::get($mod);
 
         return view('gestion.terceros', [
-            'titulo' => Tercero::CLASES[$clase][0], 'activo' => $mod, 'c' => $c, 'clase' => $clase, 'mod' => $mod, 'q' => $q, 'lista' => $lista, 'kpis' => $kpis,
-            'comprasPor' => $fr->filter(fn ($f) => $f->fecha->year === $y)->groupBy('tercero_id')->map->sum('total'),
+            'titulo' => $clase === 'cliente' ? 'Ventas' : Tercero::CLASES[$clase][0], 'activo' => $clase === 'cliente' ? 'clientes' : $mod, 'c' => $c, 'clase' => $clase, 'mod' => $mod, 'q' => $q, 'lista' => $lista, 'kpis' => $kpis,
+            'comprasPor' => $porTercero,
             'form' => $request->boolean('nuevo') || $editar, 'editar' => $editar, 'par' => $par,
             'siguiente' => Tercero::siguienteCuenta($c->id, $clase), 'anio' => $y,
+            'sinAlta' => $clase === 'cliente' ? count($this->receptoresSinAlta($c)) : 0,
         ]);
     }
 
@@ -146,7 +161,7 @@ abstract class TerceroController extends Controller
             }
             $cuenta = $d['cuenta'];
         } else {
-            $cuenta = $tercero?->cuenta ?? Tercero::siguienteCuenta($c->id, $clase);
+            $cuenta = $tercero?->cuenta ?? ($clase === 'cliente' && $nif !== '' ? $this->cuenta430($c, $nif) : Tercero::siguienteCuenta($c->id, $clase));
         }
         if (Tercero::where('cliente_id', $c->id)->where('cuenta', $cuenta)->when($tercero, fn ($w) => $w->whereKeyNot($tercero->id))->exists()) {
             throw ValidationException::withMessages(['form' => 'La cuenta '.$cuenta.' ya está asignada a otro '.strtolower(Tercero::CLASES[$clase][1]).'.']);
@@ -158,7 +173,47 @@ abstract class TerceroController extends Controller
         $t = $tercero ? tap($tercero)->update($datos) : Tercero::create($datos);
         Auditoria::registrar('gestion.'.$clase, ($tercero ? 'Modificado: ' : 'Alta: ').$t->nombre.' ('.$t->cuenta.')', $t);
 
-        return redirect()->route($this->modulo($clase).'.index')->with('ok', Tercero::CLASES[$clase][1].' «'.$t->nombre.'» guardado con la cuenta '.$t->cuenta.'.');
+        return redirect()->route($clase === 'cliente' ? 'clientes.index' : $this->modulo($clase).'.index')->with('ok', Tercero::CLASES[$clase][1].' «'.$t->nombre.'» guardado con la cuenta '.$t->cuenta.'.');
+    }
+
+    /** Subcuenta 430 del cliente: la que ya creó la contabilidad para ese NIF o la siguiente libre */
+    private function cuenta430(Cliente $c, string $nif): string
+    {
+        $ya = Cuenta::where('cliente_id', $c->id)->where('codigo', 'like', '430%')->where('nif', $nif)->value('codigo');
+
+        return $ya && ! Tercero::where('cliente_id', $c->id)->where('cuenta', $ya)->exists() ? $ya : Tercero::siguienteCuenta($c->id, 'cliente');
+    }
+
+    /** Receptores de las facturas emitidas por la empresa que aún no están dados de alta en Ventas (por NIF) */
+    private function receptoresSinAlta(Cliente $c): array
+    {
+        $ya = Tercero::where('cliente_id', $c->id)->where('clase', 'cliente')->whereNotNull('nif')->pluck('nif')->map(fn ($n) => strtoupper($n))->all();
+        $out = [];
+        foreach (Factura::where('cliente_id', $c->id)->whereNotNull('receptor_nif')->orderByDesc('fecha')->get() as $f) {
+            $nif = strtoupper(preg_replace('/[\s.-]/', '', (string) $f->receptor_nif));
+            if ($nif !== '' && ! in_array($nif, $ya, true) && ! isset($out[$nif])) {
+                $out[$nif] = $f;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Da de alta en Ventas a los clientes que ya aparecen en sus facturas emitidas */
+    public function importar(Request $request)
+    {
+        $c = $this->ctx($request);
+        abort_unless($c && $this->clase === 'cliente', 404);
+        $n = 0;
+        foreach ($this->receptoresSinAlta($c) as $nif => $f) {
+            Tercero::create(['cliente_id' => $c->id, 'clase' => 'cliente', 'cuenta' => $this->cuenta430($c, $nif), 'nombre' => $f->receptor_nombre ?: $nif, 'nif' => $nif,
+                'domicilio' => $f->receptor_dir, 'cp' => $f->datos_fe['cp'] ?? null, 'municipio' => $f->datos_fe['municipio'] ?? null, 'provincia' => $f->datos_fe['provincia'] ?? null,
+                'forma_pago' => in_array($f->forma_pago, self::PAGOS, true) ? $f->forma_pago : 'Transferencia', 'pago_dias' => (int) ($f->pago_dias ?? 30), 'retencion' => 0]);
+            $n++;
+        }
+        Auditoria::registrar('gestion.cliente', $n.' clientes dados de alta desde sus facturas', null, $c->id);
+
+        return redirect()->route('clientes.index')->with('ok', $n.' '.($n === 1 ? 'cliente dado' : 'clientes dados').' de alta con su subcuenta 430.');
     }
 
     public function borrar(Request $request, Tercero $tercero)
@@ -166,13 +221,13 @@ abstract class TerceroController extends Controller
         $clase = $this->clase;
         $c = $this->ctx($request);
         abort_unless($c && $tercero->cliente_id === $c->id && $tercero->clase === $clase, 404);
-        if ($tercero->facturas()->exists()) {
+        if ($tercero->facturas()->exists() || ($clase === 'cliente' && $tercero->nif && Factura::where('cliente_id', $c->id)->where('receptor_nif', $tercero->nif)->exists())) {
             return back()->with('aviso', 'No se puede eliminar: tiene facturas registradas.');
         }
         Auditoria::registrar('gestion.'.$clase.'.baja', 'Eliminado: '.$tercero->nombre, $tercero);
         $tercero->delete();
 
-        return redirect()->route($this->modulo($clase).'.index')->with('ok', Tercero::CLASES[$clase][1].' eliminado.');
+        return redirect()->route($clase === 'cliente' ? 'clientes.index' : $this->modulo($clase).'.index')->with('ok', Tercero::CLASES[$clase][1].' eliminado.');
     }
 
     // ===================================================== facturas recibidas

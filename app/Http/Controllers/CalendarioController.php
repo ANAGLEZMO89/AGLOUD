@@ -4,12 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Cliente;
 use App\Models\Evento;
-use App\Models\FiscalModelo;
-use App\Services\Fiscal;
 use App\Models\Expediente;
+use App\Models\FiscalModelo;
 use App\Models\Notificacion;
 use App\Models\Tarea;
 use App\Services\Auditoria;
+use App\Services\Fiscal;
 use App\Support\Parametros;
 use App\Support\Plazos;
 use Carbon\CarbonImmutable;
@@ -68,7 +68,7 @@ class CalendarioController extends Controller
             'diaEvs' => ($porDia[$dia->toDateString()] ?? collect())->sortBy(fn ($e) => $e['hora'] ?? '99'),
             'cuenta' => collect(self::TIPOS)->map(fn ($x, $k) => $todos->filter(fn ($e) => $e['tipo'] === $k && substr($e['fecha'], 0, 7) === $mes->format('Y-m'))->count()),
             'nuevo' => $request->boolean('nuevo'),
-            'clientes' => Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get(['id', 'nombre']),
+            'clientes' => ($ctx = $request->attributes->get('ctx')) && ! $ctx->es_despacho ? collect([$ctx]) : Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get(['id', 'nombre']),
             'url' => fn (array $x = []) => route('calendario', array_filter(array_merge(['m' => $mes->format('Y-m'), 'vista' => $vista, 't' => count($activos) === count(self::TIPOS) ? null : $activos], $x), fn ($v) => $v !== null && $v !== '')),
         ]);
     }
@@ -79,11 +79,14 @@ class CalendarioController extends Controller
         $a = $ini->toDateString();
         $b = $fin->toDateString();
         $out = [];
+        // Empresa elegida: si es un cliente, solo lo suyo; si es el despacho, todo el despacho y todos sus clientes
+        $cli = $ctx && ! $ctx->es_despacho ? $ctx->id : null;
+        $f = fn ($q) => $q->when($cli, fn ($w) => $w->where('cliente_id', $cli));
         if ($par['notificaciones']) {
-            foreach (Notificacion::with('cliente')->where('archivada', false)->whereNotNull('vence')->whereBetween('vence', [$a, $b])->get() as $n) {
+            foreach ($f(Notificacion::with('cliente'))->where('archivada', false)->whereNotNull('vence')->whereBetween('vence', [$a, $b])->get() as $n) {
                 $out[] = ['fecha' => $n->vence->toDateString(), 'hora' => null, 'tipo' => 'notif', 't' => 'Vence: '.$n->tipo, 's' => $n->cliente?->nombre.' · '.$n->organismo, 'url' => route('notificaciones.index', ['sel' => $n->id, 'chip' => 2])];
             }
-            foreach (Notificacion::with('cliente')->where('archivada', false)->where('estado', 'Pendiente')->get() as $n) {
+            foreach ($f(Notificacion::with('cliente'))->where('archivada', false)->where('estado', 'Pendiente')->get() as $n) {
                 $cad = $n->caducidad()->toDateString();
                 if ($cad >= $a && $cad <= $b) {
                     $out[] = ['fecha' => $cad, 'hora' => null, 'tipo' => 'notif', 't' => 'Caduca sin abrir: '.$n->tipo, 's' => $n->cliente?->nombre.' · '.$n->organismo, 'url' => route('notificaciones.index', ['sel' => $n->id])];
@@ -91,17 +94,17 @@ class CalendarioController extends Controller
             }
         }
         if ($par['expedientes']) {
-            foreach (Expediente::with('cliente')->where('estado', '!=', 'Cerrado')->whereNotNull('plazo')->whereBetween('plazo', [$a, $b])->get() as $e) {
+            foreach ($f(Expediente::with('cliente'))->where('estado', '!=', 'Cerrado')->whereNotNull('plazo')->whereBetween('plazo', [$a, $b])->get() as $e) {
                 $out[] = ['fecha' => $e->plazo->toDateString(), 'hora' => null, 'tipo' => 'exp', 't' => $e->plazo_lbl ?: $e->tramite, 's' => $e->ref.' · '.$e->cliente?->nombre, 'url' => route('expedientes.show', $e)];
             }
         }
         if ($par['tareas']) {
-            foreach (Tarea::with(['cliente', 'responsable'])->where('hecha', false)->whereNotNull('fecha')->whereBetween('fecha', [$a, $b])->get() as $t) {
+            foreach ($f(Tarea::with(['cliente', 'responsable']))->where('hecha', false)->whereNotNull('fecha')->whereBetween('fecha', [$a, $b])->get() as $t) {
                 $out[] = ['fecha' => $t->fecha->toDateString(), 'hora' => null, 'tipo' => 'tarea', 't' => $t->titulo, 's' => trim(($t->cliente?->nombre ?? '').' · '.($t->responsable?->name ?? ''), ' ·'), 'url' => route('tareas.index')];
             }
         }
         // Plazos de los modelos fiscales que debe presentar la empresa elegida (los ya presentados no salen)
-        if (($par['fiscal'] ?? true) && $ctx && ! $ctx->es_despacho) {
+        if (($par['fiscal'] ?? true) && $ctx) {
             $fis = app(Fiscal::class);
             $pres = FiscalModelo::where('cliente_id', $ctx->id)->whereNotNull('presentado_at')->get()->mapWithKeys(fn ($m) => [$m->modelo.'|'.$m->anio.'|'.$m->periodo => true])->all();
             foreach (array_keys(Fiscal::detectar($ctx, $fis->parametros($ctx))) as $code) {
@@ -113,7 +116,7 @@ class CalendarioController extends Controller
                 }
             }
         }
-        foreach (Evento::with('cliente')->whereBetween('fecha', [$a, $b])->get() as $e) {
+        foreach ($f(Evento::with('cliente'))->whereBetween('fecha', [$a, $b])->get() as $e) {
             $out[] = ['fecha' => $e->fecha->toDateString(), 'hora' => $e->hora, 'tipo' => $e->tipo, 't' => $e->titulo, 's' => trim(($e->cliente?->nombre ?? '').($e->detalle ? ' · '.$e->detalle : ''), ' ·'), 'url' => null, 'id' => $e->id];
         }
 

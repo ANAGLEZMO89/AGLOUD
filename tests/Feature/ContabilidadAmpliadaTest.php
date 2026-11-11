@@ -7,6 +7,7 @@ use App\Models\Asiento;
 use App\Models\BandejaDocumento;
 use App\Models\Cliente;
 use App\Models\Cuenta;
+use App\Models\Documento;
 use App\Models\Factura;
 use App\Models\FacturaRecibida;
 use App\Models\MovimientoBanco;
@@ -92,7 +93,7 @@ class ContabilidadAmpliadaTest extends TestCase
         $a = Asiento::first();
         $this->assertSame('Nómina', $a->tipo);
         $this->assertNotNull($a->documento_id);
-        $this->assertSame('laboral/nominas', $a->fresh()->documento_id ? \App\Models\Documento::find($a->documento_id)->carpeta : null);
+        $this->assertSame('laboral/nominas', $a->fresh()->documento_id ? Documento::find($a->documento_id)->carpeta : null);
         $this->en()->get(route('contabilidad.apuntes', ['guardado' => $a->id]))->assertOk()->assertSee('ASIENTO 1 GUARDADO')->assertSee('1.507,75');
     }
 

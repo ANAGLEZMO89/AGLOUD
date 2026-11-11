@@ -7,8 +7,8 @@ use App\Models\Cliente;
 use App\Models\Factura;
 use App\Models\User;
 use App\Services\AccesosPortal;
-use App\Services\VerificacionNif;
 use App\Services\Auditoria;
+use App\Services\VerificacionNif;
 use App\Support\Formato;
 use App\Support\Parametros;
 use App\Support\SeccionesAlta;
@@ -24,6 +24,12 @@ class ClienteController extends Controller
     // ---------------------------------------------------------------- listado
     public function index(Request $request)
     {
+        // Empresa elegida: el despacho ve sus clientes (los de la gestoría); un cliente ve sus propios clientes
+        $ctx = $request->attributes->get('ctx');
+        if ($ctx && ! $ctx->es_despacho) {
+            return app(VentaController::class)->index($request);
+        }
+
         return view('clientes.index', $this->datosListado($request) + ['titulo' => 'Clientes', 'activo' => 'clientes', 'nRevisar' => EscritorioController::nRevisar()]);
     }
 

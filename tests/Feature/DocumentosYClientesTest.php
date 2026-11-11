@@ -85,16 +85,16 @@ class DocumentosYClientesTest extends TestCase
         $base = ['tipo' => 'Sociedad', 'nombre' => 'Bar El Puerto SL', 'asesor_id' => $as->id, 'provincia' => 'Huelva'];
 
         $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'B21890123'])->assertSessionHasErrors('form');
-        $this->assertSame(0, Cliente::count());
+        $this->assertSame(0, Cliente::clientes()->count());
 
         // El NIF tiene que cuadrar con el tipo de cliente
         $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => '12345678Z'])->assertSessionHasErrors('form');
         $this->actingAs($as)->post(route('clientes.store'), ['tipo' => 'Autónomo'] + $base + ['nif' => 'B21890124'])->assertSessionHasErrors('form');
-        $this->assertSame(0, Cliente::count());
+        $this->assertSame(0, Cliente::clientes()->count());
 
         // Sin email se guarda igual; el acceso al portal se crea solo al indicar el correo
         $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'b-21890124'])->assertRedirect()->assertSessionHas('ok', fn ($m) => str_contains($m, 'Sin email'));
-        $c = Cliente::first();
+        $c = Cliente::clientes()->first();
         $this->assertSame(0, User::where('cliente_id', $c->id)->count());
         $this->actingAs($as)->put(route('clientes.update', $c), $base + ['nif' => 'B21890124', 'email' => 'bar@test.es'])->assertRedirect();
 

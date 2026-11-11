@@ -186,6 +186,14 @@ class Contabilidad
         if ($nif && ($x = Cuenta::where('cliente_id', $c->id)->where('codigo', 'like', '430%')->where('nif', $nif)->first())) {
             return $x->codigo;
         }
+        // Cliente dado de alta en Ventas con su subcuenta 430: se usa esa
+        if ($nif && ($t = Tercero::where('cliente_id', $c->id)->where('clase', 'cliente')->where('nif', $nif)->first())) {
+            if (! Cuenta::where('cliente_id', $c->id)->where('codigo', $t->cuenta)->exists()) {
+                Cuenta::create(['cliente_id' => $c->id, 'codigo' => $t->cuenta, 'nombre' => $t->nombre, 'nif' => $nif]);
+            }
+
+            return $t->cuenta;
+        }
         if (! $nif && ! $nombre) {
             return '430000000';
         }
@@ -278,6 +286,7 @@ class Contabilidad
         if (! $f->cobrada || ! $f->cobrada_at) {
             throw new InvalidArgumentException('Marca antes la factura '.$f->num.' como cobrada.');
         }
+
         return DB::transaction(function () use ($f, $medio, $userId, $cuentaTes) {
             if (! $f->asiento_id) {
                 $this->contabilizarEmitida($f, $userId);

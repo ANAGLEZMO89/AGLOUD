@@ -31,6 +31,7 @@ use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\TareaController;
+use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -82,6 +83,14 @@ Route::middleware('auth')->group(function () {
             Route::post('/'.$seg.'/pagos/{factura}/marcar', [CobrosPagosController::class, 'marcarPago'.$suf])->whereNumber('factura')->name($seg.'.pagos.marcar');
             Route::post('/'.$seg.'/pagos/{factura}/contabilizar', [CobrosPagosController::class, 'contabilizarPago'.$suf])->whereNumber('factura')->name($seg.'.pagos.contabilizar');
         }
+        // Ventas › clientes de la empresa elegida (cuando no es el despacho)
+        Route::prefix('ventas/clientes')->name('ventas.')->group(function () {
+            Route::get('/', [VentaController::class, 'index'])->name('index');
+            Route::post('/', [VentaController::class, 'store'])->name('store');
+            Route::post('/importar', [VentaController::class, 'importar'])->name('importar');
+            Route::post('/{tercero}', [VentaController::class, 'update'])->whereNumber('tercero')->name('update');
+            Route::delete('/{tercero}', [VentaController::class, 'borrar'])->whereNumber('tercero')->name('destroy');
+        });
         Route::get('/acreedores/no-deducibles', [AcreedorController::class, 'noDeducibles'])->name('acreedores.nodeducibles');
         // Productos y servicios de la empresa elegida (se usan al facturar)
         Route::get('/productos', [ProductoController::class, 'index'])->name('productos.index');

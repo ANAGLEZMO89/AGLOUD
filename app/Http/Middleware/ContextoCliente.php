@@ -15,6 +15,18 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ContextoCliente
 {
+    /** Módulos que dependen de la empresa elegida */
+    private const MODULOS = ['clientes', 'ventas', 'proveedores', 'acreedores', 'productos', 'cobros', 'calendario', 'tareas', 'contabilidad', 'fiscal', 'laboral',
+        'facturacion', 'crm', 'horario', 'notificaciones', 'documentos', 'expedientes', 'parametros'];
+
+    private function requiereEmpresa(Request $request): bool
+    {
+        $n = (string) $request->route()?->getName();
+        $raiz = explode('.', $n)[0];
+
+        return in_array($raiz, self::MODULOS, true) && ! str_ends_with($n, '.descargar') && ! str_ends_with($n, '.ver');
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $u = $request->user();
@@ -30,6 +42,13 @@ class ContextoCliente
         }
         $request->attributes->set('ctx', $ctx);
         View::share('ctx', $ctx);
+
+        // Personal del despacho: toda la plataforma trabaja sobre la empresa elegida en el Escritorio
+        // (el despacho = el despacho y todos sus clientes; un cliente = solo ese cliente).
+        if (! $ctx && $u?->esDespacho() && $request->isMethod('GET') && $this->requiereEmpresa($request)) {
+            return redirect()->route('escritorio', ['cambiar' => 1, 'volver' => '/'.ltrim($request->path(), '/')])
+                ->with('aviso', 'Elige primero con qué empresa vas a trabajar: el despacho o uno de tus clientes.');
+        }
 
         return $next($request);
     }

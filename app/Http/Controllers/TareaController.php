@@ -26,7 +26,10 @@ class TareaController extends Controller
         $hoy = Plazos::hoy();
         $todo = $request->query('ver') === 'equipo';
         $verHechas = $request->boolean('hechas');
-        $base = Tarea::with(['cliente', 'responsable'])->when(! $todo, fn ($q) => $q->where('responsable_id', $u->id));
+        // Empresa elegida: con un cliente, solo sus tareas; con el despacho, todas
+        $ctx = $request->attributes->get('ctx');
+        $cli = $ctx && ! $ctx->es_despacho ? $ctx->id : null;
+        $base = Tarea::with(['cliente', 'responsable'])->when(! $todo, fn ($q) => $q->where('responsable_id', $u->id))->when($cli, fn ($q) => $q->where('cliente_id', $cli));
         $pend = (clone $base)->where('hecha', false)->orderByRaw('fecha is null')->orderBy('fecha')->get();
         $finSemana = $hoy->endOfWeek(CarbonImmutable::SUNDAY);
         $grupos = [
@@ -40,15 +43,15 @@ class TareaController extends Controller
             $grupos[] = ['Hechas (últimos 30 días)', (clone $base)->where('hecha', true)->where('hecha_at', '>=', now()->subDays(30))->orderByDesc('hecha_at')->get(), false];
         }
         $equipo = User::whereIn('role', User::ROLES_DESPACHO)->where('activo', true)->orderBy('name')->get();
-        $cargaTodas = Tarea::where('hecha', false)->get()->groupBy('responsable_id');
+        $cargaTodas = Tarea::where('hecha', false)->when($cli, fn ($q) => $q->where('cliente_id', $cli))->get()->groupBy('responsable_id');
         $maxCarga = max(1, $cargaTodas->map->count()->max() ?? 1);
 
         return view('tareas.index', [
             'titulo' => 'Tareas y horario', 'activo' => 'tareas', 'hoy' => $hoy, 'todo' => $todo, 'verHechas' => $verHechas, 'grupos' => $grupos,
             'resumen' => [['Pendientes', $pend->count()], ['Vencidas', $grupos[0][1]->count()], ['Para hoy', $grupos[1][1]->count()], ['Hechas esta semana', (clone $base)->where('hecha', true)->where('hecha_at', '>=', $hoy->startOfWeek())->count()]],
             'carga' => $equipo->map(fn ($e) => ['n' => $e->name, 'c' => $cargaTodas->get($e->id)?->count() ?? 0, 'w' => round((($cargaTodas->get($e->id)?->count() ?? 0) / $maxCarga) * 100)]),
-            'recurrentes' => Tarea::where('hecha', false)->whereNotNull('repetir')->orderBy('fecha')->limit(20)->get(),
-            'equipo' => $equipo, 'clientes' => Cliente::where('estado', '!=', 'Baja')->orderByDesc('es_despacho')->orderBy('nombre')->get(['id', 'nombre']),
+            'recurrentes' => Tarea::where('hecha', false)->when($cli, fn ($q) => $q->where('cliente_id', $cli))->whereNotNull('repetir')->orderBy('fecha')->limit(20)->get(),
+            'equipo' => $equipo, 'clientes' => $cli ? collect([$ctx]) : Cliente::where('estado', '!=', 'Baja')->orderByDesc('es_despacho')->orderBy('nombre')->get(['id', 'nombre']), 'ctxCli' => $cli,
             'nueva' => $request->boolean('nueva'), 'par' => Parametros::get('tareas'),
             'url' => fn (array $x = []) => route('tareas.index', array_filter(array_merge(['ver' => $todo ? 'equipo' : null, 'hechas' => $verHechas ? 1 : null], $x), fn ($v) => $v !== null && $v !== '')),
         ]);

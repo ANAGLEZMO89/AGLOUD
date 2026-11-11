@@ -170,7 +170,7 @@ class FiscalTest extends TestCase
 
     public function test_portal_y_sin_empresa(): void
     {
-        $this->actingAs($this->as)->get(route('fiscal.index'))->assertRedirect();
+        $this->actingAs($this->as)->withSession(['cliente_activo' => 0])->get(route('fiscal.index'))->assertRedirect();
         $portal = $this->usuario(User::CLIENTE_ADMIN, $this->a);
         $this->actingAs($portal)->get(route('fiscal.index'))->assertForbidden();
     }

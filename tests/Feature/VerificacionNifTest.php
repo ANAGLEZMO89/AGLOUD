@@ -67,7 +67,7 @@ class VerificacionNifTest extends TestCase
         // NO IDENTIFICADO → no se guarda
         $resp = Http::response($this->respuesta('NO IDENTIFICADO', ''), 200);
         $this->actingAs($as)->post(route('clientes.store'), $base)->assertSessionHasErrors('form');
-        $this->assertSame(0, Cliente::count());
+        $this->assertSame(0, Cliente::clientes()->count());
         Http::assertSent(fn (HttpRequest $r) => str_contains($r->body(), '<vnif:Nif>B21345673</vnif:Nif>') && str_contains($r->body(), '<vnif:Nombre>BAR EL PUERTO SL</vnif:Nombre>'));
 
         // BAJA → no se guarda
@@ -77,7 +77,7 @@ class VerificacionNifTest extends TestCase
         // IDENTIFICADO → se guarda con el nombre que consta en la AEAT
         $resp = Http::response($this->respuesta('IDENTIFICADO', 'BAR EL PUERTO SL'), 200);
         $this->actingAs($as)->post(route('clientes.store'), $base)->assertSessionHas('ok', fn ($m) => str_contains($m, 'NIF verificado en la AEAT'));
-        $c = Cliente::first();
+        $c = Cliente::clientes()->first();
         $this->assertSame('IDENTIFICADO', $c->nif_aeat);
         $this->assertSame('BAR EL PUERTO SL', $c->nif_aeat_nombre);
 
