@@ -3,7 +3,7 @@
   // Pestañas de Contabilidad (prototipo): los listados y el Registro Mercantil van en desplegables
   $LISTADOS = [['extracto', 'Extracto de cuenta', 'contabilidad.mayor'], ['pyg', 'Cuenta de explotación (PyG)', 'contabilidad.pyg'], ['sumas', 'Balance de sumas y saldos', 'contabilidad.sumas'],
     ['ldiario', 'Listado diario de movimientos', 'contabilidad.ldiario'], ['lmayor', 'Listado mayor de cuentas', 'contabilidad.lmayor'], ['anuales', 'Balances oficiales', 'contabilidad.anuales']];
-  $APUNTES = [['bandeja', 'Bandeja de facturas', 'contabilidad.bandeja', $nBandeja], ['diario', 'Libro diario', 'contabilidad.diario', $nAsientos], ['apuntes', 'Mantenimiento de apuntes', 'contabilidad.apuntes', null]];
+  $APUNTES = [['bandeja', 'Bandeja de facturas', 'contabilidad.bandeja', $nBandeja], ['diario', 'Libro diario', 'contabilidad.diario', null], ['apuntes', 'Mantenimiento de apuntes', 'contabilidad.apuntes', null]];
   $TABLAS = [['pgc', 'Plan General Contable (PGC)', 'contabilidad.pgc'], ['conciliador', 'Conciliador bancario', 'contabilidad.conciliador']];
   $RM = [['rm-plantillas', 'Plantillas e informes', 'contabilidad.rm', 'plantillas'], ['rm-legalia', 'Emisión de libros contables (Legalia)', 'contabilidad.rm', 'legalia'], ['rm-d2', 'Depósito de cuentas (D2)', 'contabilidad.rm', 'd2']];
   $enListados = in_array($tab, array_column($LISTADOS, 0), true);

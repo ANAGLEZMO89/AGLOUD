@@ -67,6 +67,8 @@ class ContabilidadAmpliadaTest extends TestCase
         $this->en()->get(route('contabilidad.ldiario'))->assertOk()->assertSee('LISTADO DIARIO DE MOVIMIENTOS')->assertSee('Totales · 2 asientos');
         $this->en()->get(route('contabilidad.lmayor', ['de' => '572', 'a' => '572']))->assertOk()->assertSee('572000000')->assertSee('2.990,00')->assertDontSee('<span class="mono" style="margin-right:8px">626000000</span>', false);
         $this->en()->get('/contabilidad/mayor')->assertRedirect('/contabilidad/listados/extracto');
+        // El número del menú solo sale en lo pendiente: el Libro diario no lleva contador
+        $this->en()->get(route('contabilidad.index'))->assertSee('Libro diario</a>', false);
 
         // PGC: alta de subcuenta, baja de una cuenta del plan sin movimientos y reactivación
         $this->en()->get(route('contabilidad.pgc', ['q' => '572']))->assertOk()->assertSee('572000000');
