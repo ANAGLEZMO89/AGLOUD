@@ -130,7 +130,7 @@ class ParametrosController extends Controller
     {
         $r->validate(['vista' => ['required', Rule::in(['mes', 'agenda'])]]);
 
-        return ['vista' => $r->input('vista'), 'notificaciones' => $r->boolean('notificaciones'), 'expedientes' => $r->boolean('expedientes'), 'tareas' => $r->boolean('tareas'), 'festivos' => $r->boolean('festivos')];
+        return ['vista' => $r->input('vista'), 'notificaciones' => $r->boolean('notificaciones'), 'expedientes' => $r->boolean('expedientes'), 'tareas' => $r->boolean('tareas'), 'festivos' => $r->boolean('festivos'), 'fiscal' => $r->boolean('fiscal')];
     }
 
     private function datosTareas(Request $r): array
@@ -155,6 +155,23 @@ class ParametrosController extends Controller
         }
 
         return $out;
+    }
+
+    private function datosFiscal(Request $r): array
+    {
+        $d = $r->validate([
+            'aviso_dias' => ['required', 'integer', 'min:0', 'max:60'],
+            'umbral_347' => ['required', 'string', 'max:20'],
+            'pct_130' => ['required', 'integer', 'min:1', 'max:100'],
+            'pct_202_402' => ['required', 'integer', 'min:1', 'max:100'],
+            'pct_202_403' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+        $umbral = Formato::parseNum($d['umbral_347']);
+        if ($umbral <= 0) {
+            throw ValidationException::withMessages(['umbral_347' => 'Indica el importe del umbral del modelo 347.']);
+        }
+
+        return ['aviso_dias' => (int) $d['aviso_dias'], 'umbral_347' => round($umbral, 2), 'pct_130' => (int) $d['pct_130'], 'pct_202_402' => (int) $d['pct_202_402'], 'pct_202_403' => (int) $d['pct_202_403']];
     }
 
     private function datosCrm(Request $r): array

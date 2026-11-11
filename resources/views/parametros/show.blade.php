@@ -136,11 +136,25 @@
       </div>
     @endif
 
+    @if($modulo === 'fiscal')
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Avisos y cálculo de los modelos</span>
+        <span class="hint muted">Para todas las empresas. Los datos de cada empresa (régimen de IVA, retenciones, Impuesto sobre Sociedades…) se configuran en Fiscal › «Parámetros» con la empresa elegida.</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:12px">
+          <label class="lbl-s">Avisar de un plazo con (días de antelación)<input class="inp mono" type="number" min="0" max="60" name="aviso_dias" value="{{ old('aviso_dias', $p['aviso_dias']) }}"><span class="hint muted">El modelo se marca «Plazo cerca» en la lista.</span></label>
+          <label class="lbl-s">Umbral del modelo 347 (€)<input class="inp mono" name="umbral_347" value="{{ old('umbral_347', Formato::num($p['umbral_347'])) }}"><span class="hint muted">Art. 33 RGAT: 3.005,06 € anuales por tercero.</span></label>
+          <label class="lbl-s">Pago fraccionado del 130 (%)<input class="inp mono" type="number" min="1" max="100" name="pct_130" value="{{ old('pct_130', $p['pct_130']) }}"><span class="hint muted">Art. 110 RIRPF: 20 % del rendimiento neto.</span></label>
+          <label class="lbl-s">202 · artículo 40.2 LIS (%)<input class="inp mono" type="number" min="1" max="100" name="pct_202_402" value="{{ old('pct_202_402', $p['pct_202_402']) }}"><span class="hint muted">18 % de la cuota del último IS.</span></label>
+          <label class="lbl-s">202 · artículo 40.3 LIS (%)<input class="inp mono" type="number" min="1" max="100" name="pct_202_403" value="{{ old('pct_202_403', $p['pct_202_403']) }}"><span class="hint muted">5/7 del tipo de gravamen redondeado por defecto (17 % con el tipo del 25 %). Con cifra de negocios ≥ 10 M€, 24 %.</span></label>
+        </div>
+      </div>
+    @endif
+
     @if($modulo === 'calendario')
       <div class="card" style="padding:18px 20px;gap:12px">
         <span style="font-size:16px;font-weight:700">Qué se muestra en el calendario</span>
         <label class="lbl-s" style="max-width:260px">Vista al entrar<select class="sel" name="vista"><option value="mes" @selected($p['vista'] === 'mes')>Mes</option><option value="agenda" @selected($p['vista'] === 'agenda')>Agenda</option></select></label>
-        @foreach(['notificaciones' => 'Vencimientos y caducidades de notificaciones', 'expedientes' => 'Fechas límite de expedientes', 'tareas' => 'Tareas con fecha', 'festivos' => 'Festivos (los mismos que usa el cálculo de plazos)'] as $k => $l)
+        @foreach(['notificaciones' => 'Vencimientos y caducidades de notificaciones', 'expedientes' => 'Fechas límite de expedientes', 'tareas' => 'Tareas con fecha', 'fiscal' => 'Plazos de los modelos fiscales de la empresa elegida', 'festivos' => 'Festivos (los mismos que usa el cálculo de plazos)'] as $k => $l)
           <label class="chk" style="gap:10px"><input type="checkbox" name="{{ $k }}" value="1" @checked($p[$k]) style="width:18px;height:18px;accent-color:#0B0B0B"><span style="font-size:13.5px">{{ $l }}</span></label>
         @endforeach
       </div>

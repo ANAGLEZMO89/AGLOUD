@@ -475,3 +475,29 @@ fieldset:disabled .inp,fieldset:disabled .sel,fieldset:disabled .txa{background:
 .may-cols{display:grid;grid-template-columns:64px 92px 100px minmax(0,1fr) 110px 110px 120px;gap:10px;align-items:center}
 .sys-cols{display:grid;grid-template-columns:110px minmax(0,1fr) 120px 120px 120px 120px;gap:10px;align-items:center}
 @media (max-width:800px){.ap-lin{grid-template-columns:1fr 1fr 1fr}}
+
+/* ---------- Fiscal ---------- */
+.fis-mod{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 8px;margin:0 -8px;border-radius:10px;color:inherit;text-decoration:none}
+.fis-mod:hover{background:#F4F4F0;color:inherit}
+.fis-sec{display:flex;flex-direction:column;gap:12px;padding:14px 16px;border-radius:12px;background:#F4F4F0}
+.fis-st{font-size:13px;font-weight:700;letter-spacing:.02em}
+.fis-chk{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;cursor:pointer}
+.fis-chk input{width:18px;height:18px;margin:1px 0 0;accent-color:#0B0B0B;flex:none}
+.fis-chk span{display:flex;flex-direction:column;gap:2px}
+.fis-chk small{font-size:12px;color:#6A6A65}
+.fis-sec .inp,.fis-sec .sel{background:#fff}
+.fis-back{height:36px;padding:0 16px;border-radius:18px;background:#fff;display:flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;color:inherit;text-decoration:none}
+.fis-back:hover{box-shadow:0 0 0 1.5px #0B0B0B;color:inherit}
+.fis-h{padding:14px 0 6px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6A6A65;border-bottom:1px solid #E6E6E0}
+.fis-row{display:grid;grid-template-columns:48px minmax(0,1fr) 170px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid #F1F1EC}
+.fis-n{font:600 12px var(--mono);color:#6A6A65}
+.fis-inp{width:100%;box-sizing:border-box;height:34px;padding:0 10px;border-radius:8px;border:1px solid #E6E6E0;background:#FAFAF7;text-align:right;font:500 13px var(--mono);outline:none;min-width:0}
+.fis-inp:focus{border-color:#0B0B0B;background:#fff}
+.fis-inp.cambiada{border-color:#E0B25A;background:#FFF8EA}
+.fis-res{padding:12px 10px;margin:8px -10px 0;border-radius:10px;background:#C8F031;border-bottom:0}
+.fis-terc{display:grid;grid-template-columns:100px minmax(0,1fr) 110px 120px;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #F1F1EC;font-size:13px}
+.fis-gen{min-height:40px;padding:6px 12px;border-radius:20px;border:1.5px dashed #BDBDB7;color:#6A6A65;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-weight:700;font-size:13.5px;cursor:not-allowed}
+.fis-gen small{font:500 11.5px var(--mono)}
+.fis-x{padding:7px 12px;border-radius:16px;background:#F4F4F0;font-size:12.5px;font-weight:600;color:inherit;text-decoration:none}
+.fis-x:hover{background:#C8F031;color:inherit}
+@media (max-width:560px){.fis-row{grid-template-columns:40px minmax(0,1fr) 120px}.fis-terc{grid-template-columns:minmax(0,1fr) 110px}.fis-terc span:nth-child(1),.fis-terc span:nth-child(3){display:none}}

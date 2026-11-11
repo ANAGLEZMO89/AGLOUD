@@ -468,6 +468,43 @@
     on(todas, 'change', function () { $$('[data-band-k]', band).forEach(function (c) { c.checked = todas.checked; }); });
   }
 
+  // ---------- Fiscal: recálculo al momento de las casillas del modelo ----------
+  var ff = $('[data-fiscal]');
+  if (ff) {
+    var fT = null, fDirty = $('[data-dirty]');
+    var fCalc = function () {
+      fetch(ff.getAttribute('data-calc'), { method: 'POST', body: new FormData(ff), headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return;
+          Object.keys(j.casillas || {}).forEach(function (id) {
+            ff.querySelectorAll('[data-cas]').forEach(function (el) { if (el.getAttribute('data-cas') === id) el.textContent = j.casillas[id]; });
+          });
+          var rs = $('[data-res]'), rl = $('[data-reslbl]');
+          if (rs && j.res) rs.textContent = j.res;
+          if (rl) rl.textContent = j.resLbl || '';
+          var sel = $('[data-tipo]');
+          if (sel && j.tipoOpts) {
+            var keys = Object.keys(j.tipoOpts), cur = keys.map(function (k) { return k; }).join(','), now = Array.prototype.map.call(sel.options, function (o) { return o.value; }).join(',');
+            if (cur !== now) {
+              sel.innerHTML = '';
+              keys.forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = j.tipoOpts[k]; if (k === j.tipo) o.selected = true; sel.appendChild(o); });
+            }
+          }
+        })
+        .catch(function () {});
+    };
+    ff.addEventListener('input', function (e) {
+      if (e.target.classList && e.target.classList.contains('fis-inp')) {
+        var orig = ff.querySelector('input[type=hidden][name="' + e.target.name.replace(/^cas/, 'orig') + '"]');
+        e.target.classList.toggle('cambiada', !!orig && orig.value.trim() !== e.target.value.trim());
+      }
+      if (fDirty) fDirty.classList.remove('hidden');
+      clearTimeout(fT); fT = setTimeout(fCalc, 350);
+    });
+    ff.addEventListener('change', function (e) { if (e.target.hasAttribute && e.target.hasAttribute('data-tipo') && fDirty) fDirty.classList.remove('hidden'); });
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

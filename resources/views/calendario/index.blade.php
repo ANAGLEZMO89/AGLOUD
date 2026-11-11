@@ -106,7 +106,7 @@
       </div>
       <div class="card" style="padding:16px 18px;gap:6px;font-size:12.5px;color:#3C3C3C;line-height:1.5">
         <b style="font-size:13.5px;color:#0B0B0B">Cómo se alimenta</b>
-        <span>Solo: vencimientos y caducidades de <b>Notificaciones</b>, fechas límite de <b>Expedientes</b> y <b>Tareas</b> con fecha. A mano: citas y eventos internos. Las obligaciones fiscales y de Seguridad Social llegarán con las fases Fiscal y Laboral.</span>
+        <span>Solo: vencimientos y caducidades de <b>Notificaciones</b>, fechas límite de <b>Expedientes</b> y <b>Tareas</b> con fecha. A mano: citas y eventos internos. Fiscal: plazos de los modelos de la empresa elegida que aún no se han marcado como presentados. Las obligaciones de Seguridad Social llegarán con la fase Laboral.</span>
       </div>
     </div>
   </div>

@@ -15,6 +15,7 @@ use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\EscritorioController;
 use App\Http\Controllers\ExpedienteController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
@@ -92,6 +93,18 @@ Route::middleware('auth')->group(function () {
             Route::post('/ejercicios/{ejercicio}/reabrir', [ContabilidadController::class, 'reabrirEjercicio'])->whereNumber('ejercicio')->name('ejercicios.reabrir');
             Route::post('/ejercicios/{ejercicio}/bloqueo', [ContabilidadController::class, 'bloqueo'])->whereNumber('ejercicio')->name('ejercicios.bloqueo');
             Route::post('/subcuentas', [ContabilidadController::class, 'guardarCuenta'])->name('subcuentas');
+        });
+
+        // Fiscal: modelos de la empresa elegida (borradores; la presentación se hace en la Sede de la AEAT)
+        Route::prefix('fiscal')->name('fiscal.')->group(function () {
+            Route::get('/', [FiscalController::class, 'index'])->name('index');
+            Route::post('/parametros', [FiscalController::class, 'guardarParametros'])->name('parametros');
+            Route::get('/modelo/{codigo}', [FiscalController::class, 'modelo'])->where('codigo', '\\d{3}')->name('modelo');
+            Route::post('/modelo/{codigo}/calcular', [FiscalController::class, 'calcular'])->where('codigo', '\\d{3}')->name('calcular');
+            Route::post('/modelo/{codigo}/borrador', [FiscalController::class, 'borrador'])->where('codigo', '\\d{3}')->name('borrador');
+            Route::post('/modelo/{codigo}/recalcular', [FiscalController::class, 'recalcular'])->where('codigo', '\\d{3}')->name('recalcular');
+            Route::post('/modelo/{codigo}/presentado', [FiscalController::class, 'presentado'])->where('codigo', '\\d{3}')->name('presentado');
+            Route::get('/modelo/{codigo}/exportar', [FiscalController::class, 'exportar'])->where('codigo', '\\d{3}')->name('exportar');
         });
 
         // Calendario y tareas del despacho

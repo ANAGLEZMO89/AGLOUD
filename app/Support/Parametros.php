@@ -23,6 +23,7 @@ class Parametros
         'calendario' => ['Calendario', 'Gestión', 'calendario'],
         'tareas' => ['Tareas y horario', 'Gestión', 'tareas.index'],
         'contabilidad' => ['Contabilidad', 'Áreas', 'contabilidad.index'],
+        'fiscal' => ['Fiscal', 'Áreas', 'fiscal.index'],
     ];
 
     /** Pestañas de cada módulo (además de «Parámetros») */
@@ -50,10 +51,11 @@ class Parametros
                 'validez' => 30, 'pie_presupuesto' => 'Para aceptar el presupuesto, devuélvalo firmado o confírmelo por escrito antes de la fecha de validez.'],
             'proveedores' => ['forma_pago' => 'Transferencia', 'pago_dias' => 30],
             'acreedores' => ['forma_pago' => 'Domiciliación SEPA', 'pago_dias' => 0, 'tipo' => 'Servicios', 'retencion' => 0],
-            'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true],
+            'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true, 'fiscal' => true],
             'tareas' => ['jornada_semanal' => 40, 'jornada_diaria' => 8, 'vacaciones' => 22, 'prioridad' => 'Media'],
             'contabilidad' => ['ventas' => '705', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
                 'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572'],
+            'fiscal' => ['aviso_dias' => 10, 'umbral_347' => 3005.06, 'pct_130' => 20, 'pct_202_402' => 18, 'pct_202_403' => 17],
             default => [],
         };
     }

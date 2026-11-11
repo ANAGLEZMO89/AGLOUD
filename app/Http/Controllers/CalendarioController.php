@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Cliente;
 use App\Models\Evento;
+use App\Models\FiscalModelo;
+use App\Services\Fiscal;
 use App\Models\Expediente;
 use App\Models\Notificacion;
 use App\Models\Tarea;
@@ -27,6 +29,7 @@ class CalendarioController extends Controller
         'tarea' => ['Tareas', '#ECECE7', '#3C3C3C'],
         'cita' => ['Citas', '#E6F6A8', '#2E3A00'],
         'interno' => ['Interno', '#3C3C3C', '#FFFFFF'],
+        'fiscal' => ['Fiscal · AEAT', '#0B0B0B', '#C8F031'],
     ];
 
     public function index(Request $request)
@@ -41,7 +44,7 @@ class CalendarioController extends Controller
         // Rejilla: de lunes a domingo, semanas completas
         $ini = $mes->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY);
         $fin = $mes->endOfMonth()->endOfWeek(CarbonImmutable::SUNDAY);
-        $evs = $this->eventos($ini, $fin, $par);
+        $evs = $this->eventos($ini, $fin, $par, $request->attributes->get('ctx'));
         $todos = collect($evs);
         $filtrados = $todos->filter(fn ($e) => in_array($e['tipo'], $activos, true));
         $porDia = $filtrados->groupBy('fecha');
@@ -71,7 +74,7 @@ class CalendarioController extends Controller
     }
 
     /** Todos los eventos del rango, de todas las fuentes */
-    private function eventos(CarbonImmutable $ini, CarbonImmutable $fin, array $par): array
+    private function eventos(CarbonImmutable $ini, CarbonImmutable $fin, array $par, ?Cliente $ctx = null): array
     {
         $a = $ini->toDateString();
         $b = $fin->toDateString();
@@ -95,6 +98,19 @@ class CalendarioController extends Controller
         if ($par['tareas']) {
             foreach (Tarea::with(['cliente', 'responsable'])->where('hecha', false)->whereNotNull('fecha')->whereBetween('fecha', [$a, $b])->get() as $t) {
                 $out[] = ['fecha' => $t->fecha->toDateString(), 'hora' => null, 'tipo' => 'tarea', 't' => $t->titulo, 's' => trim(($t->cliente?->nombre ?? '').' · '.($t->responsable?->name ?? ''), ' ·'), 'url' => route('tareas.index')];
+            }
+        }
+        // Plazos de los modelos fiscales que debe presentar la empresa elegida (los ya presentados no salen)
+        if (($par['fiscal'] ?? true) && $ctx && ! $ctx->es_despacho) {
+            $fis = app(Fiscal::class);
+            $pres = FiscalModelo::where('cliente_id', $ctx->id)->whereNotNull('presentado_at')->get()->mapWithKeys(fn ($m) => [$m->modelo.'|'.$m->anio.'|'.$m->periodo => true])->all();
+            foreach (array_keys(Fiscal::detectar($ctx, $fis->parametros($ctx))) as $code) {
+                foreach (Fiscal::candidatos((string) $code, $ini->year) as [$y, $p, $plazo]) {
+                    if ($plazo && $plazo->toDateString() >= $a && $plazo->toDateString() <= $b && ! isset($pres[$code.'|'.$y.'|'.$p])) {
+                        $out[] = ['fecha' => $plazo->toDateString(), 'hora' => null, 'tipo' => 'fiscal', 't' => 'Modelo '.$code.' · '.Fiscal::etiquetaPeriodo((string) $code, $y, $p),
+                            's' => $ctx->nombre.' · '.Fiscal::nombre((string) $code), 'url' => route('fiscal.modelo', ['codigo' => $code, 'anio' => $y, 'per' => $p])];
+                    }
+                }
             }
         }
         foreach (Evento::with('cliente')->whereBetween('fecha', [$a, $b])->get() as $e) {
