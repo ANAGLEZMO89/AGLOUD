@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Apunte;
 use App\Models\Cliente;
 use App\Models\Cuenta;
 use App\Models\Documento;
@@ -170,6 +171,19 @@ abstract class TerceroController extends Controller
             'domicilio' => $d['domicilio'] ?? null, 'cp' => $d['cp'] ?? null, 'municipio' => $d['municipio'] ?? null, 'provincia' => $d['provincia'] ?? (Facturae::provinciaDeCp($d['cp'] ?? '') ?: null),
             'tipo' => $clase === 'acreedor' ? ($d['tipo'] ?? 'Servicios') : null, 'retencion' => $clase === 'acreedor' ? (float) ($d['retencion'] ?? 0) : 0,
             'forma_pago' => $d['forma_pago'], 'pago_dias' => (int) $d['pago_dias'], 'iban' => $iban ?: null];
+        // Cambio de subcuenta: sus apuntes contables pasan a la nueva (la contabilidad sigue conectada con el tercero)
+        if ($tercero && $tercero->cuenta !== $cuenta) {
+            $viejo = $tercero->cuenta;
+            $cerrado = Apunte::where('apuntes.cliente_id', $c->id)->where('apuntes.cuenta', $viejo)->join('asientos', 'asientos.id', '=', 'apuntes.asiento_id')->join('ejercicios', 'ejercicios.id', '=', 'asientos.ejercicio_id')->where('ejercicios.estado', 'Cerrado')->exists();
+            if ($cerrado) {
+                throw ValidationException::withMessages(['form' => 'La cuenta '.$viejo.' tiene apuntes en un ejercicio cerrado: no se puede cambiar.']);
+            }
+            if (Apunte::where('cliente_id', $c->id)->where('cuenta', $cuenta)->exists() || Cuenta::where('cliente_id', $c->id)->where('codigo', $cuenta)->where('nif', '!=', $nif)->exists()) {
+                throw ValidationException::withMessages(['form' => 'La cuenta '.$cuenta.' ya se usa en la contabilidad.']);
+            }
+            Apunte::where('cliente_id', $c->id)->where('cuenta', $viejo)->update(['cuenta' => $cuenta]);
+            Cuenta::where('cliente_id', $c->id)->where('codigo', $viejo)->update(['codigo' => $cuenta]);
+        }
         $t = $tercero ? tap($tercero)->update($datos) : Tercero::create($datos);
         Auditoria::registrar('gestion.'.$clase, ($tercero ? 'Modificado: ' : 'Alta: ').$t->nombre.' ('.$t->cuenta.')', $t);
 

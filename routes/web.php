@@ -148,6 +148,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/pgc', [ContabilidadListadosController::class, 'pgc'])->name('pgc');
             Route::post('/pgc', [ContabilidadListadosController::class, 'guardarPgc'])->name('pgc.guardar');
             Route::delete('/pgc/{codigo}', [ContabilidadListadosController::class, 'borrarPgc'])->where('codigo', '\\d{9}')->name('pgc.borrar');
+            Route::post('/pgc/{codigo}/editar', [ContabilidadListadosController::class, 'editarPgc'])->where('codigo', '\\d{9}')->name('pgc.editar');
             Route::post('/pgc/{codigo}/reactivar', [ContabilidadListadosController::class, 'reactivarPgc'])->where('codigo', '\\d{9}')->name('pgc.reactivar');
             Route::get('/ejercicios', [ContabilidadController::class, 'ejercicios'])->name('ejercicios');
             Route::post('/ejercicios', [ContabilidadController::class, 'abrirEjercicio'])->name('ejercicios.abrir');

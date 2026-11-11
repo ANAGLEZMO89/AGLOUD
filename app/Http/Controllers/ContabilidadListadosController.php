@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Apunte;
 use App\Models\Asiento;
 use App\Models\Cuenta;
+use App\Models\Factura;
 use App\Models\Tercero;
 use App\Services\Auditoria;
 use App\Services\Contabilidad;
 use App\Support\Formato;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Listados contables (cuenta de explotación, listado diario, listado mayor) y Plan General Contable
@@ -131,10 +133,10 @@ class ContabilidadListadosController extends ContabilidadController
         foreach (config('pgc') as $k => $n) {
             $k9 = Contabilidad::a9((string) $k);
             $o = $propias->get($k9);
-            $filas[$k9] = ['c' => $k9, 'n' => $n, 'tipo' => 'PGC', 'origen' => '', 'oculta' => (bool) $o?->oculta, 'usada' => isset($usadas[$k9]), 'propia' => false];
+            $filas[$k9] = ['c' => $k9, 'n' => $o && ! $o->oculta ? $o->nombre : $n, 'tipo' => 'PGC', 'origen' => $o && ! $o->oculta && $o->nombre !== $n ? 'Plan General Contable · nombre cambiado' : '', 'oculta' => (bool) $o?->oculta, 'usada' => isset($usadas[$k9]), 'propia' => false, 'base' => true];
         }
         foreach ($propias as $k => $o) {
-            if ($o->oculta && isset($filas[$k])) {
+            if (isset($filas[$k]) && ! empty($filas[$k]['base'])) {
                 continue;
             }
             $origen = match (true) {
@@ -142,16 +144,17 @@ class ContabilidadListadosController extends ContabilidadController
                 str_starts_with($k, '430') => 'Cliente'.($o->nif ? ' · '.$o->nif : ''),
                 default => 'Subcuenta propia',
             };
-            $filas[$k] = ['c' => $k, 'n' => $o->nombre, 'tipo' => 'Subcuenta', 'origen' => $origen, 'oculta' => (bool) $o->oculta, 'usada' => isset($usadas[$k]), 'propia' => true];
+            $filas[$k] = ['c' => $k, 'n' => $o->nombre, 'tipo' => 'Subcuenta', 'origen' => $origen, 'oculta' => (bool) $o->oculta, 'usada' => isset($usadas[$k]), 'propia' => true, 'base' => false];
         }
         foreach ($terceros as $k => $t) {
-            $filas[$k] = ['c' => $k, 'n' => $t->nombre, 'tipo' => 'Subcuenta', 'origen' => ($t->clase === 'proveedor' ? 'Proveedor' : 'Acreedor').($t->nif ? ' · '.$t->nif : ''), 'oculta' => false, 'usada' => isset($usadas[$k]), 'propia' => false, 'tercero' => $t->clase];
+            $filas[$k] = ['c' => $k, 'n' => $t->nombre, 'tipo' => 'Subcuenta', 'origen' => (['proveedor' => 'Proveedor', 'acreedor' => 'Acreedor', 'cliente' => 'Cliente'][$t->clase] ?? 'Tercero').($t->nif ? ' · '.$t->nif : ''),
+                'oculta' => (bool) $propias->get($k)?->oculta, 'usada' => isset($usadas[$k]), 'propia' => false, 'base' => false, 'tercero' => $t->clase];
         }
         ksort($filas, SORT_STRING);
         $q = mb_strtolower(trim((string) $request->query('q', '')));
         $grupo = preg_match('/^[1-7]$/', (string) $request->query('g')) ? (string) $request->query('g') : '';
         $ver = in_array($request->query('ver'), ['propias', 'bajas'], true) ? $request->query('ver') : 'todas';
-        $lista = collect($filas)->filter(fn ($f) => ($grupo === '' || $f['c'][0] === $grupo)
+        $lista = collect($filas)->map(fn ($f) => ['c' => (string) $f['c']] + $f)->filter(fn ($f) => ($grupo === '' || $f['c'][0] === $grupo)
             && ($q === '' || str_contains($f['c'], preg_replace('/\D/', '', $q) ?: '#') || str_contains(mb_strtolower($f['n'].' '.$f['origen']), $q))
             && ($ver === 'todas' ? ! $f['oculta'] : ($ver === 'bajas' ? $f['oculta'] : $f['tipo'] === 'Subcuenta' && ! $f['oculta'])))->values();
         if ($request->query('exportar') === 'csv') {
@@ -159,7 +162,8 @@ class ContabilidadListadosController extends ContabilidadController
         }
 
         return view('contabilidad.pgc', $b + ['lista' => $lista, 'q' => (string) $request->query('q', ''), 'grupo' => $grupo, 'ver' => $ver, 'total' => count($filas),
-            'nProp' => collect($filas)->where('tipo', 'Subcuenta')->count(), 'nBajas' => collect($filas)->where('oculta', true)->count(), 'nuevo' => $request->boolean('nuevo')]);
+            'nProp' => collect($filas)->where('tipo', 'Subcuenta')->count(), 'nBajas' => collect($filas)->where('oculta', true)->count(), 'nuevo' => $request->boolean('nuevo'),
+            'editarPgc' => preg_match('/^\d{9}$/', (string) $request->query('editar')) ? (string) $request->query('editar') : null]);
     }
 
     public function guardarPgc(Request $request): RedirectResponse
@@ -187,23 +191,98 @@ class ContabilidadListadosController extends ContabilidadController
         return redirect()->route('contabilidad.pgc', ['q' => substr($cod, 0, 3)])->with('ok', 'Cuenta '.$cod.' · '.trim($d['nombre']).' añadida al PGC de '.$c->nombre.'.');
     }
 
+    private function esBase(string $codigo): bool
+    {
+        return in_array($codigo, array_map(fn ($k) => Contabilidad::a9((string) $k), array_keys(config('pgc'))), true);
+    }
+
+    /** Modificar una cuenta: el nombre siempre; el código, en las subcuentas de la empresa (sus apuntes pasan a la nueva) */
+    public function editarPgc(Request $request, string $codigo): RedirectResponse
+    {
+        $c = $this->ctx($request);
+        abort_unless($c && preg_match('/^\d{9}$/', $codigo), 404);
+        $d = $request->validate(['nombre' => ['required', 'string', 'max:255'], 'codigo' => ['nullable', 'string', 'max:12']], ['nombre.required' => 'Indica el nombre de la cuenta.']);
+        $nombre = trim($d['nombre']);
+        $nuevo = ! empty($d['codigo']) ? $this->normaliza((string) $d['codigo']) : $codigo;
+        $base = $this->esBase($codigo);
+        $t = Tercero::where('cliente_id', $c->id)->where('cuenta', $codigo)->first();
+        $cta = Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->first();
+        $volver = fn () => redirect()->route('contabilidad.pgc', ['q' => substr($codigo, 0, 3), 'editar' => $codigo])->withInput();
+        if (! $base && ! $t && ! $cta) {
+            abort(404);
+        }
+        if ($nuevo !== $codigo) {
+            if ($base) {
+                return $volver()->withErrors(['pgcEd' => 'Las cuentas del Plan General Contable mantienen su código; solo se les puede cambiar el nombre.']);
+            }
+            if (! preg_match('/^\d{9}$/', $nuevo) || ! Contabilidad::existeEnPgc($nuevo)) {
+                return $volver()->withErrors(['pgcEd' => 'El código nuevo tiene que tener 9 dígitos y colgar de una cuenta del Plan General Contable.']);
+            }
+            if ($this->esBase($nuevo) || Cuenta::where('cliente_id', $c->id)->where('codigo', $nuevo)->exists() || Tercero::where('cliente_id', $c->id)->where('cuenta', $nuevo)->exists() || Apunte::where('cliente_id', $c->id)->where('cuenta', $nuevo)->exists()) {
+                return $volver()->withErrors(['pgcEd' => 'La cuenta '.$nuevo.' ya existe o tiene movimientos.']);
+            }
+            if ($t && substr($nuevo, 0, 3) !== substr($codigo, 0, 3)) {
+                return $volver()->withErrors(['pgcEd' => 'La cuenta de un '.mb_strtolower(Tercero::CLASES[$t->clase][1] ?? 'tercero').' tiene que seguir empezando por '.substr($codigo, 0, 3).'.']);
+            }
+            $cerrado = Apunte::where('apuntes.cliente_id', $c->id)->where('apuntes.cuenta', $codigo)->join('asientos', 'asientos.id', '=', 'apuntes.asiento_id')->join('ejercicios', 'ejercicios.id', '=', 'asientos.ejercicio_id')
+                ->where('ejercicios.estado', 'Cerrado')->exists();
+            if ($cerrado) {
+                return $volver()->withErrors(['pgcEd' => 'La cuenta '.$codigo.' tiene apuntes en un ejercicio cerrado: no se puede cambiar su código. Reabre el ejercicio o cambia solo el nombre.']);
+            }
+        }
+        DB::transaction(function () use ($c, $codigo, $nuevo, $nombre, $base, $t, $cta) {
+            if ($nuevo !== $codigo) {
+                Apunte::where('cliente_id', $c->id)->where('cuenta', $codigo)->update(['cuenta' => $nuevo]);
+            }
+            if ($t) {
+                $t->update(['cuenta' => $nuevo, 'nombre' => $nombre]);
+            }
+            if ($cta) {
+                $cta->update(['codigo' => $nuevo, 'nombre' => $nombre]);
+            } elseif ($base) {
+                if ($nombre !== Contabilidad::nombre($codigo)) {
+                    Cuenta::create(['cliente_id' => $c->id, 'codigo' => $codigo, 'nombre' => $nombre, 'oculta' => false]);
+                }
+            }
+            // Cuenta del PGC con el nombre original: no hace falta guardar nada
+            if ($base && $cta && $nombre === Contabilidad::nombre($codigo) && ! $cta->iban && ! $cta->nif && ! $cta->oculta) {
+                $cta->delete();
+            }
+        });
+        Auditoria::registrar('contabilidad.pgc', 'Cuenta '.$codigo.($nuevo !== $codigo ? ' → '.$nuevo : '').' modificada: '.$nombre, null, $c->id);
+
+        return redirect()->route('contabilidad.pgc', ['q' => substr($nuevo, 0, 3)])->with('ok', 'Cuenta '.$nuevo.' · '.$nombre.' guardada'.($nuevo !== $codigo ? ' (antes '.$codigo.'; sus apuntes se han pasado a la nueva)' : '').'.');
+    }
+
+    /**
+     * Eliminar: solo sin apuntes ni facturas (las del PGC se dan de baja). Con movimientos hay que cambiarla antes
+     * con «Modificar»: sus apuntes pasan a la cuenta nueva y se actualiza su cliente o proveedor.
+     */
     public function borrarPgc(Request $request, string $codigo): RedirectResponse
     {
         $c = $this->ctx($request);
         abort_unless($c && preg_match('/^\d{9}$/', $codigo), 404);
-        if (Apunte::where('cliente_id', $c->id)->where('cuenta', $codigo)->exists()) {
-            return back()->with('aviso', 'La cuenta '.$codigo.' tiene movimientos: no se puede eliminar.');
+        $usada = Apunte::where('cliente_id', $c->id)->where('cuenta', $codigo)->exists();
+        $t = Tercero::where('cliente_id', $c->id)->where('cuenta', $codigo)->first();
+        $base = $this->esBase($codigo);
+        $cta = Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->first();
+        $nombre = $t?->nombre ?? $cta?->nombre ?? Contabilidad::nombre($codigo) ?? $codigo;
+        // Con apuntes o facturas no se elimina: primero hay que cambiarla (Modificar) para que sus apuntes pasen a otra cuenta
+        if ($usada) {
+            return back()->with('aviso', 'La cuenta '.$codigo.' · '.$nombre.' tiene facturas o apuntes contabilizados: no se puede eliminar. Cámbiala antes con «Modificar» (sus apuntes pasan a la cuenta nueva y se actualiza su cliente o proveedor).');
         }
-        if ($t = Tercero::where('cliente_id', $c->id)->where('cuenta', $codigo)->first()) {
-            return back()->with('aviso', 'La cuenta '.$codigo.' es de '.$t->nombre.': elimínalo en Gestión › '.($t->clase === 'proveedor' ? 'Compras' : 'Gastos').'.');
+        if ($t && ($t->facturas()->exists() || ($t->clase === 'cliente' && $t->nif && Factura::where('cliente_id', $c->id)->where('receptor_nif', $t->nif)->exists()))) {
+            return back()->with('aviso', 'La cuenta '.$codigo.' es de '.$t->nombre.', que tiene facturas registradas: no se puede eliminar.');
         }
-        $base = in_array($codigo, array_map(fn ($k) => Contabilidad::a9((string) $k), array_keys(config('pgc'))), true);
         if ($base) {
-            Cuenta::updateOrCreate(['cliente_id' => $c->id, 'codigo' => $codigo], ['nombre' => Contabilidad::nombre($codigo) ?? $codigo, 'oculta' => true]);
-            $msg = 'Cuenta '.$codigo.' dada de baja en el PGC de '.$c->nombre.'. Puedes reactivarla en «Dadas de baja».';
+            Cuenta::updateOrCreate(['cliente_id' => $c->id, 'codigo' => $codigo], ['nombre' => $nombre, 'oculta' => true]);
+            $msg = 'Cuenta '.$codigo.' · '.$nombre.' dada de baja en el PGC de '.$c->nombre.'. Puedes reactivarla en «Dadas de baja».';
         } else {
-            Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->delete();
-            $msg = 'Subcuenta '.$codigo.' eliminada.';
+            DB::transaction(function () use ($c, $codigo, $t) {
+                $t?->delete();
+                Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->delete();
+            });
+            $msg = 'Cuenta '.$codigo.' · '.$nombre.' eliminada'.($t ? ' (y '.mb_strtolower(Tercero::CLASES[$t->clase][1] ?? 'tercero').' de Gestión)' : '').'.';
         }
         Auditoria::registrar('contabilidad.pgc', $msg, null, $c->id);
 
@@ -214,7 +293,11 @@ class ContabilidadListadosController extends ContabilidadController
     {
         $c = $this->ctx($request);
         abort_unless($c && preg_match('/^\d{9}$/', $codigo), 404);
-        Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->where('oculta', true)->delete();
+        $cta = Cuenta::where('cliente_id', $c->id)->where('codigo', $codigo)->where('oculta', true)->first();
+        if ($cta) {
+            $limpia = $this->esBase($codigo) && $cta->nombre === Contabilidad::nombre($codigo) && ! $cta->iban && ! $cta->nif;
+            $limpia ? $cta->delete() : $cta->update(['oculta' => false]);
+        }
         Auditoria::registrar('contabilidad.pgc', 'Cuenta '.$codigo.' reactivada', null, $c->id);
 
         return back()->with('ok', 'Cuenta '.$codigo.' reactivada.');

@@ -44,19 +44,35 @@
 
     <div>
       <div class="pgc-row pgc-head"><span>Cuenta</span><span>Nombre</span><span>Origen</span><span></span></div>
+      @if($errors->has('pgcEd'))<div class="ferr" style="margin:8px 0">{{ $errors->first('pgcEd') }}</div>@endif
       @forelse($lista as $f)
+        @php $ed = $editarPgc === (string) $f['c']; @endphp
         <div class="pgc-row {{ $f['tipo'] === 'PGC' && strlen(rtrim($f['c'], '0')) <= 3 ? 'pgc-base' : '' }}">
           <a class="mono" href="{{ route('contabilidad.mayor', ['c' => $f['c']]) }}" title="Ver el extracto" style="color:inherit;font-weight:600">{{ $f['c'] }}</a>
           <span class="ell">{{ $f['n'] }}</span>
           <span style="font-size:12px;color:#6A6A65" class="ell">{{ $f['origen'] ?: ($f['tipo'] === 'PGC' ? 'Plan General Contable' : '') }}{{ $f['usada'] ? ' · con movimientos' : '' }}</span>
-          <span style="text-align:right">
+          <span style="text-align:right;display:flex;gap:12px;justify-content:flex-end;align-items:center">
             @if($f['oculta'])
               <form method="POST" action="{{ route('contabilidad.pgc.reactivar', $f['c']) }}">@csrf<button class="lnk" type="submit" style="font-size:12.5px">Reactivar</button></form>
-            @elseif(! $f['usada'] && empty($f['tercero']))
-              <form method="POST" action="{{ route('contabilidad.pgc.borrar', $f['c']) }}" data-confirm="¿{{ $f['propia'] ? 'Eliminar' : 'Dar de baja' }} la cuenta {{ $f['c'] }} · {{ $f['n'] }}?">@csrf @method('DELETE')<button class="lnk red" type="submit" style="font-size:12.5px">{{ $f['propia'] ? 'Eliminar' : 'Dar de baja' }}</button></form>
+            @else
+              @unless($ed)<a class="lnk" href="{{ request()->fullUrlWithQuery(['editar' => $f['c']]) }}" style="font-size:12.5px">Modificar</a>@endunless
+              @if(! $f['usada'])
+                <form method="POST" action="{{ route('contabilidad.pgc.borrar', $f['c']) }}" data-confirm="{{ ! empty($f['base']) ? '¿Dar de baja la cuenta '.$f['c'].' · '.$f['n'].'?' : '¿Eliminar la cuenta '.$f['c'].' · '.$f['n'].'?'.(! empty($f['tercero']) ? ' También se elimina de Gestión.' : '') }}">@csrf @method('DELETE')<button class="lnk red" type="submit" style="font-size:12.5px">{{ ! empty($f['base']) ? 'Dar de baja' : 'Eliminar' }}</button></form>
+              @else
+                <span style="font-size:11.5px;color:#9A9A94" title="Tiene facturas o apuntes: cámbiala con «Modificar» antes de eliminarla">Con movimientos</span>
+              @endif
             @endif
           </span>
         </div>
+        @if($ed)
+          <form method="POST" action="{{ route('contabilidad.pgc.editar', $f['c']) }}" class="pgc-edit">
+            @csrf
+            <label class="lbl-s">Código @if(! empty($f['base']))<input class="inp mono" value="{{ $f['c'] }}" disabled title="Las cuentas del PGC mantienen su código">@else<input class="inp mono" name="codigo" value="{{ old('codigo', $f['c']) }}" maxlength="12">@endif</label>
+            <label class="lbl-s" style="flex:1;min-width:220px">Nombre<input class="inp" name="nombre" value="{{ old('nombre', $f['n']) }}" maxlength="255" required></label>
+            <div style="display:flex;gap:8px;align-items:flex-end"><a class="btn soft sm" href="{{ request()->fullUrlWithQuery(['editar' => null]) }}">Cancelar</a><button class="btn sm" type="submit">Guardar</button></div>
+            @if($f['usada'] && empty($f['base']))<span style="flex-basis:100%;font-size:12px;color:#6A6A65">Si cambias el código, todos sus apuntes pasan a la cuenta nueva.</span>@endif
+          </form>
+        @endif
       @empty
         <div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65">Ninguna cuenta coincide.</div>
       @endforelse

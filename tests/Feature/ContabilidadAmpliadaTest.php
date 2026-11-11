@@ -82,6 +82,49 @@ class ContabilidadAmpliadaTest extends TestCase
         $this->assertFalse(Cuenta::where('codigo', '572000007')->exists());
     }
 
+    public function test_modificar_y_eliminar_cuentas(): void
+    {
+        $this->en()->post(route('contabilidad.pgc.guardar'), ['codigo' => '572.7', 'nombre' => 'Banco Santander']);
+        $this->en()->post(route('contabilidad.apuntes.guardar'), ['fecha' => '2026-02-10', 'concepto' => 'Capital', 'l' => [['c' => '572000007', 'd' => '3000'], ['c' => '100', 'h' => '3000']]])->assertSessionHasNoErrors();
+        // Modificar nombre y código de una subcuenta con movimientos: sus apuntes pasan a la nueva
+        $this->en()->get(route('contabilidad.pgc', ['q' => '572', 'editar' => '572000007']))->assertOk()->assertSee('Si cambias el código');
+        $this->en()->post(route('contabilidad.pgc.editar', '572000007'), ['codigo' => '572000008', 'nombre' => 'Santander cuenta nómina'])->assertSessionHas('ok');
+        $this->assertSame('Santander cuenta nómina', Cuenta::where('codigo', '572000008')->value('nombre'));
+        $this->assertSame(1, Apunte::where('cuenta', '572000008')->count());
+        $this->assertSame(0, Apunte::where('cuenta', '572000007')->count());
+        // Código ocupado o fuera del PGC
+        $this->en()->post(route('contabilidad.pgc.editar', '572000008'), ['codigo' => '100000000', 'nombre' => 'X'])->assertSessionHasErrors('pgcEd');
+        // Cuenta del PGC: solo el nombre
+        $this->en()->post(route('contabilidad.pgc.editar', '100000000'), ['codigo' => '100000001', 'nombre' => 'X'])->assertSessionHasErrors('pgcEd');
+        $this->en()->post(route('contabilidad.pgc.editar', '100000000'), ['nombre' => 'Capital social suscrito'])->assertSessionHas('ok');
+        $this->assertSame('Capital social suscrito', Contabilidad::nombre('100000000', Contabilidad::propias($this->a)));
+        $this->en()->get(route('contabilidad.pgc', ['q' => '100']))->assertSee('Capital social suscrito');
+        $this->en()->get(route('contabilidad.pgc', ['g' => '5']))->assertSee('572000008')->assertDontSee('100000000');
+        // Con movimientos no se elimina: hay que cambiarla antes
+        $this->en()->delete(route('contabilidad.pgc.borrar', '572000008'))->assertSessionHas('aviso');
+        $this->assertTrue(Cuenta::where('codigo', '572000008')->exists());
+        $this->en()->get(route('contabilidad.pgc', ['q' => '572']))->assertSee('Con movimientos');
+        // Cuenta del PGC sin movimientos: baja y reactivación
+        $this->en()->delete(route('contabilidad.pgc.borrar', '629000000'))->assertSessionHas('ok');
+        $this->en()->post(route('contabilidad.pgc.reactivar', '629000000'))->assertSessionHas('ok');
+        $this->assertFalse(Cuenta::where('codigo', '629000000')->exists());
+        // Proveedor sin facturas: modificar y eliminar desde el PGC
+        $t = Tercero::create(['cliente_id' => $this->a->id, 'clase' => 'proveedor', 'cuenta' => '400000001', 'nombre' => 'Papelería', 'forma_pago' => 'Transferencia', 'pago_dias' => 30]);
+        $this->en()->post(route('contabilidad.pgc.editar', '400000001'), ['codigo' => '410000001', 'nombre' => 'X'])->assertSessionHasErrors('pgcEd');
+        $this->en()->post(route('contabilidad.pgc.editar', '400000001'), ['codigo' => '400000005', 'nombre' => 'Papelería del Sur SL'])->assertSessionHas('ok');
+        $this->assertSame('400000005', $t->fresh()->cuenta);
+        $this->assertSame('Papelería del Sur SL', $t->fresh()->nombre);
+        $this->en()->delete(route('contabilidad.pgc.borrar', '400000005'))->assertSessionHas('ok');
+        $this->assertNull(Tercero::find($t->id));
+        // Cambiar la cuenta desde la ficha del proveedor en Gestión también mueve sus apuntes
+        $p = Tercero::create(['cliente_id' => $this->a->id, 'clase' => 'proveedor', 'cuenta' => '400000002', 'nombre' => 'Suministros', 'forma_pago' => 'Transferencia', 'pago_dias' => 30]);
+        $this->en()->post(route('contabilidad.apuntes.guardar'), ['fecha' => '2026-04-10', 'concepto' => 'Compra', 'l' => [['c' => '600', 'd' => '50'], ['c' => '400000002', 'h' => '50']]])->assertSessionHasNoErrors();
+        $this->en()->delete(route('contabilidad.pgc.borrar', '400000002'))->assertSessionHas('aviso');
+        $this->en()->post(route('proveedores.update', $p), ['nombre' => 'Suministros', 'forma_pago' => 'Transferencia', 'pago_dias' => '30', 'cuenta_modo' => 'manual', 'cuenta' => '400000009'])->assertSessionHasNoErrors();
+        $this->assertSame(1, Apunte::where('cuenta', '400000009')->count());
+        $this->assertSame(0, Apunte::where('cuenta', '400000002')->count());
+    }
+
     public function test_apunte_de_nomina_con_documento_y_vista_guardada(): void
     {
         $this->en()->get(route('contabilidad.apuntes'))->assertOk()->assertSee('Plantillas predefinidas')->assertSee('Pago de seguros sociales')->assertSee('Importar desde nóminas');
