@@ -704,3 +704,4 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .side-area.cli{background:#C8F031;color:#0B0B0B}.side-area.cli small{color:#3C3C3C}.side-area.cli span{color:#0B0B0B;text-decoration:underline}
 .side-area:hover{filter:brightness(1.05)}
 .pgc-edit{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px;margin:4px 0 8px;border-radius:12px;border:1.5px solid #0B0B0B;background:#fff}
+.pgc-row .lnk{white-space:nowrap}
