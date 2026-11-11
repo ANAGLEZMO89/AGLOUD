@@ -6,7 +6,8 @@
 @endphp
 @section('content')
 <div class="page" style="gap:16px">
-  <div class="page-h"><div class="t"><span class="crumb">{{ $grupo }} · {{ $nombre }}</span><h1 class="ttl">{{ $nombre }}</h1></div></div>
+  <div class="page-h"><div class="t"><span class="crumb">{{ $grupo }} · {{ $nombre }}</span><h1 class="ttl">{{ $nombre }}</h1></div>@if($ctx ?? null)@include('partials.empresa', ['c' => $ctx, 'volver' => '/parametros/'.$modulo])@endif</div>
+  @if($ctx ?? null)<div class="msg" style="font-weight:500">Parámetros {{ $ctx->es_despacho ? 'del despacho' : 'de '.$ctx->nombre }}: solo se aplican a {{ $ctx->es_despacho ? 'tu despacho' : 'esta empresa' }}. Cada empresa tiene los suyos.</div>@endif
   @if($modulo === 'crm')
     <div class="chipbar" style="border-radius:11px;align-self:flex-start">
       @foreach([['embudo', 'Embudo'], ['pres', 'Presupuestos'], ['agenda', 'Agenda']] as [$id, $l])<a style="padding:7px 14px;border-radius:8px" href="{{ route('crm.index', $id === 'embudo' ? [] : ['tab' => $id]) }}">{{ $l }}</a>@endforeach

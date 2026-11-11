@@ -92,7 +92,8 @@ class Plazos
     /** @return array<string,string> fecha => nombre */
     public static function festivos(int $y): array
     {
-        $par = Parametros::get('notificaciones');
+        // Los plazos de las notificaciones los lleva el despacho: se usan sus festivos
+        $par = Parametros::get('notificaciones', Parametros::despachoId());
         $ca = (string) $par['comunidad'];
         $extra = array_merge((array) config('agcloud.festivos_extra', []), array_map(fn ($f) => (string) ($f['fecha'] ?? ''), (array) $par['festivos']));
         $key = $y.'|'.$ca.'|'.implode(',', $extra);

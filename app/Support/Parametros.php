@@ -3,12 +3,13 @@
 namespace App\Support;
 
 use App\Models\Ajuste;
+use App\Models\Cliente;
 use Throwable;
 
 /**
  * Parámetros de configuración de cada módulo (pestaña «Parámetros»).
  * Valores por defecto en config/agcloud.php; lo que guarda la administración
- * se conserva cifrado en la tabla ajustes («param.<módulo>»).
+ * se conserva cifrado en la tabla ajustes, por empresa («param.<módulo>.e<id>»): el despacho y cada cliente tienen los suyos.
  */
 class Parametros
 {
@@ -65,32 +66,57 @@ class Parametros
         };
     }
 
-    public static function get(string $m): array
+    /** Empresa cuyos parámetros se usan: la elegida en el Escritorio o, si no hay, el despacho */
+    public static function empresaId(): ?int
     {
-        if (isset(self::$cache[$m])) {
-            return self::$cache[$m];
+        try {
+            $ctx = request()?->attributes->get('ctx');
+
+            return $ctx?->id ?? self::despachoId();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    public static function despachoId(): ?int
+    {
+        try {
+            return Cliente::where('es_despacho', true)->value('id');
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** Parámetros de un módulo de la empresa elegida (cada empresa tiene los suyos) */
+    public static function get(string $m, ?int $empresa = null): array
+    {
+        $empresa ??= self::empresaId();
+        $k = $m.'|'.$empresa;
+        if (isset(self::$cache[$k])) {
+            return self::$cache[$k];
         }
         $guardado = [];
         try {
-            $guardado = json_decode((string) Ajuste::get('param.'.$m, ''), true) ?: [];
+            $guardado = $empresa ? (json_decode((string) Ajuste::get('param.'.$m.'.e'.$empresa, ''), true) ?: []) : [];
+            // El despacho conserva los parámetros que se guardaron antes de separarlos por empresa
+            if (! $guardado && (! $empresa || $empresa === self::despachoId())) {
+                $guardado = json_decode((string) Ajuste::get('param.'.$m, ''), true) ?: [];
+                if ($m === 'notificaciones' && ! $guardado) {
+                    $guardado = json_decode((string) Ajuste::get('avisos_notificaciones', ''), true) ?: [];
+                }
+            }
         } catch (Throwable) {
             // Sin base de datos (instalación): valores por defecto
         }
-        // Compatibilidad: avisos guardados antes de existir esta pestaña
-        if ($m === 'notificaciones' && ! $guardado) {
-            try {
-                $guardado = json_decode((string) Ajuste::get('avisos_notificaciones', ''), true) ?: [];
-            } catch (Throwable) {
-            }
-        }
 
-        return self::$cache[$m] = array_merge(self::defecto($m), array_intersect_key($guardado, self::defecto($m)));
+        return self::$cache[$k] = array_merge(self::defecto($m), array_intersect_key($guardado, self::defecto($m)));
     }
 
-    public static function put(string $m, array $v): void
+    public static function put(string $m, array $v, ?int $empresa = null): void
     {
-        Ajuste::put('param.'.$m, json_encode(array_intersect_key($v, self::defecto($m)), JSON_UNESCAPED_UNICODE));
-        unset(self::$cache[$m]);
+        $empresa ??= self::empresaId();
+        Ajuste::put($empresa ? 'param.'.$m.'.e'.$empresa : 'param.'.$m, json_encode(array_intersect_key($v, self::defecto($m)), JSON_UNESCAPED_UNICODE));
+        self::$cache = [];
         Plazos::limpiarCache();
     }
 

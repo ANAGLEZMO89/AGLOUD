@@ -33,7 +33,8 @@ class ParametrosController extends Controller
         abort_unless($request->user()->esAdmin(), 403, 'Solo la administración del despacho puede cambiar los parámetros.');
         $v = $this->{'datos'.ucfirst($modulo)}($request);
         Parametros::put($modulo, $v);
-        Auditoria::registrar('parametros', 'Parámetros guardados: '.Parametros::MODULOS[$modulo][0]);
+        $ctx = $request->attributes->get('ctx');
+        Auditoria::registrar('parametros', 'Parámetros guardados: '.Parametros::MODULOS[$modulo][0].($ctx ? ' · '.$ctx->nombre : ''), null, $ctx?->id);
 
         return redirect()->route('parametros', $modulo)->with('ok', 'Parámetros de '.Parametros::MODULOS[$modulo][0].' guardados.');
     }

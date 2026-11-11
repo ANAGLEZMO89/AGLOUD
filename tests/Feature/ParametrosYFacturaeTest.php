@@ -131,7 +131,16 @@ class ParametrosYFacturaeTest extends TestCase
         $this->actingAs($this->admin)->post(route('parametros.guardar', 'clientes'), ['periodicidad' => 'Trimestral', 'iva' => '21', 'forma_cobro' => 'Transferencia', 'concepto' => 'Asesoría'])->assertRedirect();
         Parametros::limpiar();
         $this->assertSame(['Web', 'Colegio profesional'], Parametros::get('crm')['origenes']);
-        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('documentos.index'))->assertSee('Caducan en 30 días')->assertSee('de 4 GB');
-        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('crm.index', ['nueva' => 1]))->assertSee('Colegio profesional');
+        $desp = Cliente::despacho();
+        $this->actingAs($this->as)->withSession(['cliente_activo' => $desp->id])->get(route('documentos.index'))->assertSee('Caducan en 30 días')->assertSee('de 4 GB');
+        $this->actingAs($this->as)->withSession(['cliente_activo' => $desp->id])->get(route('crm.index', ['nueva' => 1]))->assertSee('Colegio profesional');
+        // Cada empresa tiene sus parámetros: los del despacho no se aplican al cliente
+        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('documentos.index'))->assertSee('de 5 GB');
+        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('crm.index', ['nueva' => 1]))->assertDontSee('Colegio profesional');
+        $this->actingAs($this->admin)->withSession(['cliente_activo' => $this->a->id])->post(route('parametros.guardar', 'documentos'), ['cupo_mb' => 1024, 'aviso_caducidad' => 15])->assertRedirect();
+        Parametros::limpiar();
+        $this->assertSame(1024, Parametros::get('documentos', $this->a->id)['cupo_mb']);
+        $this->assertSame(4096, Parametros::get('documentos', $desp->id)['cupo_mb']);
+        $this->actingAs($this->admin)->withSession(['cliente_activo' => $this->a->id])->get(route('parametros', 'documentos'))->assertSee('Parámetros de '.$this->a->nombre);
     }
 }
