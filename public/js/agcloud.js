@@ -388,6 +388,28 @@
     });
   });
 
+  // ---------- Gestión: proveedores, acreedores y facturas recibidas ----------
+  $$('select[data-nav]').forEach(function (s) { on(s, 'change', function () { if (s.value) window.location.href = s.value; }); });
+  var terForm = $('[data-tercero-form]');
+  if (terForm) {
+    var cta = $('[data-cta]', terForm);
+    var modoCta = function () { var m = $('[data-cta-modo]:checked', terForm); var auto = !m || m.value === 'auto'; cta.readOnly = auto; cta.style.background = auto ? '#F4F4F0' : '#fff'; };
+    $$('[data-cta-modo]', terForm).forEach(function (x) { on(x, 'change', modoCta); });
+    modoCta();
+  }
+  var recForm = $('[data-rec-form]');
+  if (recForm) {
+    var ter = {}; try { ter = JSON.parse(recForm.getAttribute('data-ter') || '{}'); } catch (e) {}
+    var calcRec = function () {
+      var b = pnum(($('[data-rec-base]', recForm) || {}).value), iv = pnum(($('[data-rec-iva]', recForm) || {}).value), rt = pnum(($('[data-rec-ret]', recForm) || {}).value || 0);
+      var cu = Math.round(b * iv) / 100, rete = Math.round(b * rt) / 100, out = $('[data-rec-tot]', recForm);
+      if (out) out.textContent = 'Total ' + eu(b + cu) + ' €' + (rete ? ' · retención ' + eu(rete) + ' € · a pagar ' + eu(b + cu - rete) + ' €' : '');
+    };
+    var terSel = $('[data-rec-ter]', recForm);
+    on(terSel, 'change', function () { var t = ter[terSel.value]; if (!t) return; var r = $('[data-rec-ret]', recForm); if (r) r.value = String(t.ret); var fp = $('[data-rec-fp]', recForm); if (fp && t.fp) fp.value = t.fp; calcRec(); });
+    on(recForm, 'input', calcRec); on(recForm, 'change', calcRec); calcRec();
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

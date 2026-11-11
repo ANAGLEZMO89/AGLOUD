@@ -18,6 +18,18 @@ class Parametros
         'notificaciones' => ['Notificaciones', 'Comunicación', 'notificaciones.index'],
         'documentos' => ['Documentos', 'Comunicación', 'documentos.index'],
         'crm' => ['CRM', 'Áreas', 'crm.index'],
+        'proveedores' => ['Proveedores', 'Gestión', 'proveedores.index'],
+        'acreedores' => ['Acreedores', 'Gestión', 'acreedores.index'],
+        'calendario' => ['Calendario', 'Gestión', 'calendario'],
+        'tareas' => ['Tareas y horario', 'Gestión', 'tareas.index'],
+    ];
+
+    /** Pestañas de cada módulo (además de «Parámetros») */
+    public const PESTANAS = [
+        'clientes' => [['Clientes', 'clientes.index'], ['Facturas de clientes', 'clientes.facturas']],
+        'proveedores' => [['Proveedores', 'proveedores.index'], ['Facturas de proveedores', 'proveedores.facturas']],
+        'acreedores' => [['Acreedores', 'acreedores.index'], ['Facturas de acreedores', 'acreedores.facturas']],
+        'tareas' => [['Tareas', 'tareas.index'], ['Horario', 'tareas.horario']],
     ];
 
     private static array $cache = [];
@@ -35,6 +47,10 @@ class Parametros
             'crm' => ['origenes' => ['Web', 'Recomendación', 'Llamada', 'Feria', 'Cliente actual', 'Redes sociales'],
                 'probabilidades' => ['Nuevo' => 10, 'Contactado' => 25, 'Presupuesto enviado' => 50, 'Negociación' => 75, 'Ganado' => 100, 'Perdido' => 0],
                 'validez' => 30, 'pie_presupuesto' => 'Para aceptar el presupuesto, devuélvalo firmado o confírmelo por escrito antes de la fecha de validez.'],
+            'proveedores' => ['forma_pago' => 'Transferencia', 'pago_dias' => 30],
+            'acreedores' => ['forma_pago' => 'Domiciliación SEPA', 'pago_dias' => 0, 'tipo' => 'Servicios', 'retencion' => 0],
+            'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true],
+            'tareas' => ['jornada_semanal' => 40, 'jornada_diaria' => 8, 'vacaciones' => 22, 'prioridad' => 'Media'],
             default => [],
         };
     }

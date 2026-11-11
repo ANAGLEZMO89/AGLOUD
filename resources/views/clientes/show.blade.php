@@ -103,6 +103,23 @@
   @endif
 
   {{-- OBLIGACIONES / TRABAJADORES / EXPEDIENTES (próximas fases) --}}
+  @if($tab === 'fact')
+  <div class="card pad16" style="gap:6px;overflow-x:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:6px"><span style="font-size:13px;color:#6A6A65">Facturas que el despacho ha emitido a este cliente. Pendiente de cobro: <b class="mono" style="color:#0B0B0B">{{ Formato::eur($facturas->where('estado', 'Emitida')->where('cobrada', false)->sum('total')) }}</b></span></div>
+    <div class="fcl-cols" style="min-width:760px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65;padding:8px 0;border-bottom:1px solid #E6E6E0"><span>Nº</span><span>Fecha</span><span>Concepto</span><span style="text-align:right">Base</span><span style="text-align:right">IVA</span><span style="text-align:right">Total</span><span>Vence</span><span>Estado</span></div>
+    @forelse($facturas as $f)
+      @php [$st, $bg, $fg] = $f->estadoChip(); @endphp
+      <div class="fcl-cols" style="min-width:760px;padding:10px 0;border-bottom:1px solid #F1F1EC;font-size:13.5px">
+        <span class="mono" style="font-size:12.5px;font-weight:600">{{ $f->num }}</span><span class="mono" style="font-size:12.5px">{{ Formato::fecha($f->fecha) }}</span><span class="ell c3">{{ $f->lineas[0]['d'] ?? '' }}</span>
+        <span class="mono" style="text-align:right">{{ Formato::num($f->base) }}</span><span class="mono" style="text-align:right">{{ Formato::num($f->cuota) }}</span><span class="mono" style="text-align:right;font-weight:700">{{ Formato::num($f->total) }}</span>
+        <span class="mono" style="font-size:12.5px">{{ Formato::fecha($f->vencimiento() ?? $f->fecha) }}</span><span><span style="font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:10px;background:{{ $bg }};color:{{ $fg }}">{{ $st }}</span></span>
+      </div>
+    @empty
+      <div class="empty"><b>Sin facturas</b><span>Las facturas que el despacho emita a este cliente (con su NIF) aparecerán aquí.</span></div>
+    @endforelse
+  </div>
+  @endif
+
   @if($tab === 'exp')
   <div class="card pad16" style="gap:6px">
     @forelse($expedientes as $x)

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Oportunidad;
+use App\Models\Tarea;
+use App\Models\Tercero;
 use App\Services\Auditoria;
 use App\Support\Formato;
 use App\Support\Parametros;
@@ -106,6 +108,36 @@ class ParametrosController extends Controller
         }
 
         return ['portal_defecto' => $r->boolean('portal_defecto'), 'plantillas' => $pl];
+    }
+
+    private function datosProveedores(Request $r): array
+    {
+        $d = $r->validate(['forma_pago' => ['required', Rule::in(TerceroController::PAGOS)], 'pago_dias' => ['required', Rule::in(['0', '15', '30', '45', '60', '90'])]]);
+
+        return ['forma_pago' => $d['forma_pago'], 'pago_dias' => (int) $d['pago_dias']];
+    }
+
+    private function datosAcreedores(Request $r): array
+    {
+        $d = $r->validate(['forma_pago' => ['required', Rule::in(TerceroController::PAGOS)], 'pago_dias' => ['required', Rule::in(['0', '15', '30', '45', '60', '90'])],
+            'tipo' => ['required', Rule::in(Tercero::TIPOS_ACREEDOR)], 'retencion' => ['required', Rule::in(['0', '7', '15', '19'])]]);
+
+        return ['forma_pago' => $d['forma_pago'], 'pago_dias' => (int) $d['pago_dias'], 'tipo' => $d['tipo'], 'retencion' => (int) $d['retencion']];
+    }
+
+    private function datosCalendario(Request $r): array
+    {
+        $r->validate(['vista' => ['required', Rule::in(['mes', 'agenda'])]]);
+
+        return ['vista' => $r->input('vista'), 'notificaciones' => $r->boolean('notificaciones'), 'expedientes' => $r->boolean('expedientes'), 'tareas' => $r->boolean('tareas'), 'festivos' => $r->boolean('festivos')];
+    }
+
+    private function datosTareas(Request $r): array
+    {
+        $d = $r->validate(['jornada_semanal' => ['required', 'numeric', 'min:1', 'max:60'], 'jornada_diaria' => ['required', 'numeric', 'min:1', 'max:12'],
+            'vacaciones' => ['required', 'integer', 'min:0', 'max:60'], 'prioridad' => ['required', Rule::in(array_keys(Tarea::PRIORIDADES))]]);
+
+        return ['jornada_semanal' => (float) $d['jornada_semanal'], 'jornada_diaria' => (float) $d['jornada_diaria'], 'vacaciones' => (int) $d['vacaciones'], 'prioridad' => $d['prioridad']];
     }
 
     private function datosCrm(Request $r): array

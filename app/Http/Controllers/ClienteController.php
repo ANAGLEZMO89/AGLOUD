@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Cliente;
+use App\Models\Factura;
 use App\Models\User;
 use App\Services\AccesosPortal;
 use App\Services\Auditoria;
@@ -93,7 +94,7 @@ class ClienteController extends Controller
         $tab = (string) $request->query('tab', 'resumen');
         $docs = $c->documentos()->gestor()->vivos()->orderByDesc('fecha')->orderBy('nombre');
         $nDocs = (clone $docs)->count();
-        $tabs = [['resumen', 'Resumen', null], ['datos', 'Datos fiscales', null], ['obl', 'Obligaciones', null], ['trab', 'Trabajadores', null], ['docs', 'Documentos', $nDocs ?: null], ['exp', 'Expedientes', $c->expedientes()->where('estado', '!=', 'Cerrado')->count() ?: null], ['alta', 'Datos de alta', null], ['accesos', 'Accesos al portal', $c->usuarios()->count() ?: null]];
+        $tabs = [['resumen', 'Resumen', null], ['datos', 'Datos fiscales', null], ['obl', 'Obligaciones', null], ['trab', 'Trabajadores', null], ['docs', 'Documentos', $nDocs ?: null], ['fact', 'Facturas', $this->facturasDespacho($c)->count() ?: null], ['exp', 'Expedientes', $c->expedientes()->where('estado', '!=', 'Cerrado')->count() ?: null], ['alta', 'Datos de alta', null], ['accesos', 'Accesos al portal', $c->usuarios()->count() ?: null]];
 
         $actividad = AuditLog::where('cliente_id', $c->id)->with('user')->latest('created_at')->limit(6)->get();
 
@@ -102,10 +103,19 @@ class ClienteController extends Controller
             'docs' => $tab === 'docs' ? $docs->limit(200)->get() : collect(),
             'porRevisar' => $c->documentos()->gestor()->vivos()->where('por_revisar', true)->orderByDesc('created_at')->limit(5)->get(),
             'actividad' => $actividad,
+            'facturas' => $tab === 'fact' ? $this->facturasDespacho($c)->orderByDesc('fecha')->orderByDesc('id')->limit(300)->get() : collect(),
             'expedientes' => $tab === 'exp' ? $c->expedientes()->with('responsable')->orderByRaw("estado = 'Cerrado'")->orderByDesc('id')->get() : collect(),
             'usuarios' => $tab === 'accesos' ? $c->usuarios()->orderBy('name')->get() : collect(),
             'nRevisar' => EscritorioController::nRevisar(),
         ];
+    }
+
+    /** Facturas que el despacho ha emitido a este cliente (por su NIF) */
+    private function facturasDespacho(Cliente $c)
+    {
+        $desp = Cliente::where('es_despacho', true)->value('id');
+
+        return Factura::where('cliente_id', $desp ?? 0)->where('receptor_nif', $c->nif ?: '#sin-nif#');
     }
 
     public static function estadoCert(?string $fCad): array

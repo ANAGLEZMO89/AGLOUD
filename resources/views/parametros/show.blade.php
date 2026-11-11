@@ -109,6 +109,43 @@
       </div>
     @endif
 
+    @if(in_array($modulo, ['proveedores', 'acreedores'], true))
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Valores por defecto de los {{ $modulo }} nuevos</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:12px">
+          <label class="lbl-s">Forma de pago<select class="sel" name="forma_pago">@foreach(\App\Http\Controllers\TerceroController::PAGOS as $x)<option @selected($p['forma_pago'] === $x)>{{ $x }}</option>@endforeach</select></label>
+          <label class="lbl-s">Vencimiento<select class="sel" name="pago_dias">@foreach(['0' => 'Al contado', '15' => '15 días', '30' => '30 días', '45' => '45 días', '60' => '60 días', '90' => '90 días'] as $k => $l)<option value="{{ $k }}" @selected((string) $p['pago_dias'] === (string) $k)>{{ $l }}</option>@endforeach</select></label>
+          @if($modulo === 'acreedores')
+            <label class="lbl-s">Tipo<select class="sel" name="tipo">@foreach(\App\Models\Tercero::TIPOS_ACREEDOR as $x)<option @selected($p['tipo'] === $x)>{{ $x }}</option>@endforeach</select></label>
+            <label class="lbl-s">Retención IRPF %<select class="sel" name="retencion">@foreach(['0', '7', '15', '19'] as $x)<option @selected((string) $p['retencion'] === $x)>{{ $x }}</option>@endforeach</select></label>
+          @endif
+        </div>
+        <span class="hint muted">La cuenta contable se asigna sola (400… proveedores, 410… acreedores) o a mano en cada ficha.</span>
+      </div>
+    @endif
+
+    @if($modulo === 'calendario')
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Qué se muestra en el calendario</span>
+        <label class="lbl-s" style="max-width:260px">Vista al entrar<select class="sel" name="vista"><option value="mes" @selected($p['vista'] === 'mes')>Mes</option><option value="agenda" @selected($p['vista'] === 'agenda')>Agenda</option></select></label>
+        @foreach(['notificaciones' => 'Vencimientos y caducidades de notificaciones', 'expedientes' => 'Fechas límite de expedientes', 'tareas' => 'Tareas con fecha', 'festivos' => 'Festivos (los mismos que usa el cálculo de plazos)'] as $k => $l)
+          <label class="chk" style="gap:10px"><input type="checkbox" name="{{ $k }}" value="1" @checked($p[$k]) style="width:18px;height:18px;accent-color:#0B0B0B"><span style="font-size:13.5px">{{ $l }}</span></label>
+        @endforeach
+      </div>
+    @endif
+
+    @if($modulo === 'tareas')
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Jornada y tareas del despacho</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px">
+          <label class="lbl-s">Jornada semanal (horas)<input class="inp mono" type="number" step="0.5" min="1" max="60" name="jornada_semanal" value="{{ $p['jornada_semanal'] }}"></label>
+          <label class="lbl-s">Jornada diaria (horas)<input class="inp mono" type="number" step="0.5" min="1" max="12" name="jornada_diaria" value="{{ $p['jornada_diaria'] }}"></label>
+          <label class="lbl-s">Vacaciones al año (días hábiles)<input class="inp mono" type="number" min="0" max="60" name="vacaciones" value="{{ $p['vacaciones'] }}"><span class="hint muted">Mínimo legal: 30 días naturales (art. 38 ET). Revisa tu convenio.</span></label>
+          <label class="lbl-s">Prioridad por defecto<select class="sel" name="prioridad">@foreach(array_keys(\App\Models\Tarea::PRIORIDADES) as $x)<option @selected($p['prioridad'] === $x)>{{ $x }}</option>@endforeach</select></label>
+        </div>
+      </div>
+    @endif
+
     </fieldset>
     @if($puede)<div style="display:flex;justify-content:flex-end"><button class="btn" type="submit" style="background:#0B0B0B;color:#fff">Guardar</button></div>@endif
   </form>

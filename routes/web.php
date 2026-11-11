@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AcreedorController;
 use App\Http\Controllers\Admin\AuditoriaController;
 use App\Http\Controllers\Admin\CopiasController;
 use App\Http\Controllers\Admin\EquipoController;
+use App\Http\Controllers\CalendarioController;
 use App\Http\Controllers\ClienteAccesoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ClienteSeccionController;
@@ -15,6 +17,8 @@ use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
+use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\TareaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -52,6 +56,36 @@ Route::middleware('auth')->group(function () {
         Route::post('/escritorio/entorno/{cliente}', [EscritorioController::class, 'seleccionar'])->name('escritorio.seleccionar');
         Route::post('/escritorio/cambiar', [EscritorioController::class, 'cambiar'])->name('escritorio.cambiar');
         Route::get('/modulo/{modulo}', [EscritorioController::class, 'preparacion'])->name('preparacion');
+
+        // Gestión de la empresa elegida: facturas de clientes, proveedores y acreedores
+        Route::get('/clientes/facturas', [ProveedorController::class, 'facturasClientes'])->name('clientes.facturas');
+        foreach (['proveedores' => ProveedorController::class, 'acreedores' => AcreedorController::class] as $seg => $ctl) {
+            Route::prefix($seg)->name($seg.'.')->group(function () use ($ctl) {
+                Route::get('/', [$ctl, 'index'])->name('index');
+                Route::post('/', [$ctl, 'store'])->name('store');
+                Route::get('/facturas', [$ctl, 'facturas'])->name('facturas');
+                Route::post('/facturas', [$ctl, 'storeFactura'])->name('facturas.store');
+                Route::post('/facturas/{factura}', [$ctl, 'updateFactura'])->whereNumber('factura')->name('facturas.update');
+                Route::post('/facturas/{factura}/pagar', [$ctl, 'pagar'])->whereNumber('factura')->name('facturas.pagar');
+                Route::delete('/facturas/{factura}', [$ctl, 'borrarFactura'])->whereNumber('factura')->name('facturas.destroy');
+                Route::post('/{tercero}', [$ctl, 'update'])->whereNumber('tercero')->name('update');
+                Route::delete('/{tercero}', [$ctl, 'borrar'])->whereNumber('tercero')->name('destroy');
+            });
+        }
+
+        // Calendario y tareas del despacho
+        Route::get('/calendario', [CalendarioController::class, 'index'])->name('calendario');
+        Route::post('/calendario/eventos', [CalendarioController::class, 'guardar'])->name('calendario.store');
+        Route::delete('/calendario/eventos/{evento}', [CalendarioController::class, 'borrar'])->whereNumber('evento')->name('calendario.destroy');
+        Route::get('/tareas', [TareaController::class, 'index'])->name('tareas.index');
+        Route::post('/tareas', [TareaController::class, 'guardar'])->name('tareas.store');
+        Route::post('/tareas/{tarea}/hecha', [TareaController::class, 'hecha'])->whereNumber('tarea')->name('tareas.hecha');
+        Route::delete('/tareas/{tarea}', [TareaController::class, 'borrar'])->whereNumber('tarea')->name('tareas.destroy');
+        Route::get('/tareas/horario', [TareaController::class, 'horario'])->name('tareas.horario');
+        Route::post('/tareas/horario/fichar', [TareaController::class, 'fichar'])->name('tareas.fichar');
+        Route::get('/tareas/horario/exportar', [TareaController::class, 'exportar'])->name('tareas.exportar');
+        Route::post('/tareas/solicitudes', [TareaController::class, 'solicitar'])->name('tareas.solicitar');
+        Route::post('/tareas/solicitudes/{solicitud}', [TareaController::class, 'resolver'])->whereNumber('solicitud')->name('tareas.resolver');
 
         Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes.index');
         Route::get('/clientes/exportar', [ClienteController::class, 'exportar'])->name('clientes.exportar');

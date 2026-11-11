@@ -87,11 +87,10 @@ return [
     'menu' => [
         ['label' => 'Gestión', 'items' => [
             ['clientes', 'Clientes', 'clientes.index'],
-            ['expedientes', 'Expedientes', 'expedientes.index'],
-            ['proveedores', 'Proveedores', null],
-            ['acreedores', 'Acreedores', null],
-            ['calendario', 'Calendario', null],
-            ['tareas', 'Tareas y horario', null],
+            ['proveedores', 'Proveedores', 'proveedores.index'],
+            ['acreedores', 'Acreedores', 'acreedores.index'],
+            ['calendario', 'Calendario', 'calendario'],
+            ['tareas', 'Tareas y horario', 'tareas.index'],
         ]],
         ['label' => 'Áreas', 'items' => [
             ['contabilidad', 'Contabilidad', null],
