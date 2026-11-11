@@ -98,7 +98,7 @@ return [
             ['laboral', 'Laboral y SS', 'laboral.index'],
             ['facturacion', 'Facturación', 'facturacion.index'],
             ['crm', 'CRM', 'crm.index'],
-            ['horario', 'Control horario', null],
+            ['horario', 'Control horario', 'horario.index'],
         ]],
         ['label' => 'Comunicación', 'items' => [
             ['notificaciones', 'Notificaciones', 'notificaciones.index'],

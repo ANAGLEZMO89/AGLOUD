@@ -688,3 +688,11 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .lb-chip{padding:6px 10px;border-radius:9px;background:#F4F4F0;font:600 12.5px var(--mono);color:var(--ink);text-decoration:none;border:0;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
 .lb-chip:hover{box-shadow:0 0 0 1.5px var(--ink);color:var(--ink)}
 .lb-chip.on{background:#0B0B0B;color:#C8F031}.lb-chip.off{opacity:.5}
+/* ---------- Control horario ---------- */
+.ho-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid #F1F1EC}
+.ho-row:last-child{border-bottom:0}
+.ho-reg{grid-template-columns:90px minmax(0,1fr) 80px 80px 80px 80px}
+.ho-res{grid-template-columns:minmax(0,1.6fr) 80px 100px 100px 100px 100px}
+@media (max-width:720px){.ho-row{grid-template-columns:1fr}}
+.print-only{display:none}
+@media print{.print-only{display:block}}

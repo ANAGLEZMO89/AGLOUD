@@ -10,6 +10,7 @@ use App\Http\Controllers\ClienteAccesoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ClienteSeccionController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\ControlHorarioController;
 use App\Http\Controllers\ContabilidadListadosController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CuentaController;
@@ -200,6 +201,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/trabajador/{trabajador}/texto-contrato', [LaboralGestionController::class, 'guardarTextoContrato'])->whereNumber('trabajador')->name('contrato.texto.guardar');
             Route::get('/parametros', [LaboralController::class, 'parametros'])->name('parametros');
             Route::post('/parametros', [LaboralController::class, 'guardarParametros'])->name('parametros.guardar');
+        });
+
+        // Control horario de los trabajadores de la empresa elegida (registro de jornada, art. 34.9 ET)
+        Route::prefix('control-horario')->name('horario.')->group(function () {
+            Route::get('/', [ControlHorarioController::class, 'index'])->name('index');
+            Route::post('/{trabajador}/fichar/{accion}', [ControlHorarioController::class, 'fichar'])->whereNumber('trabajador')->name('fichar');
+            Route::post('/{trabajador}/corregir', [ControlHorarioController::class, 'corregir'])->whereNumber('trabajador')->name('corregir');
+            Route::post('/ausencias', [ControlHorarioController::class, 'ausencia'])->name('ausencia');
+            Route::delete('/ausencias/{ausencia}', [ControlHorarioController::class, 'borrarAusencia'])->whereNumber('ausencia')->name('ausencia.borrar');
         });
 
         // Calendario y tareas del despacho

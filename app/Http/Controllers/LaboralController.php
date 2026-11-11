@@ -131,7 +131,7 @@ class LaboralController extends Controller
         $o['agrario'] = ! empty($in['agrario']);
         $m = (array) ($in['m145'] ?? []);
         $disc = ['No', '33 % a 64 %', '65 % o más'];
-        $o['m145'] = ['sit' => in_array($m['sit'] ?? '3', ['1', '2', '3'], true) ? $m['sit'] : '3', 'nifCony' => mb_substr(strtoupper(trim((string) ($m['nifCony'] ?? ''))), 0, 12),
+        $o['m145'] = ['sit' => in_array((string) ($m['sit'] ?? '3'), ['1', '2', '3'], true) ? (string) ($m['sit'] ?? '3') : '3', 'nifCony' => mb_substr(strtoupper(trim((string) ($m['nifCony'] ?? ''))), 0, 12),
             'movil' => ! empty($m['movil']), 'vivienda' => ! empty($m['vivienda']), 'pension' => mb_substr((string) ($m['pension'] ?? ''), 0, 20), 'alimentos' => mb_substr((string) ($m['alimentos'] ?? ''), 0, 20),
             'fecha' => (string) ($m['fecha'] ?? ''),
             'hijos' => collect((array) ($m['hijos'] ?? []))->filter(fn ($h) => is_array($h) && trim((string) ($h['anio'] ?? '')) !== '')
