@@ -14,6 +14,7 @@ use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
 use App\Support\Parametros;
 use App\Support\Validacion;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,40 @@ class BandejaController extends ContabilidadController
         return redirect()->route('contabilidad.bandeja')->with('ok', 'Documento quitado de la bandeja. Sigue guardado en Documentos › Contable › Facturas recibidas.');
     }
 
+    /**
+     * Eliminar de la bandeja lo que está mal: un documento subido (va a la papelera de Documentos)
+     * o una factura de compra o gasto aún sin contabilizar. Las emitidas no se borran: se anulan en Facturación.
+     */
+    public function eliminar(Request $request, string $k): RedirectResponse
+    {
+        $c = $this->ctx($request);
+        abort_unless($c && preg_match('/^([erd])(\d+)$/', $k, $m), 404);
+        $id = (int) $m[2];
+        $volver = redirect()->route('contabilidad.bandeja');
+        if ($m[1] === 'e') {
+            return $volver->with('aviso', 'Las facturas emitidas no se pueden eliminar (normativa de facturación): si está mal, anúlala con una rectificativa en Facturación.');
+        }
+        if ($m[1] === 'd') {
+            $d = BandejaDocumento::with('documento')->where('cliente_id', $c->id)->findOrFail($id);
+            $nombre = $d->documento?->nombre_original ?: 'Documento';
+            DB::transaction(function () use ($d) {
+                $d->documento?->update(['eliminado_at' => now()]);
+                $d->delete();
+            });
+            Auditoria::registrar('contabilidad.bandeja.eliminar', 'Documento «'.$nombre.'» eliminado de la bandeja (a la papelera de Documentos)', null, $c->id);
+
+            return $volver->with('ok', '«'.$nombre.'» eliminado. Queda en la papelera de Documentos por si lo necesitas recuperar.');
+        }
+        $f = FacturaRecibida::with('tercero')->where('cliente_id', $c->id)->findOrFail($id);
+        if ($f->asiento_id) {
+            return $volver->with('aviso', 'Esta factura ya está contabilizada. Borra antes su asiento en Contabilidad › Libro diario.');
+        }
+        Auditoria::registrar('contabilidad.bandeja.eliminar', 'Eliminada la factura '.$f->num.' de '.$f->tercero?->nombre.' desde la bandeja', $f, $c->id);
+        $f->delete();
+
+        return $volver->with('ok', 'Factura '.$f->num.' de '.($f->tercero?->nombre ?? '').' eliminada. Su PDF, si lo tenía, sigue en Documentos.');
+    }
+
     /** Guarda lo revisado y contabiliza */
     public function contabilizarRevision(Request $request, string $k): RedirectResponse
     {
@@ -107,7 +142,7 @@ class BandejaController extends ContabilidadController
                 $msg = 'Factura '.$f->num.' contabilizada (asiento '.$a->numero.').';
             } else {
                 $d = $this->datos($request);
-                $a = DB::transaction(function () use ($c, $m, $id, $d, $uid, $request) {
+                $a = DB::transaction(function () use ($c, $m, $id, $d, $uid) {
                     if ($m[1] === 'r') {
                         $f = FacturaRecibida::where('cliente_id', $c->id)->whereNull('asiento_id')->findOrFail($id);
                         $t = Tercero::where('cliente_id', $c->id)->findOrFail((int) $d['tercero_id']);
@@ -188,7 +223,7 @@ class BandejaController extends ContabilidadController
         $f->fill(['cliente_id' => $c->id, 'tercero_id' => $t->id, 'clase' => Tercero::CLASES[$t->clase][3], 'num' => trim($d['num']), 'fecha' => $d['fecha'],
             'concepto' => trim((string) ($d['concepto'] ?? '')) ?: 'Factura '.trim($d['num']), 'base' => $d['base'], 'iva_pct' => (float) $d['iva_pct'], 'ret_pct' => $ret,
             'deducible' => $t->clase === 'proveedor' ? true : $d['deducible'], 'forma_pago' => $f->forma_pago ?: $t->forma_pago,
-            'vencimiento' => $f->vencimiento ?? \Carbon\CarbonImmutable::parse($d['fecha'])->addDays((int) $t->pago_dias)->toDateString()] + FacturaRecibida::importes($d['base'], (float) $d['iva_pct'], $ret));
+            'vencimiento' => $f->vencimiento ?? CarbonImmutable::parse($d['fecha'])->addDays((int) $t->pago_dias)->toDateString()] + FacturaRecibida::importes($d['base'], (float) $d['iva_pct'], $ret));
         $f->save();
 
         return $this->conta->contabilizarRecibida($f->fresh('tercero'), $uid, $d['cuenta']);

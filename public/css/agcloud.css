@@ -468,7 +468,7 @@ fieldset:disabled .inp,fieldset:disabled .sel,fieldset:disabled .txa{background:
 .cal-c .n.hoy{background:#0B0B0B;color:#C8F031}
 .cal-fest{font-size:10.5px;font-weight:700;color:#8A1C1C}
 .cal-ev{font-size:11px;font-weight:600;padding:2px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.band-cols{display:grid;grid-template-columns:28px 90px 92px 130px minmax(0,1.5fr) 96px 86px 100px 210px;gap:10px;align-items:center}
+.band-cols{display:grid;grid-template-columns:28px 90px 92px 130px minmax(0,1.5fr) 96px 86px 100px 210px 70px;gap:10px;align-items:center}
 .dia-cols{display:grid;grid-template-columns:64px 92px minmax(0,1fr) 120px 120px 120px;gap:10px;align-items:center}
 .ap-lin{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(0,1fr) 120px 120px 24px;gap:8px;align-items:center}
 .ap-lin .inp{height:36px;font-size:13.5px}
@@ -705,3 +705,7 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .side-area:hover{filter:brightness(1.05)}
 .pgc-edit{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px;margin:4px 0 8px;border-radius:12px;border:1.5px solid #0B0B0B;background:#fff}
 .pgc-row .lnk{white-space:nowrap}
+.band-docrow{display:flex;align-items:center;gap:8px}
+.band-docrow .band-doc{flex:1;min-width:0}
+.band-del{border:0;background:none;color:#8A1C1C;font:600 12.5px inherit;cursor:pointer;padding:6px 8px;border-radius:8px;white-space:nowrap;font-family:inherit}
+.band-del:hover{background:#FDE7E7}

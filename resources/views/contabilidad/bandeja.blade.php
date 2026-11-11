@@ -25,7 +25,10 @@
     <div class="card" style="padding:8px">
       <span style="font-size:13px;font-weight:700;padding:8px 12px 4px">Documentos subidos pendientes de revisar · {{ $docs->count() }}</span>
       @foreach($docs as $x)
-        <a class="band-doc {{ ($rev['k'] ?? '') === $x['k'] ? 'on' : '' }}" href="{{ $x['url'] }}"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b class="ell" style="font-size:14px">{{ $x['ter'] }}</b><small style="color:#6A6A65">{{ Formato::fecha($x['fecha']) }} · {{ $x['origen'] }}</small></span><span class="band-tag">REVISAR</span></a>
+        <div class="band-docrow">
+          <a class="band-doc {{ ($rev['k'] ?? '') === $x['k'] ? 'on' : '' }}" href="{{ $x['url'] }}"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b class="ell" style="font-size:14px">{{ $x['ter'] }}</b><small style="color:#6A6A65">{{ Formato::fecha($x['fecha']) }} · {{ $x['origen'] }}</small></span><span class="band-tag">REVISAR</span></a>
+          <form method="POST" action="{{ route('contabilidad.bandeja.eliminar', $x['k']) }}" data-confirm="¿Eliminar «{{ $x['ter'] }}» de la bandeja? Irá a la papelera de Documentos.">@csrf @method('DELETE')<button class="band-del" type="submit" title="Eliminar" aria-label="Eliminar">Eliminar</button></form>
+        </div>
       @endforeach
     </div>
   @endif
@@ -33,7 +36,7 @@
   <form method="POST" action="{{ route('contabilidad.contabilizar') }}" class="card" style="padding:6px 18px 14px;overflow-x:auto;gap:0" data-bandeja>
     @csrf
     <div style="min-width:1040px">
-      <div class="band-cols" style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65;padding:12px 0 10px;border-bottom:1px solid #E6E6E0"><label class="chk"><input type="checkbox" data-band-todas checked style="accent-color:#0B0B0B"></label><span>Tipo</span><span>Fecha</span><span>Nº</span><span>Cliente / proveedor</span><span style="text-align:right">Base</span><span style="text-align:right">IVA</span><span style="text-align:right">Total</span><span>Cuenta</span></div>
+      <div class="band-cols" style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65;padding:12px 0 10px;border-bottom:1px solid #E6E6E0"><label class="chk"><input type="checkbox" data-band-todas checked style="accent-color:#0B0B0B"></label><span>Tipo</span><span>Fecha</span><span>Nº</span><span>Cliente / proveedor</span><span style="text-align:right">Base</span><span style="text-align:right">IVA</span><span style="text-align:right">Total</span><span>Cuenta</span><span></span></div>
       @foreach($facturas as $x)
         @php $col = ['Emitida' => ['#E6F6A8', '#2E3A00'], 'Compra' => ['#FCEBCB', '#6E4300'], 'Gasto' => ['#ECECE7', '#3C3C3C']][$x['tipo']]; @endphp
         <div class="band-cols" style="padding:10px 0;border-bottom:1px solid #F1F1EC;font-size:13.5px;{{ ($rev['k'] ?? '') === $x['k'] ? 'background:#F7F7F3' : '' }}">
@@ -48,6 +51,7 @@
           @else
             <input class="inp mono" name="cta[{{ $x['k'] }}]" value="{{ $x['cuenta'] }}" maxlength="9" list="ctas6" style="height:32px;font-size:12.5px" title="{{ Contabilidad::nombre($x['cuenta']) }}">
           @endif
+          @if($x['tipo'] === 'Emitida')<span title="Las emitidas no se eliminan: se anulan con una rectificativa en Facturación"></span>@else<button class="band-del" type="submit" form="del-{{ $x['k'] }}" title="Eliminar esta factura">Eliminar</button>@endif
         </div>
       @endforeach
       <datalist id="ctas6">@foreach(config('pgc') as $k => $n)@if(in_array(((string) $k)[0], ['6', '2'], true) && strlen((string) $k) === 3)<option value="{{ Contabilidad::a9($k) }}">{{ $n }}</option>@endif @endforeach</datalist>
@@ -57,6 +61,7 @@
       </div>
     </div>
   </form>
+  @foreach($facturas->where('tipo', '!=', 'Emitida') as $x)<form id="del-{{ $x['k'] }}" method="POST" action="{{ route('contabilidad.bandeja.eliminar', $x['k']) }}" data-confirm="¿Eliminar la factura {{ $x['num'] }} de {{ $x['ter'] }}? No está contabilizada; su PDF, si lo tiene, sigue en Documentos.">@csrf @method('DELETE')</form>@endforeach
   @endif
   @endif
 </div>
@@ -121,11 +126,11 @@
           <div class="ap-tot"><div><span>Base</span><b data-rt="base">0,00</b></div><div><span>IVA</span><b data-rt="iva">0,00</b></div><div><span>Retención</span><b data-rt="ret">0,00</b></div><div><span>Total</span><b data-rt="tot">0,00</b></div></div>
         @endif
         <div class="rev-pie">
-          @if(isset($rev['nuevo']))<button class="lnk red" type="submit" form="rev-descartar" style="font-size:12.5px">Quitar de la bandeja</button>@else<span></span>@endif
+          @if(! $esE)<button class="btn danger" type="submit" form="rev-eliminar">Eliminar</button>@else<span></span>@endif
           <div style="display:flex;gap:10px"><a class="btn soft" href="{{ route('contabilidad.bandeja') }}">Cerrar</a><button class="btn lime" type="submit" @disabled($ej->cerrado())>Contabilizar</button></div>
         </div>
       </form>
-      @if(isset($rev['nuevo']))<form id="rev-descartar" method="POST" action="{{ route('contabilidad.bandeja.descartar', $rev['d']) }}" data-confirm="¿Quitar este documento de la bandeja? Seguirá en Documentos.">@csrf @method('DELETE')</form>@endif
+      @if(! $esE)<form id="rev-eliminar" method="POST" action="{{ route('contabilidad.bandeja.eliminar', $rev['k']) }}" data-confirm="{{ isset($rev['nuevo']) ? '¿Eliminar este documento de la bandeja? Irá a la papelera de Documentos.' : '¿Eliminar esta factura? No está contabilizada; su PDF, si lo tiene, sigue en Documentos.' }}">@csrf @method('DELETE')</form>@endif
     </div>
   </div>
 </div>

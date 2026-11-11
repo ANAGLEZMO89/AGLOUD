@@ -115,6 +115,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/', [ContabilidadController::class, 'index'])->name('index');
             Route::get('/bandeja', [BandejaController::class, 'bandeja'])->name('bandeja');
             Route::post('/bandeja/subir', [BandejaController::class, 'subir'])->name('bandeja.subir');
+            Route::delete('/bandeja/{k}', [BandejaController::class, 'eliminar'])->where('k', '[erd]\\d+')->name('bandeja.eliminar');
             Route::delete('/bandeja/documentos/{documento}', [BandejaController::class, 'descartar'])->whereNumber('documento')->name('bandeja.descartar');
             Route::post('/bandeja/{k}/contabilizar', [BandejaController::class, 'contabilizarRevision'])->where('k', '[erd]\\d+')->name('bandeja.revisar');
             Route::post('/bandeja', [ContabilidadController::class, 'contabilizar'])->name('contabilizar');

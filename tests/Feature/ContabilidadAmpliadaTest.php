@@ -164,6 +164,30 @@ class ContabilidadAmpliadaTest extends TestCase
         $this->assertNotNull($e->fresh()->asiento_id);
     }
 
+    public function test_eliminar_de_la_bandeja_lo_que_esta_mal(): void
+    {
+        // Documento subido con fallos: se elimina desde la lista y va a la papelera de Documentos
+        $this->en()->post(route('contabilidad.bandeja.subir'), ['archivos' => [UploadedFile::fake()->createWithContent('mal.pdf', '%PDF-1.4 x')]])->assertRedirect();
+        $bd = BandejaDocumento::firstOrFail();
+        $this->en()->get(route('contabilidad.bandeja'))->assertSee('Eliminar');
+        $this->en()->get(route('contabilidad.bandeja', ['revisar' => 'd'.$bd->id]))->assertSee('rev-eliminar');
+        $this->en()->delete(route('contabilidad.bandeja.eliminar', 'd'.$bd->id))->assertSessionHas('ok');
+        $this->assertSame(0, BandejaDocumento::count());
+        $this->assertNotNull(Documento::withoutGlobalScopes()->find($bd->documento_id)->eliminado_at);
+        // Factura de gasto sin contabilizar: se elimina; contabilizada, no
+        $t = Tercero::create(['cliente_id' => $this->a->id, 'clase' => 'acreedor', 'cuenta' => '410000001', 'nombre' => 'Bar', 'forma_pago' => 'Transferencia', 'pago_dias' => 0]);
+        $f = FacturaRecibida::create(['cliente_id' => $this->a->id, 'tercero_id' => $t->id, 'clase' => 'gasto', 'num' => 'X-1', 'fecha' => '2026-11-02', 'concepto' => 'Comida',
+            'base' => 10, 'iva_pct' => 10, 'cuota' => 1, 'ret_pct' => 0, 'retencion' => 0, 'total' => 11, 'deducible' => true, 'forma_pago' => 'Transferencia', 'vencimiento' => '2026-11-02']);
+        $this->en()->get(route('contabilidad.bandeja'))->assertSee('del-r'.$f->id);
+        $this->en()->delete(route('contabilidad.bandeja.eliminar', 'r'.$f->id))->assertSessionHas('ok');
+        $this->assertNull(FacturaRecibida::find($f->id));
+        // Emitida: no se elimina
+        $e = app(Facturacion::class)->emitir($this->a, ['serie' => 'A', 'tf' => 'F1', 'fecha' => '2026-11-01', 'receptor_nombre' => 'Hotel Costa SL', 'receptor_nif' => 'B21345673',
+            'lineas' => [['d' => 'Servicio', 'q' => 1, 'p' => 500, 'iva' => 21, 'sup' => false]], 'ret_pct' => 0, 'forma_pago' => 'Transferencia', 'pago_dias' => 30], $this->as->id);
+        $this->en()->delete(route('contabilidad.bandeja.eliminar', 'e'.$e->id))->assertSessionHas('aviso');
+        $this->assertNotNull(Factura::find($e->id));
+    }
+
     public function test_conciliador_importa_y_concilia(): void
     {
         $conta = app(Contabilidad::class);
