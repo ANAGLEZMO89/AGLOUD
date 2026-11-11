@@ -31,12 +31,21 @@
       <select class="sel" name="estado" style="width:auto;height:38px" data-change-submit>
         <option value="Todos">Todos los estados</option>
         @foreach(array_keys(config('agcloud.estados_cliente')) as $e)<option value="{{ $e }}" @selected($estado === $e)>{{ $e }}</option>@endforeach
+        <option value="Eliminados" @selected($estado === 'Eliminados')>Eliminados</option>
       </select>
     </form>
     <div class="tbl">
       <div class="th cli-cols"><span>Cliente</span><span>Tipo</span><span>Actividad</span><span>Asesor</span><span>Cuota</span><span>Pendiente</span><span>Estado</span></div>
       @forelse($lista as $c)
         @php [$ebg, $efg] = $c->estadoColores(); @endphp
+        @if($c->trashed())
+          <div class="tr cli-cols" style="opacity:.85">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0"><span class="avsq">{{ $c->iniciales() }}</span><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span class="ell" style="font-weight:600">{{ $c->nombre }}</span><span style="font:500 11.5px var(--mono);color:#6A6A65">{{ $c->nif }} · eliminado el {{ \App\Support\Formato::fecha($c->deleted_at) }}</span></div></div>
+            <span class="c3">{{ $c->tipo }}</span><span class="c3 ell">{{ $c->actividadPrincipal() ?: '—' }}</span><span class="c3 ell">{{ $c->asesor?->name ?? '—' }}</span><span></span><span></span>
+            @if(auth()->user()->esAdmin())<form method="POST" action="{{ route('clientes.recuperar', $c->id) }}">@csrf<button class="btn soft sm" type="submit">Recuperar</button></form>@else<span class="pill">Eliminado</span>@endif
+          </div>
+          @continue
+        @endif
         <a class="tr cli-cols" href="{{ route('clientes.show', $c) }}">
           <div style="display:flex;align-items:center;gap:12px;min-width:0">
             <span class="avsq">{{ $c->iniciales() }}</span>

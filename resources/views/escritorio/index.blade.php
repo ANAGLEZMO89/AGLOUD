@@ -29,7 +29,7 @@
         <input class="inp" name="q" value="{{ $q }}" placeholder="Buscar por nombre o NIF" style="flex:0 1 320px;min-width:200px" data-autosubmit>
       </form>
       <div class="seg" style="align-self:flex-start;padding:3px">
-        @foreach([['act', 'Clientes activos'], ['alta', 'Alta en curso'], ['desp', 'Despacho']] as [$id, $l])
+        @foreach([['act', 'Clientes activos'], ['baja', 'Dados de baja'], ['desp', 'Despacho']] as [$id, $l])
           <a class="{{ $tab === $id ? 'on' : '' }}" style="padding:7px 14px" href="{{ route('escritorio', array_filter(['cambiar' => 1, 'tab' => $id, 'q' => $q, 'volver' => request('volver')])) }}">{{ $l }} ({{ $n[$id] }})</a>
         @endforeach
       </div>

@@ -100,7 +100,7 @@ class DocumentosYClientesTest extends TestCase
 
         $c->refresh();
         $this->assertSame('B21890124', $c->nif);
-        $this->assertSame('Alta en curso', $c->estado);
+        $this->assertSame('Activo', $c->estado);
         $u = User::where('email', 'bar@test.es')->first();
         $this->assertSame(User::CLIENTE_ADMIN, $u->role);
         $this->assertSame($c->id, $u->cliente_id);

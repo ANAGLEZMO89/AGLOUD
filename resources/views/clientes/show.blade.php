@@ -26,6 +26,20 @@
       @unless($c->es_despacho)<a class="btn" href="{{ route('expedientes.index', ['nuevo' => 1, 'cli' => $c->id]) }}" style="background:#0B0B0B;color:#fff"><span style="color:#C8F031">+</span>Nuevo expediente</a>@endunless
     </div>
   </div>
+  @unless($c->es_despacho)
+    @php $nUs = $c->usuarios()->count(); $nAct = $c->usuarios()->where('activo', true)->count(); @endphp
+    <div class="card" style="padding:12px 16px;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px">
+      <span style="font-size:13.5px">@if(! $nUs)<b>Sin acceso a la plataforma</b> · se crea solo al guardar Datos generales con su email.@elseif($nAct)<b style="color:#2E3A00">● Plataforma habilitada</b> · {{ $nAct }} {{ $nAct === 1 ? 'usuario puede' : 'usuarios pueden' }} entrar en el portal.@else<b style="color:#8A1C1C">● Plataforma inhabilitada</b> · el cliente no puede entrar en el portal.@endif</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        @if($nUs)
+          <form method="POST" action="{{ route('clientes.plataforma', $c) }}" @if($nAct) data-confirm="¿Inhabilitar la plataforma para {{ $c->nombre }}? Sus usuarios no podrán entrar en el portal y se cerrarán sus sesiones." @endif>@csrf<input type="hidden" name="habilitar" value="{{ $nAct ? 0 : 1 }}"><button class="btn {{ $nAct ? 'soft' : 'lime' }} sm" type="submit">{{ $nAct ? 'Inhabilitar plataforma' : 'Habilitar plataforma' }}</button></form>
+        @endif
+        @if(auth()->user()->esAdmin())
+          <form method="POST" action="{{ route('clientes.destroy', $c) }}" data-confirm="¿Eliminar a {{ $c->nombre }}? Se cerrará su acceso a la plataforma. Sus documentos y su contabilidad se conservan y podrás recuperarlo desde el filtro «Eliminados».">@csrf @method('DELETE')<button class="btn sm" type="submit" style="background:#FDE7E7;color:#8A1C1C">Eliminar cliente</button></form>
+        @endif
+      </div>
+    </div>
+  @endunless
 
   <div class="tabs">
     @foreach($tabs as [$id, $l, $num])

@@ -24,14 +24,14 @@ class EscritorioController extends Controller
         $base = Cliente::query();
         $n = [
             'act' => (clone $base)->clientes()->where('estado', 'Activo')->count(),
-            'alta' => (clone $base)->clientes()->where('estado', 'Alta en curso')->count(),
+            'baja' => (clone $base)->clientes()->where('estado', 'Baja')->count(),
             'desp' => (clone $base)->where('es_despacho', true)->count(),
         ];
 
         $lista = Cliente::query()->with('asesor')
             ->withCount(['documentos as por_revisar' => fn ($w) => $w->gestor()->vivos()->where('por_revisar', true)])
             ->when($tab === 'act', fn ($w) => $w->clientes()->where('estado', 'Activo'))
-            ->when($tab === 'alta', fn ($w) => $w->clientes()->where('estado', 'Alta en curso'))
+            ->when($tab === 'baja', fn ($w) => $w->clientes()->where('estado', 'Baja'))
             ->when($tab === 'desp', fn ($w) => $w->where('es_despacho', true))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('nombre', 'like', "%$q%")->orWhere('nif', 'like', "%$q%")))
             ->orderBy('nombre')->limit(100)->get();

@@ -43,7 +43,7 @@ class ClienteController extends Controller
         $cli = Cliente::clientes();
         $resumen = [
             ['Clientes activos', (clone $cli)->where('estado', 'Activo')->count()],
-            ['Altas en curso', (clone $cli)->where('estado', 'Alta en curso')->count()],
+            ['Dados de baja', (clone $cli)->where('estado', 'Baja')->count()],
             ['Con documentación pendiente', (clone $cli)->whereHas('documentos', fn ($w) => $w->gestor()->vivos()->where('por_revisar', true))->count()],
             ['Sin acceso al portal', (clone $cli)->where('estado', '!=', 'Baja')->whereDoesntHave('usuarios', fn ($w) => $w->where('activo', true))->count()],
         ];
@@ -53,11 +53,64 @@ class ClienteController extends Controller
 
     private function consulta(string $q, ?string $tipo, string $asesor, string $estado)
     {
-        return Cliente::clientes()
+        return Cliente::clientes()->when($estado === 'Eliminados', fn ($w) => $w->onlyTrashed())
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('nombre', 'like', "%$q%")->orWhere('nif', 'like', "%$q%")->orWhere('actividad', 'like', "%$q%")->orWhere('comercial', 'like', "%$q%")))
             ->when($tipo, fn ($w) => $w->where('tipo', $tipo))
             ->when($asesor !== 'Todos', fn ($w) => $w->where('asesor_id', (int) $asesor))
-            ->when($estado !== 'Todos', fn ($w) => $w->where('estado', $estado));
+            ->when(! in_array($estado, ['Todos', 'Eliminados'], true), fn ($w) => $w->where('estado', $estado));
+    }
+
+    /** Elimina el cliente (se puede recuperar) y le cierra el acceso a la plataforma */
+    public function destroy(Request $request, Cliente $cliente)
+    {
+        abort_unless($request->user()->esAdmin(), 403, 'Solo la administración del despacho puede eliminar clientes.');
+        abort_if($cliente->es_despacho, 422, 'El despacho no se puede eliminar.');
+        $this->portal($cliente, false);
+        if ((int) $request->session()->get('cliente_activo') === $cliente->id) {
+            $request->session()->forget('cliente_activo');
+        }
+        $cliente->delete();
+        Auditoria::registrar('cliente.baja', 'Cliente eliminado: '.$cliente->nombre.' ('.$cliente->nif.')', $cliente, $cliente->id);
+
+        return redirect()->route('clientes.index')->with('ok', 'Cliente '.$cliente->nombre.' eliminado y su acceso a la plataforma cerrado. Sus documentos y su contabilidad se conservan (obligación de conservación): puedes recuperarlo desde el filtro «Eliminados».');
+    }
+
+    public function recuperar(Request $request, int $id)
+    {
+        abort_unless($request->user()->esAdmin(), 403);
+        $c = Cliente::onlyTrashed()->findOrFail($id);
+        $c->restore();
+        Auditoria::registrar('cliente.recuperado', 'Cliente recuperado: '.$c->nombre, $c, $c->id);
+
+        return redirect()->route('clientes.show', $c)->with('ok', 'Cliente '.$c->nombre.' recuperado. Su acceso a la plataforma sigue inhabilitado: habilítalo si hace falta.');
+    }
+
+    /** Inhabilita o habilita el acceso del cliente a la plataforma (todos sus usuarios del portal) */
+    public function plataforma(Request $request, Cliente $cliente)
+    {
+        abort_if($cliente->es_despacho, 422);
+        $habilitar = $request->boolean('habilitar');
+        if ($habilitar && ! $cliente->usuarios()->exists()) {
+            return back()->with('aviso', 'El cliente aún no tiene acceso a la plataforma: indica su email en Datos generales y guarda.');
+        }
+        $n = $this->portal($cliente, $habilitar);
+        Auditoria::registrar('cliente.plataforma', 'Plataforma '.($habilitar ? 'habilitada' : 'inhabilitada').' para '.$cliente->nombre.' ('.$n.' usuarios)', $cliente, $cliente->id);
+
+        return back()->with('ok', $habilitar ? 'Acceso a la plataforma habilitado para '.$cliente->nombre.'.' : 'Acceso a la plataforma inhabilitado: '.$cliente->nombre.' ya no puede entrar en el portal.');
+    }
+
+    /** Activa o desactiva todos los usuarios del portal del cliente (y cierra sus sesiones) */
+    private function portal(Cliente $c, bool $activo): int
+    {
+        $us = $c->usuarios()->get();
+        foreach ($us as $u) {
+            $u->forceFill(['activo' => $activo])->save();
+            if (! $activo) {
+                DB::table('sessions')->where('user_id', $u->id)->delete();
+            }
+        }
+
+        return $us->count();
     }
 
     private function asesores()
@@ -304,7 +357,7 @@ class ClienteController extends Controller
 
         $c = DB::transaction(function () use ($v) {
             $c = new Cliente(collect($v)->except(['portal', 'portal_pass'])->all());
-            $c->estado = 'Alta en curso';
+            $c->estado = 'Activo';
             $c->provincia = $c->provincia ?: config('agcloud.despacho.provincia');
             $c->save();
 

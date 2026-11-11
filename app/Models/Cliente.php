@@ -18,7 +18,7 @@ class Cliente extends Model
 
     protected $guarded = ['id', 'es_despacho', 'created_by', 'updated_by'];
 
-    protected $attributes = ['estado' => 'Alta en curso', 'es_despacho' => false, 'cuota_periodicidad' => 'Mensual', 'cuota_iva' => 21, 'cuota_forma_cobro' => 'Domiciliación SEPA', 'cuota_concepto' => 'Honorarios de asesoría'];
+    protected $attributes = ['estado' => 'Activo', 'es_despacho' => false, 'cuota_periodicidad' => 'Mensual', 'cuota_iva' => 21, 'cuota_forma_cobro' => 'Domiciliación SEPA', 'cuota_concepto' => 'Honorarios de asesoría'];
 
     protected function casts(): array
     {

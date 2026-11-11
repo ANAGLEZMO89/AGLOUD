@@ -45,7 +45,7 @@ class DemoSeeder extends Seeder
         $cafe->setSeccion('certs', [['tipo' => 'Representante de persona jurídica', 'titular' => 'María López', 'nifT' => '29400137L', 'emisor' => 'FNMT-RCM', 'fEmi' => '2024-12-10', 'fCad' => now()->addDays(30)->toDateString(), 'archivo' => null, 'pass' => '', 'aeat' => true, 'ss' => true, 'dehu' => true]]);
         $cafe->save();
         $trans = $mk(['tipo' => 'Sociedad', 'nombre' => 'Transportes Costa de la Luz SL', 'nif' => 'B21112230', 'estado' => 'Activo', 'asesor_id' => $ases->id, 'email' => 'otro@demo.test', 'actividad' => 'Transporte de mercancías por carretera', 'cuota_importe' => 240]);
-        $mk(['tipo' => 'Autónomo', 'nombre' => 'Manuel Ortiz Pérez', 'nif' => '29331847Q', 'estado' => 'Alta en curso', 'asesor_id' => $admin->id, 'actividad' => 'Fontanería']);
+        $mk(['tipo' => 'Autónomo', 'nombre' => 'Manuel Ortiz Pérez', 'nif' => '29331847Q', 'estado' => 'Activo', 'asesor_id' => $admin->id, 'actividad' => 'Fontanería']);
         $mk(['tipo' => 'Comunidad de bienes', 'nombre' => 'Hnos. Ruiz Panadería CB', 'nif' => 'E21456785', 'estado' => 'Activo', 'asesor_id' => $ases->id, 'actividad' => 'Panadería y pastelería', 'cuota_importe' => 95.5]);
         $mk(['tipo' => 'Particular', 'nombre' => 'Carmen Vázquez Gil', 'nif' => '48800211F', 'estado' => 'Baja', 'asesor_id' => $admin->id]);
 

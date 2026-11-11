@@ -37,7 +37,6 @@ return [
 
     'estados_cliente' => [
         'Activo' => ['#E6F6A8', '#2E3A00'],
-        'Alta en curso' => ['#FCEBCB', '#6E4300'],
         'Baja' => ['#ECECE7', '#6A6A65'],
     ],
 

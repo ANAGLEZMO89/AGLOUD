@@ -178,6 +178,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/clientes/{cliente}', [ClienteController::class, 'show'])->name('clientes.show');
         Route::get('/clientes/{cliente}/editar', [ClienteController::class, 'edit'])->name('clientes.edit');
         Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
+        Route::delete('/clientes/{cliente}', [ClienteController::class, 'destroy'])->name('clientes.destroy');
+        Route::post('/clientes/{id}/recuperar', [ClienteController::class, 'recuperar'])->whereNumber('id')->name('clientes.recuperar');
+        Route::post('/clientes/{cliente}/plataforma', [ClienteController::class, 'plataforma'])->name('clientes.plataforma');
         Route::post('/clientes/{cliente}/seccion/{seccion}', [ClienteSeccionController::class, 'guardar'])->name('clientes.seccion.guardar');
         Route::delete('/clientes/{cliente}/seccion/{seccion}/{idx}', [ClienteSeccionController::class, 'borrar'])->whereNumber('idx')->name('clientes.seccion.borrar');
         Route::post('/clientes/{cliente}/imagen/{slot}', [ClienteSeccionController::class, 'imagen'])->whereIn('slot', ['logo', 'firma'])->name('clientes.imagen');
