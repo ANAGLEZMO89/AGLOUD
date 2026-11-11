@@ -8,6 +8,7 @@ use App\Models\Notificacion;
 use App\Models\User;
 use App\Services\Auditoria;
 use App\Support\Formato;
+use App\Support\Parametros;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,12 +53,16 @@ class ExpedienteController extends Controller
                 default => 'Otro trámite',
             };
         }
+        $tplsDisp = Parametros::get('expedientes')['plantillas'];
+        if (! isset($tplsDisp[$tplDef])) {
+            $tplDef = array_key_first($tplsDisp) ?? '';
+        }
 
         return view('expedientes.index', [
             'titulo' => 'Expedientes', 'activo' => 'expedientes', 'vista' => $vista, 'asesor' => $asesor, 'cat' => $cat, 'q' => $q,
             'resumen' => $resumen, 'cols' => $cols, 'lista' => $fl, 'soloCli' => $soloCli,
             'equipo' => User::whereIn('role', User::ROLES_DESPACHO)->where('activo', true)->orderBy('name')->get(['id', 'name']),
-            'cats' => collect(config('agcloud.plantillas_expediente'))->pluck('cat')->unique()->values(),
+            'cats' => collect(Parametros::get('expedientes')['plantillas'])->pluck('cat')->unique()->values(),
             'nuevo' => $nuevo, 'notif' => $notif, 'tplDef' => old('tramite', $tplDef),
             'cliDef' => old('cliente_id', $request->query('cli', $soloCli?->id)),
             'clientes' => $nuevo ? Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get(['id', 'nombre', 'asesor_id']) : collect(),
@@ -67,7 +72,7 @@ class ExpedienteController extends Controller
 
     public function store(Request $request)
     {
-        $tpls = config('agcloud.plantillas_expediente');
+        $tpls = Parametros::get('expedientes')['plantillas'];
         $data = $request->validate([
             'cliente_id' => ['required', 'integer', Rule::exists('clientes', 'id')->where('es_despacho', false)],
             'tramite' => ['required', Rule::in(array_keys($tpls))],
@@ -90,7 +95,7 @@ class ExpedienteController extends Controller
                     'apertura' => now()->toDateString(), 'plazo' => $data['plazo'] ?? null, 'plazo_lbl' => $data['plazo_lbl'] ?? null,
                     'pasos' => array_map(fn ($l) => ['l' => $l, 'ok' => false], $t['pasos']),
                     'docs' => array_map(fn ($l) => ['l' => $l, 'ok' => false], $t['docs']),
-                    'honorarios' => max(0, $hon), 'portal' => true, 'created_by' => $request->user()->id,
+                    'honorarios' => max(0, $hon), 'portal' => (bool) Parametros::get('expedientes')['portal_defecto'], 'created_by' => $request->user()->id,
                 ]));
             } catch (QueryException $ex) {
                 if ($i === 4) {

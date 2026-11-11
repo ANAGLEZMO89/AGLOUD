@@ -9,6 +9,7 @@ use App\Models\Presupuesto;
 use App\Models\RegistroFacturacion;
 use App\Services\Auditoria;
 use App\Services\Facturacion;
+use App\Services\Facturae;
 use App\Support\Formato;
 use App\Support\Plazos;
 use App\Support\Validacion;
@@ -54,7 +55,7 @@ class FacturaController extends Controller
 
     private function base(Cliente $c, string $tab): array
     {
-        return ['titulo' => 'Facturación', 'activo' => 'facturacion', 'c' => $c, 'tab' => $tab,
+        return ['titulo' => 'Facturación', 'activo' => 'facturacion', 'c' => $c, 'tab' => $tab, 'modoCfg' => FacturacionConfig::de($c)->modo ?: 'normal',
             'obligTxt' => $c->tipo === 'Sociedad' || $c->es_despacho ? 'Obligatorio desde el 1 de enero de 2027 (contribuyentes del Impuesto sobre Sociedades).' : 'Obligatorio desde el 1 de julio de 2027 (autónomos y resto de obligados).'];
     }
 
@@ -116,6 +117,20 @@ class FacturaController extends Controller
         return view('facturacion.documento', ['c' => $c, 'f' => $factura, 'cfg' => FacturacionConfig::de($c), 'qr' => Facturacion::qrSvg(Facturacion::urlQr($nif, $factura)), 'draft' => false, 'imprimir' => $request->boolean('imprimir')]);
     }
 
+    /** Factura electrónica Facturae 3.2.2 (XML sin firma) */
+    public function facturae(Request $request, Factura $factura)
+    {
+        $c = $this->propia($request, $factura);
+        try {
+            $xml = Facturae::xml($c, $factura);
+        } catch (InvalidArgumentException $e) {
+            return back()->with('aviso', $e->getMessage());
+        }
+        Auditoria::registrar('factura.facturae', 'Descarga de la factura electrónica '.$factura->num, $factura);
+
+        return response($xml, 200, ['Content-Type' => 'application/xml; charset=UTF-8', 'Content-Disposition' => 'attachment; filename="'.$c->nif.'_'.$factura->num.'.xml"']);
+    }
+
     public function cobro(Request $request, Factura $factura)
     {
         $this->propia($request, $factura);
@@ -152,6 +167,7 @@ class FacturaController extends Controller
         $hoy = Plazos::hoy()->toDateString();
         $dr = ['serie' => $cfg->series[0]['cod'] ?? 'A', 'fecha' => $hoy, 'receptor_nombre' => '', 'receptor_nif' => '', 'receptor_dir' => '', 'ret_pct' => '0', 'observaciones' => '',
             'forma_pago' => 'Transferencia', 'pago_dias' => '30', 'iban' => '', 'iban_emisor' => '', 'rectifica_id' => '', 'presupuesto_id' => '',
+            'fe_cp' => '', 'fe_municipio' => '', 'fe_provincia' => '', 'dir3_oc' => '', 'dir3_og' => '', 'dir3_ut' => '',
             'lineas' => [['d' => '', 'q' => '1', 'p' => '', 'iva' => '21', 'sup' => false]]];
         $rect = null;
         if ($request->query('rectifica')) {
@@ -161,7 +177,9 @@ class FacturaController extends Controller
                 return redirect()->route('facturacion.config')->with('aviso', 'Crea primero una serie de facturas rectificativas (tipo R1).');
             }
             $dr = array_merge($dr, ['serie' => $serR['cod'], 'receptor_nombre' => $rect->receptor_nombre, 'receptor_nif' => $rect->receptor_nif, 'receptor_dir' => $rect->receptor_dir,
-                'ret_pct' => (string) (0 + $rect->ret_pct), 'forma_pago' => $rect->forma_pago, 'pago_dias' => (string) $rect->pago_dias, 'rectifica_id' => $rect->id,
+                'ret_pct' => (string) (0 + $rect->ret_pct), 'forma_pago' => $rect->forma_pago,
+                'fe_cp' => $rect->datos_fe['cp'] ?? '', 'fe_municipio' => $rect->datos_fe['municipio'] ?? '', 'fe_provincia' => $rect->datos_fe['provincia'] ?? '',
+                'dir3_oc' => $rect->datos_fe['dir3_oc'] ?? '', 'dir3_og' => $rect->datos_fe['dir3_og'] ?? '', 'dir3_ut' => $rect->datos_fe['dir3_ut'] ?? '', 'pago_dias' => (string) $rect->pago_dias, 'rectifica_id' => $rect->id,
                 'lineas' => array_map(fn ($l) => ['d' => 'Rectificación · '.$l['d'], 'q' => Formato::num(-(float) $l['q'], 2), 'p' => Formato::num($l['p']), 'iva' => (string) (0 + $l['iva']), 'sup' => ! empty($l['sup'])], $rect->lineas)]);
         }
         if ($request->query('presupuesto')) {
@@ -171,6 +189,9 @@ class FacturaController extends Controller
             $cli = collect($this->clientesReceptores($c))->firstWhere('nombre', $p->receptor_nombre);
             if ($cli) {
                 $dr['receptor_dir'] = $cli['dir'];
+                $dr['fe_cp'] = $cli['cp'];
+                $dr['fe_municipio'] = $cli['municipio'];
+                $dr['fe_provincia'] = $cli['provincia'];
                 $dr['receptor_nif'] = $dr['receptor_nif'] ?: $cli['nif'];
             }
         }
@@ -194,15 +215,15 @@ class FacturaController extends Controller
         $out = [];
         if ($c->es_despacho) {
             foreach (Cliente::where('es_despacho', false)->orderBy('nombre')->get() as $x) {
-                $out[mb_strtolower($x->nombre)] = ['nombre' => $x->nombre, 'nif' => (string) $x->nif, 'dir' => implode(', ', array_filter([$x->domicilio, trim($x->cp.' '.$x->municipio)])),
+                $out[mb_strtolower($x->nombre)] = ['nombre' => $x->nombre, 'nif' => (string) $x->nif, 'dir' => (string) $x->domicilio, 'cp' => (string) $x->cp, 'municipio' => (string) $x->municipio, 'provincia' => (string) $x->provincia,
                     'ibans' => collect($x->seccion('bancos'))->pluck('iban')->filter()->values()->all()];
             }
         }
         foreach (Factura::where('cliente_id', $c->id)->whereNotNull('receptor_nombre')->orderByDesc('id')->limit(500)->get() as $f) {
-            $out[mb_strtolower($f->receptor_nombre)] ??= ['nombre' => $f->receptor_nombre, 'nif' => (string) $f->receptor_nif, 'dir' => (string) $f->receptor_dir, 'ibans' => array_values(array_filter([$f->iban]))];
+            $out[mb_strtolower($f->receptor_nombre)] ??= ['nombre' => $f->receptor_nombre, 'nif' => (string) $f->receptor_nif, 'dir' => (string) $f->receptor_dir, 'cp' => (string) ($f->datos_fe['cp'] ?? ''), 'municipio' => (string) ($f->datos_fe['municipio'] ?? ''), 'provincia' => (string) ($f->datos_fe['provincia'] ?? ''), 'ibans' => array_values(array_filter([$f->iban]))];
         }
         foreach (Presupuesto::where('cliente_id', $c->id)->orderByDesc('id')->limit(300)->get() as $p) {
-            $out[mb_strtolower($p->receptor_nombre)] ??= ['nombre' => $p->receptor_nombre, 'nif' => (string) $p->receptor_nif, 'dir' => '', 'ibans' => []];
+            $out[mb_strtolower($p->receptor_nombre)] ??= ['nombre' => $p->receptor_nombre, 'nif' => (string) $p->receptor_nif, 'dir' => '', 'cp' => '', 'municipio' => '', 'provincia' => '', 'ibans' => []];
         }
 
         return array_values($out);
@@ -230,7 +251,13 @@ class FacturaController extends Controller
             'lineas.*.iva' => ['nullable', Rule::in(self::IVAS)],
             'rectifica_id' => ['nullable', 'integer'],
             'presupuesto_id' => ['nullable', 'integer'],
-        ], ['fecha.before_or_equal' => 'No se pueden emitir facturas con fecha futura.']);
+            'fe_cp' => ['nullable', 'string', 'max:10'],
+            'fe_municipio' => ['nullable', 'string', 'max:50'],
+            'fe_provincia' => ['nullable', 'string', 'max:20'],
+            'dir3_oc' => ['nullable', 'regex:/^[A-Za-z0-9]{1,10}$/'],
+            'dir3_og' => ['nullable', 'regex:/^[A-Za-z0-9]{1,10}$/'],
+            'dir3_ut' => ['nullable', 'regex:/^[A-Za-z0-9]{1,10}$/'],
+        ], ['dir3_oc.regex' => 'Los códigos DIR3 tienen hasta 10 letras y números.', 'dir3_og.regex' => 'Los códigos DIR3 tienen hasta 10 letras y números.', 'dir3_ut.regex' => 'Los códigos DIR3 tienen hasta 10 letras y números.', 'fecha.before_or_equal' => 'No se pueden emitir facturas con fecha futura.']);
 
         $ser = $cfg->serie($request->input('serie'));
         $tf = $ser['tf'];
@@ -260,6 +287,17 @@ class FacturaController extends Controller
             $ibanEm !== '' && ! Validacion::iban($ibanEm) => 'El IBAN de la empresa no es válido.',
             default => null,
         };
+        $electronica = $cfg->modo === 'electronica';
+        $feCp = trim((string) $request->input('fe_cp'));
+        $dir3 = array_filter([trim((string) $request->input('dir3_oc')), trim((string) $request->input('dir3_og')), trim((string) $request->input('dir3_ut'))]);
+        if (! $err && $electronica && ($tf !== 'F2' || $nif !== '')) {
+            $err = match (true) {
+                ! preg_match('/^\d{5}$/', $feCp) || trim((string) $request->input('fe_municipio')) === '' || trim((string) $request->input('receptor_dir')) === '' => 'Factura electrónica: indica la dirección, el código postal (5 cifras) y el municipio del cliente.',
+                count($dir3) > 0 && count($dir3) < 3 => 'Para facturar a una Administración Pública hacen falta los tres códigos DIR3 (oficina contable, órgano gestor y unidad tramitadora).',
+                ! $c->domicilio || ! preg_match('/^\d{5}$/', (string) $c->cp) || ! $c->municipio => 'Factura electrónica: completa el domicilio, el código postal y el municipio de la empresa en su ficha.',
+                default => null,
+            };
+        }
         if (! $err && $tf === 'F2' && Facturacion::totales($L, (float) $request->input('ret_pct'))['total'] > 3000) {
             $err = 'Una factura simplificada no puede superar 3.000 € (art. 4 RD 1619/2012). Usa la serie ordinaria.';
         }
@@ -272,6 +310,9 @@ class FacturaController extends Controller
             'receptor_nombre' => trim((string) $request->input('receptor_nombre')) ?: null, 'receptor_nif' => $nif ?: null, 'receptor_dir' => trim((string) $request->input('receptor_dir')) ?: null,
             'lineas' => $L, 'ret_pct' => (float) $request->input('ret_pct'), 'forma_pago' => $fp, 'pago_dias' => $dias,
             'iban' => $iban ?: null, 'iban_emisor' => $fp === 'Transferencia' ? ($ibanEm ?: null) : null, 'observaciones' => trim((string) $request->input('observaciones')) ?: null,
+            'modo' => $cfg->modoEfectivo(),
+            'datos_fe' => $electronica ? ['cp' => $feCp, 'municipio' => trim((string) $request->input('fe_municipio')), 'provincia' => trim((string) $request->input('fe_provincia')) ?: Facturae::provinciaDeCp($feCp),
+                'dir3_oc' => strtoupper(trim((string) $request->input('dir3_oc'))), 'dir3_og' => strtoupper(trim((string) $request->input('dir3_og'))), 'dir3_ut' => strtoupper(trim((string) $request->input('dir3_ut')))] : null,
             'rectifica_id' => $rect?->id, 'presupuesto_id' => $request->filled('presupuesto_id') ? Presupuesto::where('cliente_id', $c->id)->find((int) $request->input('presupuesto_id'))?->id : null,
         ];
     }
@@ -365,6 +406,7 @@ class FacturaController extends Controller
         abort_unless($c, 403);
         $cfg = FacturacionConfig::de($c);
         $request->validate([
+            'modo' => ['required', Rule::in(array_keys(FacturacionConfig::MODOS))],
             'pie' => ['nullable', 'string', 'max:500'],
             'series' => ['required', 'array', 'min:1', 'max:20'],
             'series.*.cod' => ['required', 'regex:/^[A-Z0-9]{1,3}$/'],
@@ -405,6 +447,7 @@ class FacturaController extends Controller
         }
         $e = $request->input('est');
         $cfg->fill([
+            'modo' => $request->input('modo'),
             'pie' => trim((string) $request->input('pie')),
             'series' => $series->all(),
             'estilo' => ['modelo' => $e['modelo'], 'color' => strtoupper($e['color']), 'forma' => $e['forma'], 'cuadros' => $request->boolean('est.cuadros'), 'cabecera' => $e['cabecera'],

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\PerteneceACliente;
 use App\Models\Concerns\SoloDespacho;
+use App\Support\Parametros;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -13,7 +14,15 @@ class Oportunidad extends Model
 
     public const ETAPAS = ['Nuevo' => 10, 'Contactado' => 25, 'Presupuesto enviado' => 50, 'Negociación' => 75, 'Ganado' => 100, 'Perdido' => 0];
 
-    public const ORIGENES = ['Web', 'Recomendación', 'Llamada', 'Feria', 'Cliente actual', 'Redes sociales'];
+    public static function probabilidad(string $etapa): int
+    {
+        return (int) (Parametros::get('crm')['probabilidades'][$etapa] ?? self::ETAPAS[$etapa] ?? 0);
+    }
+
+    public static function origenes(): array
+    {
+        return Parametros::get('crm')['origenes'];
+    }
 
     protected $table = 'crm_oportunidades';
 

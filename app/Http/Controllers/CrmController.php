@@ -54,7 +54,7 @@ class CrmController extends Controller
                 fwrite($o, "\xEF\xBB\xBF");
                 fputcsv($o, ['Cliente', 'Oportunidad', 'Etapa', 'Importe', 'Probabilidad', 'Cierre', 'Origen'], ';');
                 foreach ($ops as $x) {
-                    fputcsv($o, [$x->nombre, $x->titulo, $x->etapa, Formato::num($x->importe), Oportunidad::ETAPAS[$x->etapa].' %', Formato::fecha($x->fecha), $x->origen], ';');
+                    fputcsv($o, [$x->nombre, $x->titulo, $x->etapa, Formato::num($x->importe), Oportunidad::probabilidad($x->etapa).' %', Formato::fecha($x->fecha), $x->origen], ';');
                 }
                 fclose($o);
             }, 'crm-oportunidades.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -64,7 +64,7 @@ class CrmController extends Controller
             'titulo' => 'CRM', 'activo' => 'crm', 'c' => $c, 'tab' => $tab, 'hoy' => $hoy,
             'kpis' => [
                 ['Embudo abierto', Formato::eur($abiertas->sum('importe'), 0), Formato::entero($abiertas->count()).' oportunidades'],
-                ['Previsión ponderada', Formato::eur($abiertas->sum(fn ($o) => $o->importe * Oportunidad::ETAPAS[$o->etapa] / 100), 0), 'Según la probabilidad de cada etapa'],
+                ['Previsión ponderada', Formato::eur($abiertas->sum(fn ($o) => $o->importe * Oportunidad::probabilidad($o->etapa) / 100), 0), 'Según la probabilidad de cada etapa'],
                 ['Ganado en '.$hoy->year, Formato::eur($won->sum('importe'), 0), Formato::entero($won->count()).' cerradas'],
                 ['Conversión', ($ganadas->count() + $perdidas->count() ? round($ganadas->count() / ($ganadas->count() + $perdidas->count()) * 100) : 0).' %', 'Ganadas frente a cerradas'],
             ],
@@ -83,7 +83,7 @@ class CrmController extends Controller
         abort_unless($c, 403);
         $d = $request->validate([
             'nombre' => ['required', 'string', 'max:255'], 'titulo' => ['required', 'string', 'max:255'], 'importe' => ['nullable', 'string', 'max:20'],
-            'etapa' => ['required', Rule::in(array_keys(Oportunidad::ETAPAS))], 'fecha' => ['required', 'date'], 'origen' => ['required', Rule::in(Oportunidad::ORIGENES)],
+            'etapa' => ['required', Rule::in(array_keys(Oportunidad::ETAPAS))], 'fecha' => ['required', 'date'], 'origen' => ['required', Rule::in(Oportunidad::origenes())],
         ], ['nombre.required' => 'Indica el cliente y qué le ofreces.', 'titulo.required' => 'Indica el cliente y qué le ofreces.']);
         $o = Oportunidad::create(['cliente_id' => $c->id, 'nombre' => trim($d['nombre']), 'titulo' => trim($d['titulo']), 'importe' => max(0, Formato::parseNum($d['importe'] ?? '0')),
             'etapa' => $d['etapa'], 'fecha' => $d['fecha'], 'origen' => $d['origen'], 'responsable_id' => $request->user()->id]);

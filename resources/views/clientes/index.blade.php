@@ -9,6 +9,7 @@
       <a class="btn lime" href="{{ route('clientes.create') }}">+ Nuevo cliente</a>
     </div>
   </div>
+  @include('partials.tabs-modulo', ['modulo' => 'clientes', 'actual' => 'modulo'])
   <div class="kpis">
     @foreach($resumen as [$l, $v])
       <div class="kpi"><span>{{ $l }}</span><b>{{ Formato::entero($v) }}</b></div>

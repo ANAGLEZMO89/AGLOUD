@@ -22,5 +22,5 @@ th{background:{{ $col }};color:#fff;font-size:10px;text-transform:uppercase;lett
 @foreach($p->lineas as $l)<tr><td>{{ $l['d'] }}</td><td class="r">{{ $q($l['q']) }}</td><td class="r">{{ Formato::num($l['p']) }}</td><td class="r">{{ 0 + $l['iva'] }} %</td><td class="r">{{ Formato::num(round($l['q'] * $l['p'], 2)) }}</td></tr>@endforeach
 </table>
 <table style="width:280px;margin-left:auto"><tr><td>Base imponible</td><td class="r">{{ Formato::num($p->base) }}</td></tr><tr><td>IVA</td><td class="r">{{ Formato::num($p->cuota) }}</td></tr><tr><td><b>Total</b></td><td class="r"><b>{{ Formato::eur($p->total) }}</b></td></tr></table>
-<p style="margin-top:30px;color:#666;font-size:10.5px">Para aceptar el presupuesto, devuélvalo firmado o confírmelo por escrito antes de la fecha de validez.</p>
+<p style="margin-top:30px;color:#666;font-size:10.5px">{{ \App\Support\Parametros::get('crm')['pie_presupuesto'] }}</p>
 </body></html>

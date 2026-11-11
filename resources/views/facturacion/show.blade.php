@@ -12,6 +12,7 @@
       <div class="card" style="padding:16px 18px;gap:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font:600 14px var(--mono)">{{ $f->num }}</span><span style="font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:10px;background:{{ $bg }};color:{{ $fg }}">{{ $st }}</span></div>
         <a class="pillbtn ink" style="height:40px" href="{{ route('facturacion.documento', [$f, 'imprimir' => 1]) }}" target="_blank" rel="noopener">Descargar PDF</a>
+        @if($f->modo === 'electronica' && $f->receptor_nif)<a class="pillbtn" style="height:40px;border:1.5px solid #0B0B0B" href="{{ route('facturacion.facturae', $f) }}">Factura electrónica (XML Facturae)</a>@endif
         @if($f->estado === 'Emitida')
           <form method="POST" action="{{ route('facturacion.cobro', $f) }}">@csrf<button class="pillbtn lime" style="width:100%;font-weight:700" type="submit">{{ $f->cobrada ? 'Anular cobro' : 'Marcar como cobrada' }}</button></form>
           @if($f->tipo !== 'R1')<a class="pillbtn" href="{{ route('facturacion.create', ['rectifica' => $f->id]) }}">Rectificar</a>@endif

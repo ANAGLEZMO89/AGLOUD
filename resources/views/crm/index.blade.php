@@ -35,7 +35,7 @@
       <input class="inp mono" name="importe" value="{{ old('importe') }}" placeholder="Importe estimado €" inputmode="decimal">
       <select class="sel" name="etapa">@foreach($etapas as $e)<option @selected(old('etapa', 'Nuevo') === $e)>{{ $e }}</option>@endforeach</select>
       <input class="inp" type="date" name="fecha" value="{{ old('fecha', $hoy->addDays(30)->toDateString()) }}" title="Cierre previsto">
-      <select class="sel" name="origen">@foreach(Oportunidad::ORIGENES as $o)<option @selected(old('origen', 'Web') === $o)>{{ $o }}</option>@endforeach</select>
+      <select class="sel" name="origen">@foreach(Oportunidad::origenes() as $o)<option @selected(old('origen') === $o)>{{ $o }}</option>@endforeach</select>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px"><a class="btn soft" href="{{ route('crm.index') }}">Cancelar</a><button class="btn lime" type="submit">Crear</button></div>
   </form>
@@ -46,6 +46,7 @@
       @foreach([['embudo', 'Embudo'], ['pres', 'Presupuestos'], ['agenda', 'Agenda'.($pendientes ? ' · '.$pendientes : '')]] as [$id, $l])
         <a class="{{ $tab === $id ? 'on' : '' }}" style="padding:7px 14px;border-radius:8px" href="{{ route('crm.index', $id === 'embudo' ? [] : ['tab' => $id]) }}">{{ $l }}</a>
       @endforeach
+      <a style="padding:7px 14px;border-radius:8px" href="{{ route('parametros', 'crm') }}">Parámetros</a>
     </div>
     <div style="display:flex;align-items:center;gap:4px;padding:3px;border-radius:20px;background:#fff"><span style="padding:0 8px 0 10px;font-size:13px;font-weight:700">Exportar</span><a class="pillbtn" style="height:30px;font-size:12.5px" href="{{ route('crm.index', ['exportar' => 'csv']) }}">Excel / CSV</a></div>
   </div>
@@ -88,7 +89,7 @@
         <div style="display:grid;grid-template-columns:minmax(0,1fr) 180px 170px;gap:10px">
           <input class="inp" name="cli" value="{{ old('cli', $presNuevo->nombre) }}" placeholder="Cliente *" maxlength="255" required>
           <input class="inp mono upper" name="nif" value="{{ old('nif', $presNuevo->nif) }}" placeholder="NIF (opcional)" maxlength="20">
-          <select class="sel" name="validez">@foreach([15, 30, 60, 90] as $v)<option value="{{ $v }}" @selected((string) old('validez', '30') === (string) $v)>Válido {{ $v }} días</option>@endforeach</select>
+          <select class="sel" name="validez">@foreach([15, 30, 60, 90] as $v)<option value="{{ $v }}" @selected((string) old('validez', \App\Support\Parametros::get('crm')['validez']) === (string) $v)>Válido {{ $v }} días</option>@endforeach</select>
         </div>
         <datalist id="pr-prods">@foreach($catalogo as $p)<option value="{{ $p['nombre'] }}">{{ Formato::num($p['precio']) }} €</option>@endforeach</datalist>
         <div data-fc-lines style="display:flex;flex-direction:column;gap:8px">

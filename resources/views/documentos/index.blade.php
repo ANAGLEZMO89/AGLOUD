@@ -17,6 +17,7 @@
     </div>
   </div>
 
+  @unless($portal)@include('partials.tabs-modulo', ['modulo' => 'documentos', 'actual' => 'modulo'])@endunless
   @if($errors->any())<div class="ferr">{{ $errors->first() }}</div>@endif
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px">

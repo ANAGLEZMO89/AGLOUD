@@ -129,6 +129,7 @@ class Facturacion
             $f = Factura::create([
                 'cliente_id' => $emisor->id, 'serie' => $d['serie'], 'numero' => $n, 'num' => $num, 'tipo' => $d['tf'], 'fecha' => $fecha->toDateString(),
                 'receptor_nombre' => $d['receptor_nombre'] ?? null, 'receptor_nif' => $d['receptor_nif'] ?? null, 'receptor_dir' => $d['receptor_dir'] ?? null,
+                'datos_fe' => $d['datos_fe'] ?? null, 'modo' => $d['modo'] ?? 'normal',
                 'lineas' => $d['lineas'], 'ivas' => $t['ivas'], 'ret_pct' => $d['ret_pct'] ?? 0,
                 'base' => $t['base'], 'cuota' => $t['cuota'], 'retencion' => $t['retencion'], 'suplidos' => $t['suplidos'], 'total' => $t['total'],
                 'forma_pago' => $d['forma_pago'] ?? null, 'pago_dias' => (int) ($d['pago_dias'] ?? 0), 'iban' => $d['iban'] ?? null, 'iban_emisor' => $d['iban_emisor'] ?? null,

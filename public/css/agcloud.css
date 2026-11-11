@@ -443,3 +443,14 @@ input[data-color-pick]:checked+.swatch{box-shadow:0 0 0 2px #0B0B0B}
 .chkbox{width:20px;height:20px;border-radius:6px;border:1.5px solid #C4C4BE;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;padding:0}
 .chkbox.on{background:#0B0B0B;color:#C8F031;border:0}
 @media (max-width:900px){.ag-grid{grid-template-columns:1fr 1fr !important}}
+.modo-opt{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;border:1px solid #E6E6E0;cursor:pointer}
+.modo-opt input{position:absolute;opacity:0;pointer-events:none}
+.modo-opt .dot{flex:none;width:16px;height:16px;border-radius:50%;border:1.5px solid #9A9A94;margin-top:2px;box-sizing:border-box}
+.modo-opt:has(input:checked){border:1.5px solid #0B0B0B}
+.modo-opt:has(input:checked) .dot{border:5px solid #0B0B0B}
+.par-tipos{display:grid;grid-template-columns:90px 120px minmax(0,1.6fr) 70px 110px minmax(0,1fr) 24px;gap:8px;align-items:center}
+.par-tipos .inp,.par-tipos .sel{height:36px;font-size:13px}
+.par-head{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6A65}
+.par-tram{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:#F7F7F3}
+@media (max-width:900px){.par-tipos{grid-template-columns:1fr 1fr}.par-head{display:none}}
+fieldset:disabled .inp,fieldset:disabled .sel,fieldset:disabled .txa{background:#F4F4F0;color:#3C3C3C}

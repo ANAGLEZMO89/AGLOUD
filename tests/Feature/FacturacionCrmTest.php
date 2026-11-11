@@ -193,7 +193,7 @@ class FacturacionCrmTest extends TestCase
         }
         $this->en($this->a)->get(route('facturacion.index', ['exportar' => 'csv']))->assertOk()->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $this->en($this->a)->post(route('facturacion.verificar'))->assertSessionHas('chk', fn ($c) => $c['ok'] === true);
-        $this->en($this->a)->post(route('facturacion.config.guardar'), ['pie' => 'Gracias', 'series' => [['cod' => 'A', 'nombre' => 'Ordinarias', 'tf' => 'R1'], ['cod' => 'S', 'nombre' => 'Simplificadas', 'tf' => 'F2'], ['cod' => 'R', 'nombre' => 'Rectificativas', 'tf' => 'R1']], 'nueva_serie' => 'b',
+        $this->en($this->a)->post(route('facturacion.config.guardar'), ['modo' => 'normal', 'pie' => 'Gracias', 'series' => [['cod' => 'A', 'nombre' => 'Ordinarias', 'tf' => 'R1'], ['cod' => 'S', 'nombre' => 'Simplificadas', 'tf' => 'F2'], ['cod' => 'R', 'nombre' => 'Rectificativas', 'tf' => 'R1']], 'nueva_serie' => 'b',
             'est' => ['modelo' => 'moderna', 'color' => '#1f3a5f', 'forma' => 'suave', 'cabecera' => 'relleno', 'margen' => 'normal', 'fuente' => 'sans', 'cuadros' => '1'], 'cat' => [['nombre' => 'Cuota mensual', 'precio' => '120,00', 'iva' => '21']]])->assertRedirect();
         $cfg = FacturacionConfig::where('cliente_id', $this->a->id)->first();
         $this->assertSame('F1', $cfg->serie('A')['tf']); // con facturas: no cambia de tipo

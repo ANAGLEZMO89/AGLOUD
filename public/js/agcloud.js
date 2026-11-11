@@ -336,7 +336,10 @@
     var onCli = function (fill) {
       var r = find(cli.value);
       if (nuevo) nuevo.style.display = cli.value.trim() && !r ? '' : 'none';
-      if (r && fill) { $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir; if (!iban.value && r.ibans[0]) iban.value = r.ibans[0]; }
+      if (r && fill) {
+        $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir; if (!iban.value && r.ibans[0]) iban.value = r.ibans[0];
+        [['[data-fc-cp]', 'cp'], ['[data-fc-mun]', 'municipio'], ['[data-fc-prov]', 'provincia']].forEach(function (x) { var el = $(x[0], fcf); if (el && r[x[1]] != null) el.value = r[x[1]]; });
+      }
       fillIbans(r);
     };
     on(cli, 'change', function () { onCli(true); }); onCli(false);
@@ -371,6 +374,19 @@
     var cf = catBox.closest('form');
     on(cf, 'change', function () { var d = $('[data-dirty]'); if (d) d.style.display = ''; });
   }
+
+  // ---------- Parámetros: filas que se añaden y se quitan ----------
+  var rowN = 5000;
+  $$('[data-rows]').forEach(function (box) {
+    var k = box.getAttribute('data-rows');
+    var wire = function (row) { on($('[data-row-del]', row), 'click', function () { if ($$('[data-row]', box).length > 1) row.remove(); }); };
+    $$('[data-row]', box).forEach(wire);
+    on($('[data-row-add="' + k + '"]'), 'click', function () {
+      var tpl = $('[data-row-tpl="' + k + '"]'), row = tpl.content.firstElementChild.cloneNode(true), n = rowN++;
+      $$('[name]', row).forEach(function (el) { el.name = el.name.replace('[__]', '[' + n + ']'); });
+      box.appendChild(row); wire(row); var f = $('input', row); if (f) f.focus();
+    });
+  });
 
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {

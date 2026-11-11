@@ -11,6 +11,7 @@ use App\Services\AlmacenDocumentos;
 use App\Services\Auditoria;
 use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
+use App\Support\Parametros;
 use App\Support\Plazos;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -30,9 +31,9 @@ class NotificacionController extends Controller
 
     public static function avisos(): array
     {
-        $a = json_decode((string) Ajuste::get('avisos_notificaciones', ''), true) ?: [];
+        $a = Parametros::get('notificaciones');
 
-        return ['email' => (bool) ($a['email'] ?? true), 'wa' => (bool) ($a['wa'] ?? false), 'dias' => (int) ($a['dias'] ?? config('agcloud.avisar_dias', 3))];
+        return ['email' => (bool) $a['email'], 'wa' => (bool) $a['wa'], 'dias' => (int) $a['dias']];
     }
 
     /** Número de notificaciones sin abrir (para la insignia del menú) */
@@ -98,7 +99,6 @@ class NotificacionController extends Controller
     {
         $ctx = $request->attributes->get('ctx');
         abort_unless($ctx, 403);
-        $tipos = config('agcloud.tipos_notificacion');
         $data = $request->validate([
             'cliente_id' => ['required', 'integer', Rule::exists('clientes', 'id')->where('es_despacho', false)],
             'plantilla' => ['required', 'string'],

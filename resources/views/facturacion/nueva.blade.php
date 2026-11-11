@@ -31,6 +31,22 @@
           <label class="lbl-s">NIF del cliente<input class="inp mono upper" name="receptor_nif" value="{{ $dr['receptor_nif'] }}" maxlength="20" data-fc-nif></label>
           <label class="lbl-s">Dirección del cliente<input class="inp" name="receptor_dir" value="{{ $dr['receptor_dir'] }}" maxlength="255" data-fc-dir></label>
         </div>
+        @if($cfg->modo === 'electronica')
+        <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;background:#F4F4F0">
+          <span style="font-size:12.5px;font-weight:700">Factura electrónica · datos del cliente</span>
+          <div style="display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr);gap:10px">
+            <label class="lbl-s">C.P.<input class="inp mono" name="fe_cp" value="{{ $dr['fe_cp'] }}" maxlength="5" inputmode="numeric" data-fc-cp></label>
+            <label class="lbl-s">Municipio<input class="inp" name="fe_municipio" value="{{ $dr['fe_municipio'] }}" maxlength="50" data-fc-mun></label>
+            <label class="lbl-s">Provincia<input class="inp" name="fe_provincia" value="{{ $dr['fe_provincia'] }}" maxlength="20" data-fc-prov placeholder="Se deduce del C.P."></label>
+          </div>
+          <span style="font-size:12px;color:#6A6A65">Solo si facturas a una Administración Pública (FACe): códigos DIR3 que te haya dado.</span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+            <label class="lbl-s">Oficina contable<input class="inp mono upper" name="dir3_oc" value="{{ $dr['dir3_oc'] }}" maxlength="10"></label>
+            <label class="lbl-s">Órgano gestor<input class="inp mono upper" name="dir3_og" value="{{ $dr['dir3_og'] }}" maxlength="10"></label>
+            <label class="lbl-s">Unidad tramitadora<input class="inp mono upper" name="dir3_ut" value="{{ $dr['dir3_ut'] }}" maxlength="10"></label>
+          </div>
+        </div>
+        @endif
         <div style="display:flex;flex-direction:column;gap:8px">
           <div class="fc-lin fc-lin-h"><span>Descripción</span><span>Cant.</span><span>Precio</span><span>IVA %</span><span>Suplido</span><span style="text-align:right">Importe</span><span></span></div>
           <div data-fc-lines style="display:flex;flex-direction:column;gap:8px">

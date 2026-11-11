@@ -13,6 +13,7 @@ use App\Http\Controllers\EscritorioController;
 use App\Http\Controllers\ExpedienteController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NotificacionController;
+use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
 use Illuminate\Support\Facades\Route;
 
@@ -90,6 +91,10 @@ Route::middleware('auth')->group(function () {
             Route::delete('/', [NotificacionController::class, 'destroy'])->name('destroy');
         });
 
+        // Parámetros de cada módulo
+        Route::get('/parametros/{modulo}', [ParametrosController::class, 'show'])->name('parametros');
+        Route::post('/parametros/{modulo}', [ParametrosController::class, 'guardar'])->name('parametros.guardar');
+
         // Facturación (modo No VERI*FACTU: sin envío a la AEAT)
         Route::prefix('facturacion')->name('facturacion.')->group(function () {
             Route::get('/', [FacturaController::class, 'index'])->name('index');
@@ -103,6 +108,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/muestra', [FacturaController::class, 'muestra'])->name('muestra');
             Route::get('/{factura}', [FacturaController::class, 'show'])->whereNumber('factura')->name('show');
             Route::get('/{factura}/documento', [FacturaController::class, 'documento'])->whereNumber('factura')->name('documento');
+            Route::get('/{factura}/facturae', [FacturaController::class, 'facturae'])->whereNumber('factura')->name('facturae');
             Route::post('/{factura}/cobro', [FacturaController::class, 'cobro'])->whereNumber('factura')->name('cobro');
             Route::post('/{factura}/anular', [FacturaController::class, 'anular'])->whereNumber('factura')->name('anular');
         });

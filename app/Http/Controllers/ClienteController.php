@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AccesosPortal;
 use App\Services\Auditoria;
 use App\Support\Formato;
+use App\Support\Parametros;
 use App\Support\SeccionesAlta;
 use App\Support\Validacion;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -118,7 +119,8 @@ class ClienteController extends Controller
         $nuevo = new Cliente([
             'tipo' => in_array($request->query('tipo'), config('agcloud.tipos_cliente'), true) ? $request->query('tipo') : 'Autónomo',
             'provincia' => config('agcloud.despacho.provincia'), 'fecha_alta' => now(), 'asesor_id' => $request->user()->id,
-            'cuota_periodicidad' => 'Mensual', 'cuota_iva' => 21, 'cuota_forma_cobro' => 'Domiciliación SEPA', 'cuota_concepto' => 'Honorarios de asesoría',
+            'cuota_periodicidad' => Parametros::get('clientes')['periodicidad'], 'cuota_iva' => Parametros::get('clientes')['iva'],
+            'cuota_forma_cobro' => Parametros::get('clientes')['forma_cobro'], 'cuota_concepto' => Parametros::get('clientes')['concepto'],
         ]);
 
         return view('clientes.index', $this->datosListado($request) + [

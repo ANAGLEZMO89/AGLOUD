@@ -6,6 +6,8 @@ use App\Models\Cliente;
 use App\Models\Documento;
 use App\Models\User;
 use App\Services\AlmacenDocumentos;
+use App\Support\Parametros;
+use App\Support\Plazos;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
@@ -19,6 +21,8 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
         $this->docsDir = sys_get_temp_dir().'/agcloud-test-'.getmypid().'-'.uniqid();
         config(['agcloud.docs_path' => $this->docsDir]);
+        Parametros::limpiar();
+        Plazos::limpiarCache();
     }
 
     protected function tearDown(): void

@@ -8,6 +8,7 @@ use App\Services\AlmacenDocumentos;
 use App\Services\Auditoria;
 use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
+use App\Support\Parametros;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -52,7 +53,9 @@ class DocumentoController extends Controller
         $yr = (string) $request->query('y', 'Todos');
         $oc = max(0, min(4, (int) $request->query('o', 0)));
         $q = trim((string) $request->query('q', ''));
-        $limite60 = now()->addDays(60)->toDateString();
+        $par = Parametros::get('documentos');
+        $diasCad = (int) $par['aviso_caducidad'];
+        $limite60 = now()->addDays($diasCad)->toDateString();
 
         $base = Documento::where('cliente_id', $c->id)->gestor();
         $vivos = (clone $base)->vivos();
@@ -82,9 +85,9 @@ class DocumentoController extends Controller
         $soon = $todosVivos->filter(fn ($d) => $d->caduca && $d->caduca->toDateString() <= $limite60);
         $kb = $todosVivos->sum('tamano') / 1024;
         $kpis = [
-            ['Documentos', Formato::entero($todosVivos->count()), Formato::num($kb / 1024, 1).' MB de '.Formato::entero(config('agcloud.cupo_mb') / 1024).' GB'],
+            ['Documentos', Formato::entero($todosVivos->count()), Formato::num($kb / 1024, 1).' MB de '.Formato::num($par['cupo_mb'] / 1024, $par['cupo_mb'] % 1024 ? 1 : 0).' GB'],
             ['Por revisar', Formato::entero($todosVivos->where('por_revisar', true)->count()), 'Subidos por el cliente'],
-            ['Caducan en 60 días', Formato::entero($soon->count()), $soon->count() ? $soon->take(2)->map(fn ($d) => config('agcloud.tipos_documento.'.$d->tipo, 'Documento'))->implode(' · ') : 'Nada a la vista'],
+            ['Caducan en '.$diasCad.' días', Formato::entero($soon->count()), $soon->count() ? $soon->take(2)->map(fn ($d) => config('agcloud.tipos_documento.'.$d->tipo, 'Documento'))->implode(' · ') : 'Nada a la vista'],
             ['Compartidos en el portal', Formato::entero($todosVivos->where('compartido', true)->count()), 'Visibles para el cliente'],
         ];
         if ($portal) {

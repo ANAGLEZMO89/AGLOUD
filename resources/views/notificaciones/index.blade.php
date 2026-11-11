@@ -3,13 +3,14 @@
     use App\Support\Formato;
     use App\Support\Plazos;
     $orgs = config('agcloud.organismos');
+    $tiposN = \App\Support\Parametros::get('notificaciones')['tipos'];
 @endphp
 @section('content')
 <div class="page" style="gap:16px">
   <div class="page-h">
     <div class="t"><span class="crumb">Comunicación · Notificaciones</span><h1 class="ttl">Notificaciones</h1></div>
     <div class="row" style="min-width:0;max-width:100%">
-      <a class="btn white lg" href="{{ $url(['avisos' => $avOpen ? null : 1, 'sel' => $sel?->id]) }}">Avisos</a>
+      <a class="btn white lg" href="{{ route('parametros', 'notificaciones') }}">Avisos</a>
       <a class="btn lg" href="{{ $url(['nueva' => 1]) }}" style="background:#0B0B0B;color:#fff"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031"></span>Registrar notificación</a>
       <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px 6px;border-radius:22px;background:#fff;min-width:0;max-width:100%">
         <span style="width:32px;height:32px;flex:none;border-radius:50%;background:#0B0B0B;color:#C8F031;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ $c->iniciales() }}</span>
@@ -19,6 +20,7 @@
     </div>
   </div>
 
+  @include('partials.tabs-modulo', ['modulo' => 'notificaciones', 'actual' => 'modulo'])
   @if($errors->any() && ! $nuevo)<div class="ferr">{{ $errors->first() }}</div>@endif
 
   @if($avOpen)
@@ -175,7 +177,7 @@
   <a class="shade" href="{{ $url() }}" aria-label="Cerrar"></a>
   <div class="panel">
     <div class="ph"><div><b>Registrar notificación</b><small>Anota lo que ha llegado a DEHú o a la sede del organismo</small></div><a class="x" href="{{ $url() }}" aria-label="Cerrar">×</a></div>
-    <form method="POST" action="{{ route('notificaciones.store') }}" enctype="multipart/form-data" style="display:flex;flex-direction:column;flex:1;min-height:0" data-notif-form data-tipos='@json(config('agcloud.tipos_notificacion'))' data-festivos-hoy="{{ $hoy }}">
+    <form method="POST" action="{{ route('notificaciones.store') }}" enctype="multipart/form-data" style="display:flex;flex-direction:column;flex:1;min-height:0" data-notif-form data-tipos='@json($tiposN)' data-festivos-hoy="{{ $hoy }}">
       @csrf
       <div class="pc" style="overflow-y:auto;gap:14px">
         @if($errors->any())<div class="ferr">{{ $errors->first() }}</div>@endif
@@ -187,7 +189,7 @@
         </label>
         <label class="lbl-s">Tipo de notificación
           <select class="sel" name="plantilla" data-plantilla>
-            @foreach(config('agcloud.tipos_notificacion') as $i => $t)<option value="{{ $i }}" @selected((string) old('plantilla', '0') === (string) $i)>{{ $t[0] }} · {{ $t[2] }}</option>@endforeach
+            @foreach($tiposN as $i => $t)<option value="{{ $i }}" @selected((string) old('plantilla', '0') === (string) $i)>{{ $t[0] }} · {{ $t[2] }}</option>@endforeach
             <option value="otro" @selected(old('plantilla') === 'otro')>Otra (escribir a mano)</option>
           </select>
         </label>
@@ -195,16 +197,16 @@
           <label class="lbl-s">Organismo<select class="sel" name="organismo" data-f="0">@foreach($orgs as $k => $l)<option value="{{ $k }}" @selected(old('organismo', 'AEAT') === $k)>{{ $k }} · {{ $l }}</option>@endforeach</select></label>
           <label class="lbl-s">Canal<select class="sel" name="canal" data-f="1">@foreach(config('agcloud.canales') as $k)<option @selected(old('canal', 'Sede AEAT') === $k)>{{ $k }}</option>@endforeach</select></label>
         </div>
-        <label class="lbl-s">Tipo<input class="inp" name="tipo" value="{{ old('tipo', config('agcloud.tipos_notificacion.0.2')) }}" maxlength="160" required data-f="2"></label>
+        <label class="lbl-s">Tipo<input class="inp" name="tipo" value="{{ old('tipo', $tiposN[0][2] ?? '') }}" maxlength="160" required data-f="2"></label>
         <label class="lbl-s">Asunto<input class="inp" name="asunto" value="{{ old('asunto') }}" maxlength="255" placeholder="Ej.: IVA 2T 2026 · diferencias en el modelo 303"></label>
         <div class="fgrid" style="grid-template-columns:1fr 1fr;gap:12px">
           <label class="lbl-s">Puesta a disposición *<input class="inp" type="date" name="puesta" value="{{ old('puesta', $hoy) }}" max="{{ $hoy }}" required data-puesta></label>
           <label class="lbl-s">Referencia / CSV<input class="inp mono" name="referencia" value="{{ old('referencia') }}" maxlength="80"></label>
         </div>
         <div class="fgrid" style="grid-template-columns:90px 1fr 1fr;gap:12px">
-          <label class="lbl-s">Plazo<input class="inp" type="number" name="plazo_n" min="0" max="365" value="{{ old('plazo_n', config('agcloud.tipos_notificacion.0.3')) }}" data-f="3" required></label>
-          <label class="lbl-s">Días<select class="sel" name="plazo_tipo" data-f="4">@foreach(['h' => 'hábiles', 'n' => 'naturales', 'm' => 'meses'] as $k => $l)<option value="{{ $k }}" @selected(old('plazo_tipo', config('agcloud.tipos_notificacion.0.4')) === $k)>{{ $l }}</option>@endforeach</select></label>
-          <label class="lbl-s">Actuación<input class="inp" name="accion" value="{{ old('accion', config('agcloud.tipos_notificacion.0.5')) }}" maxlength="120" data-f="5"></label>
+          <label class="lbl-s">Plazo<input class="inp" type="number" name="plazo_n" min="0" max="365" value="{{ old('plazo_n', $tiposN[0][3] ?? 0) }}" data-f="3" required></label>
+          <label class="lbl-s">Días<select class="sel" name="plazo_tipo" data-f="4">@foreach(['h' => 'hábiles', 'n' => 'naturales', 'm' => 'meses'] as $k => $l)<option value="{{ $k }}" @selected(old('plazo_tipo', $tiposN[0][4] ?? 'h') === $k)>{{ $l }}</option>@endforeach</select></label>
+          <label class="lbl-s">Actuación<input class="inp" name="accion" value="{{ old('accion', $tiposN[0][5] ?? '') }}" maxlength="120" data-f="5"></label>
         </div>
         <span class="hint muted" style="margin-top:-6px">Revisa el plazo con el que indique la propia notificación: manda lo que diga el documento.</span>
         <label class="chk" style="gap:10px"><input type="checkbox" name="abierta" value="1" @checked(old('abierta')) data-abierta style="width:18px;height:18px;accent-color:#0B0B0B"><span style="font-size:13.5px;font-weight:600">Ya la hemos abierto en la sede</span></label>

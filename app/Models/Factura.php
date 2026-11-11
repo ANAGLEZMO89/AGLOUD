@@ -30,7 +30,7 @@ class Factura extends Model
     {
         return [
             'fecha' => 'immutable_date', 'cobrada_at' => 'immutable_date', 'lineas' => 'array', 'ivas' => 'array',
-            'cobrada' => 'boolean', 'iban' => 'encrypted', 'iban_emisor' => 'encrypted',
+            'cobrada' => 'boolean', 'datos_fe' => 'array', 'iban' => 'encrypted', 'iban_emisor' => 'encrypted',
             'base' => 'decimal:2', 'cuota' => 'decimal:2', 'retencion' => 'decimal:2', 'suplidos' => 'decimal:2', 'total' => 'decimal:2', 'ret_pct' => 'decimal:2',
         ];
     }

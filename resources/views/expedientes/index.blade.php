@@ -7,6 +7,7 @@
     <a class="btn lime" href="{{ $url(['nuevo' => 1]) }}">+ Nuevo expediente</a>
   </div>
 
+  @include('partials.tabs-modulo', ['modulo' => 'expedientes', 'actual' => 'modulo'])
   @if($soloCli)
     <div class="msg" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>Mostrando solo los expedientes de <b>{{ $soloCli->nombre }}</b>.</span><a href="{{ route('escritorio', ['cambiar' => 1, 'volver' => '/expedientes']) }}" style="font-weight:600">Cambiar empresa</a></div>
   @endif
@@ -76,7 +77,7 @@
 
 @section('overlay')
 @if($nuevo)
-@php $tpls = config('agcloud.plantillas_expediente'); $t0 = $tpls[$tplDef] ?? reset($tpls); @endphp
+@php $tpls = \App\Support\Parametros::get('expedientes')['plantillas']; $t0 = $tpls[$tplDef] ?? reset($tpls); @endphp
 <div class="drawer sm" role="dialog" aria-modal="true" aria-label="Nuevo expediente">
   <a class="shade" href="{{ $url() }}" aria-label="Cerrar"></a>
   <div class="panel">

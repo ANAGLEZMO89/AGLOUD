@@ -92,8 +92,9 @@ class Plazos
     /** @return array<string,string> fecha => nombre */
     public static function festivos(int $y): array
     {
-        $ca = (string) config('agcloud.comunidad', '');
-        $extra = (array) config('agcloud.festivos_extra', []);
+        $par = Parametros::get('notificaciones');
+        $ca = (string) $par['comunidad'];
+        $extra = array_merge((array) config('agcloud.festivos_extra', []), array_map(fn ($f) => (string) ($f['fecha'] ?? ''), (array) $par['festivos']));
         $key = $y.'|'.$ca.'|'.implode(',', $extra);
         if (isset(self::$cache[$key])) {
             return self::$cache[$key];
@@ -118,6 +119,11 @@ class Plazos
         foreach ($extra as $e) {
             if (preg_match('/^'.$y.'-\d{2}-\d{2}$/', $e)) {
                 $f[$e] = 'Festivo';
+            }
+        }
+        foreach ((array) $par['festivos'] as $x) {
+            if (str_starts_with((string) ($x['fecha'] ?? ''), $y.'-') && ! empty($x['nombre'])) {
+                $f[$x['fecha']] = $x['nombre'];
             }
         }
 
