@@ -111,17 +111,29 @@ class LaboralController extends Controller
     private function leerFicha(array $in, array $d, array $P): array
     {
         $txt = ['nom1', 'ape1', 'ape2', 'tipoDoc', 'nif', 'fnac', 'sexo', 'nac', 'ecivil', 'dom', 'cp', 'mun', 'prov', 'tel', 'email', 'nivForm', 'iban', 'disc',
-            'naf', 'ccc', 'altaSS', 'cno', 'epig', 'relEsp', 'contrato', 'alta', 'fin', 'causa', 'sustituido', 'horas', 'horario', 'centro', 'convCat', 'prueba', 'vac', 'irpfModo'];
+            'naf', 'ccc', 'altaSS', 'cno', 'epig', 'relEsp', 'contrato', 'alta', 'fin', 'causa', 'sustituido', 'horas', 'horario', 'centro', 'convCat', 'prueba', 'vac', 'irpfModo',
+            'autMutua', 'autTarifaFin', 'iae'];
         $o = [];
         foreach ($txt as $k) {
             if (array_key_exists($k, $in)) {
                 $o[$k] = mb_substr(trim((string) $in[$k]), 0, $k === 'causa' ? 600 : 160);
             }
         }
-        foreach (['jor', 'salBase', 'plus', 'irpf'] as $k) {
+        foreach (['jor', 'salBase', 'plus', 'irpf', 'autBase', 'autCuota', 'autRend'] as $k) {
             if (array_key_exists($k, $in)) {
                 $o[$k] = round(Formato::parseNum((string) $in[$k]), 2);
             }
+        }
+        $o['regimen'] = ($in['regimen'] ?? ($d['regimen'] ?? 'General')) === 'Autónomo' ? 'Autónomo' : 'General';
+        if ($o['regimen'] === 'Autónomo' && ! empty($in['autAlta'])) {
+            $o['alta'] = mb_substr(trim((string) $in['autAlta']), 0, 10);
+        }
+        if (array_key_exists('autTipo', $in)) {
+            $o['autTipo'] = in_array($in['autTipo'], Nomina::TIPOS_AUTONOMO, true) ? $in['autTipo'] : Nomina::TIPOS_AUTONOMO[0];
+        }
+        if (array_key_exists('_aut', $in)) {
+            $o['autCese'] = ! empty($in['autCese']);
+            $o['autTarifa'] = ! empty($in['autTarifa']);
         }
         $o['grupo'] = max(1, min(7, (int) ($in['grupo'] ?? $d['grupo'])));
         $o['pagas'] = (int) ($in['pagas'] ?? 14) === 12 ? 12 : 14;
@@ -158,7 +170,14 @@ class LaboralController extends Controller
         $nombre = trim(implode(' ', array_filter([trim($d['nom1']), trim($d['ape1']), trim($d['ape2'])])));
         $anual = Nomina::anual($d);
         $temp = Nomina::temporal($d);
-        $err = $nombre === '' ? 'Indica el nombre y los apellidos.'
+        $aut = Nomina::esAutonomo($d);
+        $err = $aut ? ($nombre === '' ? 'Indica el nombre y los apellidos.'
+            : (! Nomina::dni($d['nif'], $d['tipoDoc']) ? 'El documento de identidad no es válido (revisa la letra).'
+            : (! preg_match('/^\d{12}$/', $d['naf']) ? 'El número de afiliación debe tener 12 dígitos.'
+            : (! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $d['alta']) ? 'Indica la fecha de alta en el RETA.'
+            : ($d['autBase'] < 0 || $d['autCuota'] < 0 ? 'La base y la cuota no pueden ser negativas.'
+            : ($d['autTarifa'] && $d['autTarifaFin'] !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $d['autTarifaFin']) ? 'Revisa la fecha de fin de la tarifa plana.' : ''))))))
+            : ($nombre === '' ? 'Indica el nombre y los apellidos.'
             : (! Nomina::dni($d['nif'], $d['tipoDoc']) ? 'El documento de identidad no es válido (revisa la letra).'
             : (! preg_match('/^\d{12}$/', $d['naf']) ? 'El número de afiliación debe tener 12 dígitos.'
             : (! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $d['alta']) ? 'Indica la fecha de inicio del contrato.'
@@ -166,11 +185,11 @@ class LaboralController extends Controller
             : ($temp && ! $d['fin'] ? 'Los contratos temporales necesitan fecha de fin.'
             : ($temp && mb_strlen(trim($d['causa'])) < 20 ? 'Describe la causa de la temporalidad (art. 15 ET).'
             : ($d['irpfModo'] === 'fijo' && ($d['irpf'] < 0 || $d['irpf'] > 47) ? 'Revisa el tipo fijo de IRPF.'
-            : ($d['iban'] !== '' && ! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/', $d['iban']) ? 'Revisa el IBAN para la nómina.' : ''))))))));
+            : ($d['iban'] !== '' && ! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/', $d['iban']) ? 'Revisa el IBAN para la nómina.' : '')))))))));
         if ($err) {
             return back()->withInput()->withErrors(['ficha' => $err]);
         }
-        if (! $temp) {
+        if (! $temp || $aut) {
             $d['fin'] = '';
         }
         if ($d['irpfModo'] !== 'fijo') {
@@ -180,17 +199,19 @@ class LaboralController extends Controller
         $d['cat'] = $d['convCat'] ?: $d['cat'];
         $d['sal'] = $anual;
         unset($d['id'], $d['estado'], $d['baja']);
-        $cols = ['alta' => $d['alta'], 'contrato' => Nomina::codigo($d['contrato'])];
+        $cols = ['alta' => $d['alta'], 'contrato' => $aut ? 'AUT' : Nomina::codigo($d['contrato'])];
         if (! $t) {
             $d['docs'] = [];
             $t = Trabajador::create(['cliente_id' => $c->id, 'estado' => 'Alta', 'datos' => $d] + $cols);
-            LaboralMovimiento::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'fecha' => $d['alta'], 'tipo' => 'Alta', 'detalle' => $d['contrato'], 'created_by' => $request->user()->id]);
+            LaboralMovimiento::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'fecha' => $d['alta'], 'tipo' => 'Alta', 'detalle' => $aut ? 'Alta en el RETA · '.$d['autTipo'] : $d['contrato'], 'created_by' => $request->user()->id]);
             Auditoria::registrar('laboral.alta', 'Alta del trabajador '.$nombre.' en '.$c->nombre, $t, $c->id);
 
-            return redirect()->route('laboral.ficha', [$t->id, 'sec' => 'ss'])->with('ok', $nombre.' dado de alta. Comunica el alta a la TGSS antes del inicio y el contrato al SEPE en 10 días.');
+            return $aut
+                ? redirect()->route('laboral.ficha', [$t->id, 'sec' => 'aut'])->with('ok', $nombre.' dado de alta como autónomo. Recuerda tramitar el alta en el RETA (Importass o Sistema RED) antes del inicio de la actividad.')
+                : redirect()->route('laboral.ficha', [$t->id, 'sec' => 'ss'])->with('ok', $nombre.' dado de alta. Comunica el alta a la TGSS antes del inicio y el contrato al SEPE en 10 días.');
         }
         // Variación de afiliación solo si cambian datos que conoce la TGSS
-        $cambia = collect(['naf', 'ccc', 'grupo', 'cno', 'epig', 'contrato', 'jor', 'relEsp', 'nif'])->contains(fn ($k) => (string) ($prev[$k] ?? '') !== (string) ($d[$k] ?? ''));
+        $cambia = collect($aut ? ['naf', 'nif', 'regimen', 'autBase', 'autTipo', 'autMutua'] : ['naf', 'ccc', 'grupo', 'cno', 'epig', 'contrato', 'jor', 'relEsp', 'nif', 'regimen'])->contains(fn ($k) => (string) ($prev[$k] ?? '') !== (string) ($d[$k] ?? ''));
         $t->update(['datos' => $d] + $cols);
         if ($cambia) {
             LaboralMovimiento::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'fecha' => Plazos::hoy()->toDateString(), 'tipo' => 'Variación', 'detalle' => 'Variación de datos', 'created_by' => $request->user()->id]);
@@ -345,7 +366,7 @@ class LaboralController extends Controller
         abort_unless($c && $trabajador->cliente_id === $c->id, 404);
         [$anio, $mes] = $this->periodo($request);
         $w = Nomina::rellenar($trabajador->ficha(), $c);
-        abort_unless(Nomina::activo($w, $anio, $mes), 404);
+        abort_unless(Nomina::activo($w, $anio, $mes) && ! Nomina::esAutonomo($w), 404);
         $P = Nomina::config($c);
         $n = $this->nomina->nomina($w, $anio, $mes, Nomina::incidenciasAnio($c, $anio), (float) $P['at']);
         $ult = Carbon::create($anio, $mes, 1)->endOfMonth()->day;

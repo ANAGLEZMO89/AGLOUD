@@ -255,4 +255,28 @@ class LaboralTest extends TestCase
         $this->assertStringNotContainsString('<b>x</b>', $h);
         $this->assertNotEmpty($kx);
     }
+
+    public function test_alta_de_trabajador_autonomo(): void
+    {
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha());
+        // Autónomo: sin contrato ni salario
+        $this->en()->post('/laboral/trabajador/nuevo', ['regimen' => 'Autónomo', 'nom1' => 'Agustín', 'ape1' => 'Pérez', 'tipoDoc' => 'DNI', 'nif' => '29445566T', 'naf' => '211111111111',
+            'autAlta' => '2026-03-01', '_aut' => '1', 'autTipo' => 'Autónomo colaborador familiar', 'autBase' => '1.000,00', 'autCuota' => '310,00', 'autCese' => '1', 'iae' => '671.4'])
+            ->assertSessionHasNoErrors()->assertSessionHas('ok', fn ($m) => str_contains($m, 'autónomo'));
+        $a = Trabajador::where('contrato', 'AUT')->firstOrFail();
+        $this->assertSame('Autónomo', $a->datos['regimen']);
+        $this->assertSame('2026-03-01', $a->alta->toDateString());
+        $this->assertSame(310.0, (float) $a->datos['autCuota']);
+        $this->assertTrue($a->datos['autCese']);
+        $this->assertStringContainsString('Alta en el RETA', LaboralMovimiento::where('trabajador_id', $a->id)->value('detalle'));
+        $this->en()->get('/laboral')->assertSee('Agustín Pérez')->assertSee('RETA')->assertSee('310,00 €/mes');
+        $this->en()->get('/laboral/trabajador/'.$a->id.'?sec=aut')->assertOk()->assertSee('Autónomo (RETA)')->assertSee('Cotiza por cese de actividad');
+        // No sale en nóminas, seguros sociales ni control horario
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11')->assertSee('María López Ruiz')->assertDontSee('Agustín Pérez');
+        $this->en()->get('/laboral/seguros-sociales?anio=2026&mes=11')->assertDontSee('Agustín Pérez');
+        $this->en()->get('/control-horario')->assertDontSee('Agustín Pérez');
+        $this->en()->get('/laboral/nominas/'.$a->id.'/recibo?anio=2026&mes=11')->assertNotFound();
+        // Validación: documento y afiliación también para autónomos
+        $this->en()->post('/laboral/trabajador/nuevo', ['regimen' => 'Autónomo', 'nom1' => 'X', 'nif' => '1', 'naf' => '211111111111', 'autAlta' => '2026-03-01'])->assertSessionHasErrors('ficha');
+    }
 }

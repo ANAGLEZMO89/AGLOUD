@@ -52,7 +52,7 @@ class ControlHorarioController extends Controller
     /** Trabajadores de la plantilla con su jornada diaria teórica en minutos */
     private function trabajadores(Cliente $c): Collection
     {
-        return Nomina::plantilla($c)->map(function ($w) {
+        return Nomina::asalariados($c)->map(function ($w) {
             $h = Nomina::n($w['horas'] ?? 0);
             $w['dia'] = $h > 0 ? (int) round($h * 60 / 5) : (int) round(480 * (Nomina::n($w['jor']) ?: 100) / 100);
             $w['jorTxt'] = (Nomina::parcial($w) ? 'Parcial ' : 'Completa ').Formato::num(Nomina::n($w['horas']), 0).' h/sem';

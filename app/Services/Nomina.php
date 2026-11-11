@@ -31,6 +31,9 @@ class Nomina
 
     public const CONTRATOS = ['100 · Indefinido a tiempo completo · ordinario', '200 · Indefinido a tiempo parcial · ordinario', '300 · Fijo discontinuo', '402 · Duración determinada a tiempo completo · circunstancias de la producción', '410 · Duración determinada a tiempo completo · sustitución', '130 · Indefinido a tiempo completo · persona con discapacidad', '150 · Indefinido a tiempo completo · con incentivos', '189 · Indefinido a tiempo completo · transformación de temporal', '230 · Indefinido a tiempo parcial · persona con discapacidad', '250 · Indefinido a tiempo parcial · con incentivos', '289 · Indefinido a tiempo parcial · transformación de temporal', '420 · Formativo para la obtención de práctica profesional · tiempo completo', '421 · Formación en alternancia', '502 · Duración determinada a tiempo parcial · circunstancias de la producción', '510 · Duración determinada a tiempo parcial · sustitución', '520 · Formativo para la obtención de práctica profesional · tiempo parcial'];
 
+    /** Autónomos (RETA) que se pueden dar de alta en la plantilla */
+    public const TIPOS_AUTONOMO = ['Titular de la actividad', 'Autónomo colaborador familiar', 'Socio trabajador de comunidad de bienes o sociedad civil', 'Socio o administrador de sociedad (autónomo societario)', 'Socio trabajador de cooperativa'];
+
     public const NIVEL_FORMATIVO = ['Sin estudios', 'Educación primaria', 'ESO o equivalente', 'Bachillerato', 'FP de grado medio', 'FP de grado superior', 'Grado universitario', 'Máster', 'Doctorado'];
 
     public const CLAUSULAS = [
@@ -89,6 +92,11 @@ class Nomina
         return $codigo;
     }
 
+    public static function esAutonomo(array $w): bool
+    {
+        return ($w['regimen'] ?? 'General') === 'Autónomo';
+    }
+
     public static function temporal(array $w): bool
     {
         return (bool) preg_match('/^[45]/', self::codigo((string) ($w['contrato'] ?? '')));
@@ -143,6 +151,8 @@ class Nomina
             'salBase' => 0, 'plus' => 0, 'pagas' => 14, 'prorr' => false, 'irpfModo' => 'auto', 'irpf' => 2,
             'm145' => ['sit' => '3', 'nifCony' => '', 'movil' => false, 'pension' => '', 'alimentos' => '', 'vivienda' => false, 'fecha' => '', 'hijos' => [], 'asc' => []],
             'claus' => ['conf', 'datos', 'desc', 'reg'], 'docs' => [], 'nombre' => '', 'cat' => '',
+            'regimen' => 'General', 'autTipo' => self::TIPOS_AUTONOMO[0], 'autBase' => 0, 'autCuota' => 0, 'autRend' => 0, 'autMutua' => '', 'autCese' => true,
+            'autTarifa' => false, 'autTarifaFin' => '', 'iae' => '',
         ], $w);
     }
 
@@ -196,6 +206,12 @@ class Nomina
     {
         return Trabajador::where('cliente_id', $c->id)->orderBy('alta')->orderBy('id')->get()
             ->map(fn (Trabajador $t) => self::rellenar($t->ficha(), $c))->values();
+    }
+
+    /** Solo trabajadores por cuenta ajena (los que tienen contrato, nómina, seguros sociales y registro de jornada) */
+    public static function asalariados(Cliente $c): Collection
+    {
+        return self::plantilla($c)->reject(fn ($w) => self::esAutonomo($w))->values();
     }
 
     /** Variables del año: [mes => [trabajadorId => [k => v]]] */
@@ -363,7 +379,7 @@ class Nomina
     /** Nóminas del mes de los trabajadores en alta: [[w, n], ...] */
     public function mes(Cliente $c, int $anio, int $m, ?Collection $plantilla = null, ?array $incAnio = null, ?float $at = null): array
     {
-        $plantilla ??= self::plantilla($c);
+        $plantilla = ($plantilla ?? self::plantilla($c))->reject(fn ($w) => self::esAutonomo($w));
         $incAnio ??= self::incidenciasAnio($c, $anio);
         $at ??= (float) self::config($c)['at'];
 

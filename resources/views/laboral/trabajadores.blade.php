@@ -14,8 +14,13 @@
         @php $cod = Nomina::codigo($w['contrato']); $alta = $w['estado'] === 'Alta'; @endphp
         <a class="lb-grid lb-trab lb-row" href="{{ route('laboral.ficha', $w['id']) }}">
           <span class="ell" style="font-weight:600">{{ $w['nombre'] }}</span><span class="mono12">{{ $w['nif'] }}</span><span class="mono12" style="color:#3C3C3C">{{ $w['naf'] }}</span>
+          @if(Nomina::esAutonomo($w))
+          <span style="display:flex;gap:6px;align-items:center;min-width:0"><span class="lb-code" style="background:#C8F031;color:#0B0B0B">RETA</span><span class="ell" style="font-size:12.5px;color:#3C3C3C">Autónomo · {{ $w['autTipo'] }}</span></span>
+          <span class="mono12">—</span><span class="mono12" style="color:#3C3C3C">{{ Formato::fecha($w['alta']) }}</span><span style="text-align:right;font:500 13px var(--mono)" title="Cuota mensual">{{ Nomina::n($w['autCuota']) ? Formato::eur(Nomina::n($w['autCuota'])).'/mes' : '—' }}</span>
+          @else
           <span style="display:flex;gap:6px;align-items:center;min-width:0"><span class="lb-code">{{ $cod }}</span><span class="ell" style="font-size:12.5px;color:#3C3C3C">{{ implode(' · ', array_slice(explode(' · ', $w['contrato']), 1)) }}</span></span>
           <span class="mono12">{{ $w['grupo'] }}</span><span class="mono12" style="color:#3C3C3C">{{ Formato::fecha($w['alta']) }}</span><span style="text-align:right;font:500 13px var(--mono)">{{ Formato::eur(Nomina::anual($w)) }}</span>
+          @endif
           <span><span class="lb-pill" style="background:{{ $alta ? '#E6F6A8' : '#ECECE7' }};color:{{ $alta ? '#2E3A00' : '#6A6A65' }}">{{ $w['estado'] }}</span></span>
         </a>
       @endforeach

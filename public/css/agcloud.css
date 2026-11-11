@@ -709,3 +709,4 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .band-docrow .band-doc{flex:1;min-width:0}
 .band-del{border:0;background:none;color:#8A1C1C;font:600 12.5px inherit;cursor:pointer;padding:6px 8px;border-radius:8px;white-space:nowrap;font-family:inherit}
 .band-del:hover{background:#FDE7E7}
+.lb-sec[hidden]{display:none}

@@ -673,6 +673,20 @@
     });
   }
 
+  // Laboral: régimen del trabajador (cuenta ajena o autónomo) → apartados de la ficha
+  var lbReg = document.querySelector('[data-lb-regimen] select');
+  if (lbReg) {
+    on(lbReg, 'change', function () {
+      var aut = lbReg.value === 'Autónomo', act = null;
+      $$('[data-lb-sec]').forEach(function (b) {
+        var r = b.getAttribute('data-lb-reg') || '';
+        b.hidden = !(r === '' || (r === 'aut') === aut);
+        if (b.classList.contains('on')) act = b;
+      });
+      if (act && act.hidden) { var p = $('[data-lb-sec="personal"]'); if (p) p.click(); }
+    });
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

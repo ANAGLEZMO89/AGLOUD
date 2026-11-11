@@ -27,9 +27,13 @@
       if ($hint) { $h .= '<span class="lb-h">'.e($hint).'</span>'; }
       return new HtmlString($h.'</div>');
   };
-  $SECS = [['personal', 'Datos personales'], ['afil', 'Afiliación'], ['contrato', 'Contrato'], ['retrib', 'Retribución'], ['irpf', 'IRPF · modelo 145']];
-  if (! $nuevo) $SECS[] = ['ss', 'Seguridad Social y SEPE'];
-  if (! in_array($sec, array_column($SECS, 0), true)) $sec = 'personal';
+  // Secciones: [id, título, régimen al que aplica (gen = cuenta ajena, aut = autónomo, '' = los dos)]
+  $aut = Nomina::esAutonomo($d);
+  $d['autAlta'] = $d['alta'];
+  $SECS = [['personal', 'Datos personales', ''], ['afil', 'Afiliación', ''], ['aut', 'Autónomo (RETA)', 'aut'], ['contrato', 'Contrato', 'gen'], ['retrib', 'Retribución', 'gen'], ['irpf', 'IRPF · modelo 145', 'gen']];
+  if (! $nuevo) $SECS[] = ['ss', 'Seguridad Social y SEPE', 'gen'];
+  $vis = fn ($r) => $r === '' || ($r === 'aut') === $aut;
+  if (! collect($SECS)->contains(fn ($x) => $x[0] === $sec && $vis($x[2]))) $sec = 'personal';
   $anual = Nomina::anual($d);
   $catC = collect($P['conv']['cats'])->firstWhere('cat', $d['convCat']);
   $M = $d['m145'];
@@ -45,12 +49,12 @@
   @include('laboral._cabecera')
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
     <a class="btn white" href="{{ route('laboral.index') }}">← Trabajadores</a>
-    <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:18px;font-weight:700">{{ $nuevo ? 'Alta de trabajador' : $d['nombre'] }}</span><span style="font-size:12.5px;color:#6A6A65">{{ $nuevo ? 'Completa todos los apartados antes de comunicar el alta y el contrato' : $d['contrato'].' · alta '.Formato::fecha($d['alta']).($t->estado === 'Baja' ? ' · baja '.Formato::fecha($t->baja) : '') }}</span></div>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:18px;font-weight:700">{{ $nuevo ? 'Alta de trabajador' : $d['nombre'] }}</span><span style="font-size:12.5px;color:#6A6A65">{{ $nuevo ? 'Elige el régimen y completa los apartados antes de comunicar el alta' : ($aut ? 'Autónomo (RETA) · '.$d['autTipo'] : $d['contrato']).' · alta '.Formato::fecha($d['alta']).($t->estado === 'Baja' ? ' · baja '.Formato::fecha($t->baja) : '') }}</span></div>
     <button class="btn lg" form="lbf" type="submit" style="margin-left:auto"><span style="width:8px;height:8px;border-radius:50%;background:#C8F031"></span>Guardar ficha</button>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start" data-lb-ficha>
     <div class="card lb-secs" style="flex:0 1 230px;padding:8px;gap:2px">
-      @foreach($SECS as [$v, $l])<button type="button" class="lb-sec {{ $sec === $v ? 'on' : '' }}" data-lb-sec="{{ $v }}">{{ $l }}</button>@endforeach
+      @foreach($SECS as [$v, $l, $r])<button type="button" class="lb-sec {{ $sec === $v ? 'on' : '' }}" data-lb-sec="{{ $v }}" data-lb-reg="{{ $r }}" @unless($vis($r)) hidden @endunless>{{ $l }}</button>@endforeach
       @if(! $nuevo && auth()->user()->esAdmin())
         <form method="POST" action="{{ route('laboral.eliminar', $t->id) }}" data-confirm="¿Eliminar a {{ $d['nombre'] }} de la plantilla? Se borran su ficha y sus movimientos. Si ha trabajado, es mejor tramitar la baja." style="margin-top:8px;border-top:1px solid #F1F1EC;padding-top:8px">@csrf @method('DELETE')<button class="lb-sec" type="submit" style="color:#8A1C1C">Eliminar trabajador</button></form>
       @endif
@@ -62,6 +66,7 @@
 
         {{-- Datos personales --}}
         <div class="card lb-panel" data-lb-panel="personal" @if($sec !== 'personal') hidden @endif><div class="lb-fields">
+          {{ $fb('regimen', 'Régimen', [['General', 'Cuenta ajena (Régimen General)'], ['Autónomo', 'Autónomo (RETA)']], true, 'Un autónomo no tiene contrato ni nómina: cotiza en el RETA con su base y cuota.', ['data-lb-regimen' => '1']) }}
           {{ $fb('nom1', 'Nombre') }}{{ $fb('ape1', 'Primer apellido') }}{{ $fb('ape2', 'Segundo apellido') }}{{ $fb('tipoDoc', 'Tipo de documento', ['DNI', 'NIE', 'Pasaporte']) }}
           {{ $fb('nif', 'Nº de documento') }}{{ $fb('fnac', 'Fecha de nacimiento', 'date') }}{{ $fb('sexo', 'Sexo', ['Mujer', 'Hombre']) }}{{ $fb('nac', 'Nacionalidad') }}
           {{ $fb('ecivil', 'Estado civil', ['Soltero/a', 'Casado/a', 'Viudo/a', 'Divorciado/a', 'Separado/a', 'Pareja de hecho']) }}{{ $fb('dom', 'Domicilio', 'text', true) }}
@@ -78,6 +83,20 @@
           {{ $fb('relEsp', 'Relación laboral', ['Común', 'Especial de alta dirección', 'Especial de servicio del hogar', 'Otra relación laboral especial']) }}
           {{ $fb('agrario', 'Sistema Especial Agrario (jornadas reales)', 'bool', true) }}
         </div></div>
+
+        {{-- Autónomo (RETA) --}}
+        <div class="lb-panel" data-lb-panel="aut" @if($sec !== 'aut') hidden @endif style="display:flex;flex-direction:column;gap:16px">
+          <input type="hidden" name="_aut" value="1">
+          <div class="card"><div class="lb-fields">
+            {{ $fb('autTipo', 'Tipo de autónomo', Nomina::TIPOS_AUTONOMO, true) }}
+            {{ $fb('autAlta', 'Fecha de alta en el RETA', 'date') }}{{ $fb('iae', 'Actividad (epígrafe IAE / CNAE)') }}
+            {{ $fb('autRend', 'Rendimientos netos mensuales previstos (€)', 'num', false, 'Para elegir el tramo de cotización por ingresos reales') }}
+            {{ $fb('autBase', 'Base de cotización mensual elegida (€)', 'num') }}{{ $fb('autCuota', 'Cuota mensual (€)', 'num', false, 'La que figura en la resolución de la TGSS') }}
+            {{ $fb('autMutua', 'Mutua colaboradora') }}
+            {{ $fb('autCese', 'Cotiza por cese de actividad', 'bool') }}{{ $fb('autTarifa', 'Tarifa plana', 'bool') }}{{ $fb('autTarifaFin', 'Fin de la tarifa plana', 'date') }}
+          </div></div>
+          <p style="margin:0;font-size:12.5px;color:#6A6A65;line-height:1.5">Los autónomos no tienen contrato ni nómina: no salen en Integral de nóminas, seguros sociales, remesas, modelos 111/145/190 ni control horario. La base y la cuota se indican como constan en la resolución de alta de la TGSS.</p>
+        </div>
 
         {{-- Contrato --}}
         <div class="lb-panel" data-lb-panel="contrato" @if($sec !== 'contrato') hidden @endif style="display:flex;flex-direction:column;gap:16px">

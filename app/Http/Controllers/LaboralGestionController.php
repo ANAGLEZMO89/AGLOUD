@@ -83,7 +83,7 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
         $b = $this->base($request, $c, $tipo === 'agr' ? 'ss-agr' : 'ss-pp');
-        $todos = Nomina::plantilla($c)->filter(fn ($w) => Nomina::activo($w, $b['anio'], $b['mes']))->values();
+        $todos = Nomina::asalariados($c)->filter(fn ($w) => Nomina::activo($w, $b['anio'], $b['mes']))->values();
         $lista = $tipo === 'agr' ? $todos->filter(fn ($w) => ! empty($w['agrario']))->values() : $todos;
         $datos = $this->mesRow($c, $b['anio'], $b['mes'])->afi[$tipo] ?? [];
         if (in_array($request->query('exportar'), ['excel', 'csv'], true)) {
@@ -274,7 +274,7 @@ class LaboralGestionController extends LaboralController
         }
         $b = $this->base($request, $c, 'g-comunica');
         $hoy = Plazos::hoy();
-        $filas = Nomina::plantilla($c)->map(function ($w) use ($hoy) {
+        $filas = Nomina::asalariados($c)->map(function ($w) use ($hoy) {
             $com = collect($w['docs'] ?? [])->firstWhere('k', 'contrata');
             $plazo = Carbon::parse($w['alta'])->addDays(10);
 
@@ -385,14 +385,14 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
 
-        return view('laboral.m145', $this->base($request, $c, 'm-145') + ['plantilla' => Nomina::plantilla($c)->sortBy(fn ($w) => ($w['estado'] === 'Alta' ? 0 : 1).$w['nombre'])->values()]);
+        return view('laboral.m145', $this->base($request, $c, 'm-145') + ['plantilla' => Nomina::asalariados($c)->sortBy(fn ($w) => ($w['estado'] === 'Alta' ? 0 : 1).$w['nombre'])->values()]);
     }
 
     /** Percepciones y retenciones del trabajo de un año (o un trimestre) a partir de las nóminas */
     private function anual(Cliente $c, int $anio, array $meses, array $P): array
     {
         $svc = app(Nomina::class);
-        $plant = Nomina::plantilla($c);
+        $plant = Nomina::asalariados($c);
         $inc = Nomina::incidenciasAnio($c, $anio);
         $porMes = [];
         $porTrab = [];
