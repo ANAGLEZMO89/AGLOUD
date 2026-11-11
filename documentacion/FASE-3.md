@@ -64,3 +64,28 @@ Para cumplir del todo el Reglamento en modo No VERI\*FACTU falta:
 4. Si se prefiere **VERI\*FACTU**, el envío a la AEAT, solo cuando lo pidas y tras validar los esquemas oficiales vigentes.
 
 Revisa las fechas de obligación por si ha habido cambios normativos después del RDL 15/2025.
+
+## Ampliación (11/11/2026)
+
+### Modalidad de facturación
+Está en **Facturación › Parámetros**, por empresa:
+- **Facturación normal:** PDF con registros encadenados (No VERI\*FACTU).
+- **Factura electrónica:** además del PDF, cada factura se descarga en **Facturae 3.2.2 (XML)**.
+  - El XML está **validado contra el esquema oficial** de facturae.gob.es.
+  - Admite los códigos DIR3 para FACe (Administraciones Públicas).
+  - Se genera **sin firma**: la firma con certificado está pendiente.
+- **Acogerse a VERI\*FACTU:** queda elegido, pero el **envío a la AEAT no está activado**. Mientras tanto, las facturas se emiten sin envío y sin la leyenda «VERI\*FACTU», para no inducir a error.
+
+### Pestaña «Parámetros» en todos los módulos
+Solo la administración puede cambiarlos; el resto los consulta.
+
+| Módulo | Qué se configura |
+|---|---|
+| Clientes | Cuota por defecto de los clientes nuevos: periodicidad, IVA, forma de cobro y concepto |
+| Expedientes | Tipos de trámite (pasos, documentación, honorarios) y si se ven en el portal por defecto |
+| Notificaciones | Avisos; festivos autonómicos, locales y traslados para el cálculo de plazos; tipos de notificación |
+| Documentos | Espacio por cliente y días de aviso de caducidad |
+| CRM | Probabilidad por etapa, orígenes, validez y pie de los presupuestos |
+| Facturación | Modalidad, series, pie, diseño y catálogo (por empresa) |
+
+Los módulos que aún están «en preparación» (Contabilidad, Fiscal, Laboral…) tendrán su pestaña de Parámetros cuando se construyan.
