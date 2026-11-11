@@ -44,7 +44,7 @@
               </a>
             @endforeach
             <div class="lb-grid lb-nom" style="padding:12px 0 4px;font-weight:700"><span>Totales</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['dev'])) }}</span><span></span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssT'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['irpf'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['liq'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssE'])) }}</span></div>
-            @if(! $noms)<div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65">No hay trabajadores en alta este mes.</div>@endif
+            @if(! $noms)<div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65;line-height:1.5">No hay trabajadores por cuenta ajena en alta este mes.@if($aut = $plantilla->filter(fn ($t) => \App\Services\Nomina::esAutonomo($t))->count())<br>{{ $aut }} {{ $aut === 1 ? 'persona está dada de alta como autónoma' : 'personas están dadas de alta como autónomas' }} (RETA): los autónomos no tienen nómina, pagan su cuota del RETA.@endif</div>@endif
           </div>
         </div>
       @else
