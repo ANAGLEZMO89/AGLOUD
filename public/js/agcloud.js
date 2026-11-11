@@ -552,6 +552,100 @@
   document.addEventListener('click', function (e) { $$('details.ct-dd[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); }); });
   $$('[data-autosubmit-select]').forEach(function (s) { on(s, 'change', function () { s.form.submit(); }); });
 
+  // ---------- Laboral y SS ----------
+  // Formularios que abren la sede oficial (RED / SEPE) en otra pestaña al registrar el trámite
+  $$('form[data-abrir]').forEach(function (f) { on(f, 'submit', function () { try { window.open(f.getAttribute('data-abrir'), '_blank', 'noopener'); } catch (e) {} }); });
+  $$('input[data-autosubmit]').forEach(function (i) { on(i, 'change', function () { i.form && i.form.submit(); }); });
+  // Filas dinámicas (hijos, ascendientes, categorías del convenio)
+  $$('[data-lb-add]').forEach(function (b) {
+    on(b, 'click', function () {
+      var k = b.getAttribute('data-lb-add'), tpl = $('template[data-lb-tpl="' + k + '"]'), list = $('[data-lb-list="' + k + '"]');
+      if (!tpl || !list) return;
+      var n = +list.getAttribute('data-n') || 0; list.setAttribute('data-n', n + 1);
+      var div = document.createElement('div'); div.innerHTML = tpl.innerHTML.replace(/__/g, 'n' + n);
+      var row = div.firstElementChild; list.appendChild(row); var f = row.querySelector('input'); f && f.focus();
+    });
+  });
+  on(document, 'click', function (e) { var d = e.target.closest('[data-lb-del]'); if (d) { var r = d.parentElement; r && r.remove(); } });
+  // Nombre del fichero elegido
+  $$('input[data-lb-fname]').forEach(function (i) { on(i, 'change', function () { var t = i.parentElement.querySelector('[data-lb-fname-t]'); if (t && i.files[0]) t.textContent = i.files[0].name; }); });
+  var mismo = $('[data-lb-mismo]'), sepeCert = $('[data-lb-sepecert]');
+  on(mismo, 'change', function () { if (sepeCert) sepeCert.hidden = mismo.checked; });
+
+  // Ficha del trabajador
+  var lbf = $('#lbf');
+  if (lbf) {
+    var secIn = $('[data-lb-secin]');
+    $$('[data-lb-sec]').forEach(function (b) {
+      on(b, 'click', function () {
+        var v = b.getAttribute('data-lb-sec');
+        $$('[data-lb-sec]').forEach(function (x) { x.classList.toggle('on', x === b); });
+        $$('[data-lb-panel]').forEach(function (p) { p.hidden = p.getAttribute('data-lb-panel') !== v; });
+        if (secIn) secIn.value = v;
+        try { var u = new URL(window.location.href); u.searchParams.set('sec', v); history.replaceState(null, '', u); } catch (e) {}
+      });
+    });
+    var F = function (n) { return lbf.querySelector('[name="' + n + '"]'); };
+    var box = function (attr) { return $$('[' + attr + ']', lbf); };
+    var code = function () { var c = F('contrato'); return c ? c.value.split(' · ')[0] : ''; };
+    var lbTemp = function () {
+      var c = code(), temp = /^[45]/.test(c), sust = /^(410|510)/.test(c);
+      box('data-lb-temp').forEach(function (x) { x.hidden = !temp; });
+      box('data-lb-sust').forEach(function (x) { x.hidden = !sust; });
+      var cl = $('[data-lb-causa] [data-lbl]', lbf);
+      if (cl) cl.textContent = sust ? 'Causa de la sustitución' : /^(42|52)/.test(c) ? 'Titulación y puesto formativo' : 'Causa concreta de la temporalidad';
+    };
+    var horas = function () { var j = F('jor'), h = F('horas'); if (j && h) h.value = String(Math.round(40 * pnum(j.value) / 100)); };
+    on(F('contrato'), 'change', function () {
+      var c = code(), j = F('jor');
+      if (j) { var tp = /^[25]/.test(c), v = pnum(j.value); if (tp && v >= 100) j.value = '50'; if (!tp) j.value = '100'; horas(); }
+      var fin = F('fin'), alta = F('alta');
+      if (/^[45]/.test(c) && fin && !fin.value && alta && alta.value) {
+        var d = new Date(alta.value + 'T12:00:00'); d.setMonth(d.getMonth() + (/^(42|52)/.test(c) ? 12 : 6)); d.setDate(d.getDate() - 1); fin.value = d.toISOString().slice(0, 10);
+      }
+      lbTemp(); retr();
+    });
+    on(F('jor'), 'change', horas);
+    var cats = {}; try { cats = JSON.parse(lbf.getAttribute('data-lb-cats') || '{}'); } catch (e) {}
+    on(F('convCat'), 'change', function () {
+      var ct = cats[F('convCat').value]; if (!ct) return;
+      if (F('salBase')) F('salBase').value = ct[0]; if (F('plus')) F('plus').value = ct[1]; if (F('grupo')) F('grupo').value = ct[2]; retr();
+    });
+    var fijo = function () { var m = F('irpfModo'); box('data-lb-fijo').forEach(function (x) { x.hidden = !m || m.value !== 'fijo'; }); };
+    on(F('irpfModo'), 'change', fijo);
+    var sit = $('[data-lb-sit]', lbf), cony = $('[data-lb-cony]', lbf);
+    on(sit, 'change', function () { if (cony) cony.hidden = sit.value !== '2'; });
+    var retr = function () {
+      var sb = pnum(F('salBase') && F('salBase').value), pl = pnum(F('plus') && F('plus').value), pg = +(F('pagas') && F('pagas').value) || 14, pr = F('prorr') && F('prorr').checked;
+      var a = $('[data-lb-anual]'), m = $('[data-lb-mensual]');
+      if (a) a.textContent = eu(sb * pg + pl * 12) + ' €';
+      if (m) m.textContent = eu(sb + pl + (pr && pg === 14 ? sb * 2 / 12 : 0)) + ' €';
+    };
+    ['salBase', 'plus', 'pagas', 'prorr'].forEach(function (n) { on(F(n), 'input', retr); on(F(n), 'change', retr); });
+    lbTemp(); fijo();
+  }
+
+  // Parámetros de laboral: lectura del PDF del convenio (primeras páginas)
+  var convPdf = $('[data-lb-convpdf]'), convSt = $('[data-lb-convst]');
+  on(convPdf, 'change', function () {
+    var f = convPdf.files && convPdf.files[0]; convPdf.value = '';
+    if (!f) return;
+    var st = function (t) { if (convSt) { convSt.hidden = false; convSt.textContent = t; } };
+    if (!window.AGCOcr) { st('No se ha podido cargar el lector de PDF. Introduce los datos a mano.'); return; }
+    st('Leyendo el convenio ' + f.name + '…');
+    window.AGCOcr.texto(f, st).then(function (t) {
+      var txt = String(t || '').replace(/[ \t]+/g, ' '), n = 0;
+      var put = function (k, v) { var i = $('[data-conv="' + k + '"]'); if (i && v) { i.value = v.trim().slice(0, 200); n++; } };
+      var m = txt.match(/(convenio colectivo[^\n.]{5,180})/i); put('nombre', m && m[1].replace(/\s+/g, ' '));
+      m = txt.match(/c[oó]digo(?: de convenio)?(?: n[ºo°.]*)?\s*:?\s*(\d{8,14})/i); put('codigo', m && m[1]);
+      m = txt.match(/vigencia[^\n]{0,80}?((?:19|20)\d{2}\s*(?:[-–a]|al|y)\s*(?:19|20)\d{2})/i); put('vigencia', m && m[1].replace(/\s*(a|al|y)\s*/, '-'));
+      m = txt.match(/(\d[\d.]{2,5})\s*horas?\s*(?:de trabajo\s*)?(?:efectivo\s*)?(?:anuales|al año|en c[oó]mputo anual)/i); put('jornada', m && m[1].replace(/\./g, ''));
+      m = txt.match(/(\d{2})\s*d[ií]as\s*naturales\s*de\s*vacaciones|vacaciones[^\n]{0,60}?(\d{2})\s*d[ií]as\s*naturales/i); put('vacaciones', m && (m[1] || m[2]));
+      m = txt.match(/[ÁA]mbito (?:territorial|funcional)[^\n.]{0,10}?:?\s*([^\n.]{4,80})/i); put('ambito', m && m[1]);
+      st(n ? 'Convenio leído: ' + n + ' datos rellenados. Revisa los campos, completa las tablas salariales a mano y guarda los parámetros.' : 'No se han encontrado los datos del convenio en el PDF. Introdúcelos a mano.');
+    }).catch(function () { st('No se ha podido leer el PDF del convenio. Introduce los datos a mano.'); });
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

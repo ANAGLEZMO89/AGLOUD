@@ -23,6 +23,7 @@ use App\Http\Controllers\RegistroMercantilController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\FiscalController;
+use App\Http\Controllers\LaboralController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
@@ -155,6 +156,28 @@ Route::middleware('auth')->group(function () {
             Route::post('/modelo/{codigo}/recalcular', [FiscalController::class, 'recalcular'])->where('codigo', '\\d{3}')->name('recalcular');
             Route::post('/modelo/{codigo}/presentado', [FiscalController::class, 'presentado'])->where('codigo', '\\d{3}')->name('presentado');
             Route::get('/modelo/{codigo}/exportar', [FiscalController::class, 'exportar'])->where('codigo', '\\d{3}')->name('exportar');
+        });
+
+        // Laboral y SS de la empresa elegida (no envía ficheros a la TGSS ni al SEPE: abre la sede y registra lo hecho)
+        Route::prefix('laboral')->name('laboral.')->group(function () {
+            Route::get('/', [LaboralController::class, 'index'])->name('index');
+            Route::get('/trabajador/{id}', [LaboralController::class, 'ficha'])->where('id', 'nuevo|\\d+')->name('ficha');
+            Route::post('/trabajador/{id}', [LaboralController::class, 'guardar'])->where('id', 'nuevo|\\d+')->name('guardar');
+            Route::delete('/trabajador/{trabajador}/eliminar', [LaboralController::class, 'eliminar'])->whereNumber('trabajador')->name('eliminar');
+            Route::post('/trabajador/{trabajador}/accion/{k}', [LaboralController::class, 'accion'])->whereNumber('trabajador')->name('accion');
+            Route::get('/trabajador/{trabajador}/documento/{tipo}', [LaboralController::class, 'documento'])->whereNumber('trabajador')->name('documento');
+            Route::get('/nominas', [LaboralController::class, 'integral'])->name('integral');
+            Route::post('/nominas/contabilizar', [LaboralController::class, 'contabilizar'])->name('contabilizar');
+            Route::post('/nominas/{trabajador}/variables', [LaboralController::class, 'incidencias'])->whereNumber('trabajador')->name('incidencias');
+            Route::get('/nominas/{trabajador}/recibo', [LaboralController::class, 'recibo'])->whereNumber('trabajador')->name('recibo');
+            Route::get('/seguros-sociales', [LaboralController::class, 'seguros'])->name('seguros');
+            Route::post('/seguros-sociales/at', [LaboralController::class, 'at'])->name('at');
+            Route::post('/seguros-sociales/confirmar', [LaboralController::class, 'confirmar'])->name('confirmar');
+            Route::get('/altas-y-bajas', [LaboralController::class, 'movimientos'])->name('movimientos');
+            Route::post('/altas-y-bajas/baja', [LaboralController::class, 'baja'])->name('baja');
+            Route::post('/altas-y-bajas/comunicar', [LaboralController::class, 'comunicar'])->name('comunicar');
+            Route::get('/parametros', [LaboralController::class, 'parametros'])->name('parametros');
+            Route::post('/parametros', [LaboralController::class, 'guardarParametros'])->name('parametros.guardar');
         });
 
         // Calendario y tareas del despacho

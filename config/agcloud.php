@@ -95,7 +95,7 @@ return [
         ['label' => 'Áreas', 'items' => [
             ['contabilidad', 'Contabilidad', 'contabilidad.index'],
             ['fiscal', 'Fiscal', 'fiscal.index'],
-            ['laboral', 'Laboral y SS', null],
+            ['laboral', 'Laboral y SS', 'laboral.index'],
             ['facturacion', 'Facturación', 'facturacion.index'],
             ['crm', 'CRM', 'crm.index'],
             ['horario', 'Control horario', null],
