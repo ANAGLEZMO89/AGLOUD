@@ -84,20 +84,15 @@ class Validacion
         return $m === 1;
     }
 
-    /** [entidad, BIC] a partir de un IBAN español, o null */
+    /** [entidad, BIC] a partir de un IBAN español (registro del Banco de España), o null. El BIC puede venir vacío. */
     public static function banco(?string $v): ?array
     {
         $s = strtoupper(preg_replace('/\s+/', '', (string) $v));
         if (! str_starts_with($s, 'ES') || strlen($s) < 8) {
             return null;
         }
-        $c = substr($s, 4, 4);
-        $b = config('agcloud.bancos.'.$c);
-        if ($b) {
-            return $b;
-        }
 
-        return str_starts_with($c, '30') ? ['Caja Rural / cooperativa de crédito ('.$c.')', 'BCOEESMM'.substr($c, 1)] : null;
+        return config('bancos_es')[substr($s, 4, 4)] ?? null;
     }
 
     /** Provincia a partir de los 2 primeros dígitos (CP o CCC) */

@@ -15,7 +15,7 @@ class SeccionesAlta
     public const DESC = [
         'general' => 'Identificación, domicilio fiscal, contacto y asesor responsable.',
         'bancos' => 'Cuentas del cliente. La principal se usa para domiciliar la cuota con mandato SEPA.',
-        'cuota' => 'Importe libre: lo fijas tú para este cliente, sin tarifa automática.',
+        'cuota' => 'Tarifa del cliente: los conceptos y los servicios incluidos se cargan solos al hacerle la factura.',
         'centros' => 'Locales y centros donde se desarrolla la actividad, con su código de cuenta de cotización.',
         'acts' => 'Epígrafes CNAE 2025 e IAE, régimen de IVA y de IRPF de cada actividad.',
         'reps' => 'Administradores, socios y representantes legales o laborales.',

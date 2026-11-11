@@ -87,10 +87,18 @@ class DocumentosYClientesTest extends TestCase
         $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'B21890123'])->assertSessionHasErrors('form');
         $this->assertSame(0, Cliente::count());
 
-        $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'B21890124', 'portal' => '1'])->assertSessionHasErrors('form'); // sin email
-        $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'b-21890124', 'portal' => '1', 'email' => 'bar@test.es'])->assertRedirect();
+        // El NIF tiene que cuadrar con el tipo de cliente
+        $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => '12345678Z'])->assertSessionHasErrors('form');
+        $this->actingAs($as)->post(route('clientes.store'), ['tipo' => 'Autónomo'] + $base + ['nif' => 'B21890124'])->assertSessionHasErrors('form');
+        $this->assertSame(0, Cliente::count());
 
+        // Sin email se guarda igual; el acceso al portal se crea solo al indicar el correo
+        $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'b-21890124'])->assertRedirect()->assertSessionHas('ok', fn ($m) => str_contains($m, 'Sin email'));
         $c = Cliente::first();
+        $this->assertSame(0, User::where('cliente_id', $c->id)->count());
+        $this->actingAs($as)->put(route('clientes.update', $c), $base + ['nif' => 'B21890124', 'email' => 'bar@test.es'])->assertRedirect();
+
+        $c->refresh();
         $this->assertSame('B21890124', $c->nif);
         $this->assertSame('Alta en curso', $c->estado);
         $u = User::where('email', 'bar@test.es')->first();
@@ -98,6 +106,9 @@ class DocumentosYClientesTest extends TestCase
         $this->assertSame($c->id, $u->cliente_id);
         $this->assertTrue($u->must_change_password);
         Notification::assertSentTo($u, BienvenidaAcceso::class);
+        // Volver a guardar no crea otro acceso
+        $this->actingAs($as)->put(route('clientes.update', $c), $base + ['nif' => 'B21890124', 'email' => 'bar@test.es'])->assertRedirect();
+        $this->assertSame(1, User::where('cliente_id', $c->id)->count());
 
         // NIF duplicado
         $this->actingAs($as)->post(route('clientes.store'), $base + ['nif' => 'B21890124'])->assertSessionHasErrors('form');
@@ -111,6 +122,12 @@ class DocumentosYClientesTest extends TestCase
         $this->actingAs($as)->post(route('clientes.seccion.guardar', [$c, 'bancos']), ['d' => ['iban' => 'ES91 2100 0418 4502 0005 1332', 'principal' => '1']])->assertRedirect();
         $c->refresh();
         $this->assertSame('CaixaBank', $c->seccion('bancos')[0]['entidad']);
+        $this->assertSame('CAIXESBBXXX', $c->seccion('bancos')[0]['bic']);
+        // Caja rural (registro del Banco de España): la entidad y el BIC mandan sobre lo escrito a mano
+        $this->actingAs($as)->post(route('clientes.seccion.guardar', [$c, 'bancos']), ['d' => ['iban' => 'ES44 3187 0000 0000 0000 0000', 'entidad' => 'CaixaBank', 'bic' => 'CAIXESBBXXX']])->assertRedirect();
+        $b = $c->fresh()->seccion('bancos')[1];
+        $this->assertSame('BCOEESMM187', $b['bic']);
+        $this->assertStringContainsString('Caja R. del Sur', $b['entidad']);
         $this->assertStringNotContainsString('ES9121000418', (string) \DB::table('clientes')->where('id', $c->id)->value('datos'));
     }
 

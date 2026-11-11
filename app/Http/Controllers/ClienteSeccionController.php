@@ -58,9 +58,10 @@ class ClienteSeccionController extends Controller
         // Normalizaciones y autocompletados del prototipo
         if ($seccion === 'bancos') {
             $d['iban'] = strtoupper(preg_replace('/\s+/', '', $d['iban']));
+            // La entidad y el BIC salen del propio IBAN (código de entidad): mandan sobre lo escrito a mano
             if ($b = Validacion::banco($d['iban'])) {
-                $d['entidad'] = $d['entidad'] ?: $b[0];
-                $d['bic'] = $d['bic'] ?: $b[1];
+                $d['entidad'] = $b[0];
+                $d['bic'] = $b[1] ?: $d['bic'];
             }
         }
         if ($seccion === 'reps') {

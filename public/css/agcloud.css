@@ -501,3 +501,8 @@ fieldset:disabled .inp,fieldset:disabled .sel,fieldset:disabled .txa{background:
 .fis-x{padding:7px 12px;border-radius:16px;background:#F4F4F0;font-size:12.5px;font-weight:600;color:inherit;text-decoration:none}
 .fis-x:hover{background:#C8F031;color:inherit}
 @media (max-width:560px){.fis-row{grid-template-columns:40px minmax(0,1fr) 120px}.fis-terc{grid-template-columns:minmax(0,1fr) 110px}.fis-terc span:nth-child(1),.fis-terc span:nth-child(3){display:none}}
+
+/* ---------- Cuota: líneas de la tarifa ---------- */
+.cu-lin{display:grid;grid-template-columns:minmax(0,1fr) 70px 120px 120px 40px;gap:8px;align-items:center}
+.cu-head{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6A6A65}
+@media (max-width:640px){.cu-lin{grid-template-columns:minmax(0,1fr) 60px 100px}.cu-lin > :nth-child(4){grid-column:1/3}.cu-head{display:none}}

@@ -67,7 +67,7 @@
       <div class="card dark" style="gap:10px">
         <span style="font:500 11px var(--mono);letter-spacing:.08em;color:#C8F031">PLAN CONTRATADO</span>
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><span style="font-size:18px;font-weight:700">{{ $c->cuota_importe ? 'Cuota '.mb_strtolower($c->cuota_periodicidad) : 'Sin cuota definida' }}</span><span style="font:600 24px var(--mono)">{{ $c->cuotaTexto() }}</span></div>
-        <span style="font-size:13px;color:#BDBDB7;line-height:1.45">{{ $c->cuota_importe ? trim(($c->cuota_concepto ?: 'Honorarios de asesoría').' · '.Formato::eur($c->cuotaConIva()).' con IVA '.($per[$c->cuota_periodicidad] ?? 'por trámite').'. '.($c->cuota_observaciones ?? '')) : 'Fija el importe en Editar ficha › Cuota.' }}</span>
+        <span style="font-size:13px;color:#BDBDB7;line-height:1.45">{{ $c->cuota_importe ? trim(($c->cuota_tarifa ? 'Tarifa '.$c->cuota_tarifa : ($c->cuota_concepto ?: 'Honorarios de asesoría')).' · '.Formato::eur($c->cuotaConIva()).' con IVA '.($per[$c->cuota_periodicidad] ?? 'por trámite').'. '.($c->cuota_observaciones ?? '')) : 'Fija el importe en Editar ficha › Cuota.' }}</span>
       </div>
       <div class="card" style="gap:4px">
         <span class="ct" style="padding-bottom:6px">Actividad reciente</span>

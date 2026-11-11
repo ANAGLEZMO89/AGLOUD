@@ -27,6 +27,7 @@ class Cliente extends Model
             'fecha_alta' => 'date',
             'cuota_inicio' => 'date',
             'cuota_importe' => 'decimal:2',
+            'cuota_lineas' => 'array',
             'datos' => 'encrypted:array',
         ];
     }
@@ -117,12 +118,43 @@ class Cliente extends Model
         return (fmod($v, 1.0) ? Formato::num($v) : number_format($v, 0, ',', '.')).' €';
     }
 
+    /**
+     * Conceptos de la cuota [{d, q, p, iva}]. Si aún no se han detallado, una sola línea con el concepto y el importe.
+     */
+    public function lineasCuota(): array
+    {
+        $L = array_values(array_filter((array) $this->cuota_lineas, fn ($l) => trim((string) ($l['d'] ?? '')) !== ''));
+        if (! $L && (float) $this->cuota_importe > 0) {
+            $L = [['d' => $this->cuota_concepto ?: 'Honorarios de asesoría', 'q' => 1, 'p' => (float) $this->cuota_importe, 'iva' => (int) $this->cuota_iva]];
+        }
+
+        return $L;
+    }
+
+    /** Texto del periodo que se factura: «noviembre 2026», «4T 2026», «2026»… */
+    public static function periodoCuota(string $periodicidad, \Carbon\CarbonInterface $f): string
+    {
+        $mes = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][$f->month - 1];
+
+        return match ($periodicidad) {
+            'Mensual' => $mes.' '.$f->year,
+            'Trimestral' => (intdiv($f->month - 1, 3) + 1).'T '.$f->year,
+            'Semestral' => (($f->month <= 6) ? '1.er' : '2.º').' semestre '.$f->year,
+            'Anual' => (string) $f->year,
+            default => '',
+        };
+    }
+
     /** Cuota con IVA, con el IVA redondeado al céntimo */
     public function cuotaConIva(): float
     {
-        $imp = round((float) $this->cuota_importe, 2);
+        $t = 0.0;
+        foreach ($this->lineasCuota() as $l) {
+            $b = round((float) $l['q'] * (float) $l['p'], 2);
+            $t += $b + round($b * (float) $l['iva'] / 100, 2);
+        }
 
-        return round($imp + round($imp * (int) $this->cuota_iva / 100, 2), 2);
+        return round($t, 2);
     }
 
     public function actividadPrincipal(): string

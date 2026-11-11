@@ -82,6 +82,7 @@
   </main>
 </div>
 @yield('overlay')
+<script src="{{ asset('js/bancos.js') }}?v={{ config('app.version', '1') }}"></script>
 <script src="{{ asset('js/agcloud.js') }}?v={{ config('app.version', '1') }}"></script>
 @stack('scripts')
 </body>

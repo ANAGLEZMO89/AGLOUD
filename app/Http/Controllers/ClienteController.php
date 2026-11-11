@@ -213,8 +213,16 @@ class ClienteController extends Controller
         if ($dup) {
             $this->fallo('Ya existe un cliente con ese NIF: '.$dup->nombre.($dup->trashed() ? ' (eliminado)' : '').'.');
         }
-        if ($request->boolean('portal') && ! filter_var(trim((string) ($v['email'] ?? '')), FILTER_VALIDATE_EMAIL)) {
-            $this->fallo('Para dar acceso al portal indica un correo válido: será el usuario del cliente.');
+        $tipoNif = $this->tipoNif($nif);
+        $esperado = match ($v['tipo']) {
+            'Sociedad' => ['CIF'], 'Comunidad de bienes' => ['CIF'], 'Autónomo', 'Particular' => ['DNI', 'NIE', 'NIF especial'], default => null,
+        };
+        if ($esperado && ! in_array($tipoNif, $esperado, true)) {
+            $this->fallo('El NIF '.$nif.' es un '.$tipoNif.' y no corresponde a un cliente de tipo «'.$v['tipo'].'»: '
+                .($esperado === ['CIF'] ? 'debe empezar por letra (B12345674).' : 'debe ser un DNI (12345678Z) o un NIE (X1234567L).'));
+        }
+        if ($v['tipo'] === 'Comunidad de bienes' && ! str_starts_with($nif, 'E')) {
+            $this->fallo('El NIF de una comunidad de bienes empieza por E.');
         }
         if ($request->filled('portal_pass') && ! Validacion::contrasenaOk((string) $request->input('portal_pass'))) {
             $this->fallo('La contraseña del portal debe tener al menos 8 caracteres, con letras y números.');
@@ -226,6 +234,29 @@ class ClienteController extends Controller
         return $v;
     }
 
+    private function tipoNif(string $nif): string
+    {
+        return match (true) {
+            (bool) preg_match('/^\d{8}[A-Z]$/', $nif) => 'DNI',
+            (bool) preg_match('/^[XYZ]/', $nif) => 'NIE',
+            (bool) preg_match('/^[KLM]/', $nif) => 'NIF especial',
+            default => 'CIF',
+        };
+    }
+
+    /** Alta automática en el portal del cliente al guardar sus datos generales (si aún no tiene acceso) */
+    private function altaPortal(Cliente $c, AccesosPortal $accesos, ?string $pass): string
+    {
+        if ($c->es_despacho || $c->usuarios()->exists()) {
+            return '';
+        }
+        if (! filter_var((string) $c->email, FILTER_VALIDATE_EMAIL)) {
+            return 'Sin email: el acceso al portal se creará en cuanto lo indiques.';
+        }
+
+        return $accesos->invitar($c, $c->email, $c->nombre, User::CLIENTE_ADMIN, $pass);
+    }
+
     private function fallo(string $msg): never
     {
         throw new HttpResponseException(back()->withInput()->withErrors(['form' => $msg]));
@@ -234,7 +265,6 @@ class ClienteController extends Controller
     public function store(Request $request, AccesosPortal $accesos)
     {
         $v = $this->validarGeneral($request, null);
-        $portal = $request->boolean('portal');
         $pass = $request->input('portal_pass');
 
         $c = DB::transaction(function () use ($v) {
@@ -247,10 +277,7 @@ class ClienteController extends Controller
         });
         Auditoria::registrar('cliente.alta', 'Alta del cliente '.$c->nombre.' ('.$c->nif.')', $c, $c->id);
 
-        $msg = 'Cliente creado. Completa ahora el resto de la ficha.';
-        if ($portal) {
-            $msg .= ' '.$accesos->invitar($c, $c->email, $c->nombre, User::CLIENTE_ADMIN, $pass);
-        }
+        $msg = trim('Cliente creado. Completa ahora el resto de la ficha. '.$this->altaPortal($c, $accesos, $pass));
 
         if ($request->input('ir') === 'cerrar') {
             return redirect()->route('clientes.show', $c)->with('ok', $msg);
@@ -264,21 +291,49 @@ class ClienteController extends Controller
         $sec = $request->input('sec', 'general');
         if ($sec === 'cuota') {
             $request->validate([
-                'cuota_importe' => ['nullable', 'string', 'max:20'],
+                'cuota_tarifa' => ['nullable', 'string', 'max:120'],
+                'cuota_lineas' => ['nullable', 'array', 'max:30'],
+                'cuota_lineas.*.d' => ['nullable', 'string', 'max:200'],
+                'cuota_lineas.*.q' => ['nullable', 'string', 'max:20'],
+                'cuota_lineas.*.p' => ['nullable', 'string', 'max:20'],
+                'cuota_lineas.*.iva' => ['nullable', Rule::in(array_keys(config('agcloud.cuota.iva')))],
+                'cuota_incluye' => ['nullable', 'string', 'max:420'],
                 'cuota_periodicidad' => ['required', Rule::in(config('agcloud.cuota.periodicidad'))],
-                'cuota_iva' => ['required', Rule::in(array_keys(config('agcloud.cuota.iva')))],
+                'cuota_iva' => ['nullable', Rule::in(array_keys(config('agcloud.cuota.iva')))],
                 'cuota_inicio' => ['nullable', 'date'],
                 'cuota_forma_cobro' => ['required', Rule::in(config('agcloud.cuota.forma_cobro'))],
                 'cuota_cuenta' => ['nullable', 'string', 'max:40'],
-                'cuota_concepto' => ['nullable', 'string', 'max:200'],
                 'cuota_observaciones' => ['nullable', 'string', 'max:2000'],
             ]);
-            $imp = Formato::parseNum($request->input('cuota_importe'));
-            if ($imp < 0 || $imp > 9999999) {
-                $this->fallo('El importe de la cuota no es válido.');
+            $L = [];
+            foreach ((array) $request->input('cuota_lineas', []) as $l) {
+                $d = trim((string) ($l['d'] ?? ''));
+                $q = Formato::parseNum((string) ($l['q'] ?? '1'));
+                $pr = Formato::parseNum((string) ($l['p'] ?? ''));
+                if ($d === '' && $pr == 0) {
+                    continue;
+                }
+                if ($d === '') {
+                    $this->fallo('Falta el concepto en una de las líneas de la tarifa.');
+                }
+                if ($q <= 0 || $q > 99999 || abs($pr) > 9999999) {
+                    $this->fallo('Revisa la cantidad y el precio de «'.$d.'».');
+                }
+                $L[] = ['d' => mb_substr($d, 0, 200), 'q' => round($q, 2), 'p' => round($pr, 2), 'iva' => (int) ($l['iva'] ?? $cliente->cuota_iva)];
             }
-            $cliente->fill($request->only(['cuota_periodicidad', 'cuota_iva', 'cuota_inicio', 'cuota_forma_cobro', 'cuota_cuenta', 'cuota_concepto', 'cuota_observaciones']));
-            $cliente->cuota_importe = $imp ?: null;
+            $base = round(array_sum(array_map(fn ($l) => round($l['q'] * $l['p'], 2), $L)), 2);
+            if ($base < 0) {
+                $this->fallo('El importe de la cuota no puede ser negativo.');
+            }
+            $cliente->fill($request->only(['cuota_periodicidad', 'cuota_inicio', 'cuota_forma_cobro', 'cuota_cuenta', 'cuota_observaciones']));
+            $cliente->cuota_tarifa = trim((string) $request->input('cuota_tarifa')) ?: null;
+            $cliente->cuota_incluye = trim((string) $request->input('cuota_incluye')) ?: null;
+            $cliente->cuota_lineas = $L ?: null;
+            $cliente->cuota_importe = $base ?: null;
+            if ($L) {
+                $cliente->cuota_concepto = $L[0]['d'];
+                $cliente->cuota_iva = $L[0]['iva'];
+            }
             $cliente->save();
             Auditoria::registrar('cliente.cuota', 'Cuota actualizada de '.$cliente->nombre, $cliente, $cliente->id);
 
@@ -292,9 +347,7 @@ class ClienteController extends Controller
         Auditoria::registrar('cliente.edicion', 'Datos generales actualizados de '.$cliente->nombre, $cliente, $cliente->id);
 
         $msg = 'Datos generales guardados.';
-        if ($request->boolean('portal') && ! $cliente->usuarios()->where('email', $cliente->email)->exists()) {
-            $msg .= ' '.$accesos->invitar($cliente, $cliente->email, $cliente->nombre, User::CLIENTE_ADMIN, $request->input('portal_pass'));
-        }
+        $msg = trim($msg.' '.$this->altaPortal($cliente, $accesos, $request->input('portal_pass')));
         if ($antesTipo !== $cliente->tipo) {
             $msg .= ' Has cambiado el tipo de cliente: revisa las secciones de la ficha.';
         }

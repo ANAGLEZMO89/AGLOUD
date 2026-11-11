@@ -72,15 +72,16 @@
               <span style="font-size:13.5px;font-weight:600">Acceso al portal del cliente activo</span>
               <span class="hint muted">Gestiona usuarios, reenvíos y bajas desde la pestaña «Accesos al portal» de la ficha.</span>
             @else
-              <label class="chk"><input type="checkbox" name="portal" value="1" data-portal-toggle @checked($old('portal', $nuevo ? '1' : null))>Dar acceso al portal del cliente</label>
-              <div data-portal-box class="{{ $old('portal', $nuevo ? '1' : null) ? '' : 'hidden' }}" style="display:flex;flex-direction:column;gap:6px">
+              <input type="hidden" name="portal" value="1">
+              <span style="font-size:13.5px;font-weight:600">Alta automática en el portal del cliente</span>
+              <div style="display:flex;flex-direction:column;gap:6px">
                 <span class="flbl">Contraseña provisional · <span data-portal-user>{{ $old('email', $c->email) ? 'Usuario: '.$old('email', $c->email) : 'El usuario será el correo del cliente' }}</span></span>
                 <div class="row" style="gap:6px">
                   <input class="inp mono" type="password" name="portal_pass" value="" placeholder="Se generará automáticamente" style="flex:1 1 200px" data-pass autocomplete="new-password">
                   <button class="btn white sm" type="button" style="height:40px" data-pass-show>Ver</button>
                   <button class="btn soft sm" type="button" style="height:40px" data-pass-gen>Generar</button>
                 </div>
-                <span class="hint muted">Al guardar el alta se envía automáticamente el correo de bienvenida con la dirección del portal, el usuario y esta contraseña. El cliente tendrá que cambiarla la primera vez que entre.</span>
+                <span class="hint muted">Al guardar se crea su acceso al portal y se le envía el correo de bienvenida con la dirección, el usuario (su email) y la contraseña provisional, que tendrá que cambiar la primera vez. Si aún no tiene email, el acceso se creará cuando lo indiques.</span>
               </div>
             @endif
           </div>
@@ -92,18 +93,49 @@
         <form id="altaForm" method="POST" action="{{ route('clientes.update', $c) }}" class="card" style="gap:16px" data-cuota>
           @csrf @method('PUT')
           <input type="hidden" name="sec" value="cuota">
+          @php
+            $ivas = config('agcloud.cuota.iva');
+            $lin = $old('cuota_lineas', null) ?? array_map(fn ($l) => ['d' => $l['d'], 'q' => Formato::num($l['q']), 'p' => Formato::num($l['p']), 'iva' => (string) $l['iva']], $c->lineasCuota());
+            $lin = $lin ?: [['d' => $c->cuota_concepto ?: 'Honorarios de asesoría', 'q' => '1', 'p' => '', 'iva' => (string) $c->cuota_iva]];
+            $tarifas = \App\Models\Cliente::whereNotNull('cuota_tarifa')->distinct()->orderBy('cuota_tarifa')->pluck('cuota_tarifa');
+          @endphp
+          <datalist id="cuota-tarifas">@foreach($tarifas as $t)<option value="{{ $t }}">@endforeach</datalist>
           <div class="fgrid g200">
-            <label class="fld"><span>Importe sin IVA (€) *</span><input class="inp big" name="cuota_importe" value="{{ $old('cuota_importe', $c->cuota_importe ? Formato::num($c->cuota_importe) : '') }}" inputmode="decimal" placeholder="0,00" data-c-imp></label>
+            <label class="fld full"><span>Tarifa</span><input class="inp" name="cuota_tarifa" value="{{ $old('cuota_tarifa', $c->cuota_tarifa) }}" list="cuota-tarifas" maxlength="120" placeholder="Ej.: Autónomo básica · Sociedad completa"></label>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span class="flbl">Conceptos que se facturan cada periodo</span>
+            <div class="cu-lin cu-head"><span>Concepto en la factura</span><span>Uds.</span><span>Precio sin IVA</span><span>IVA</span><span></span></div>
+            <div data-rows="cuota" style="display:flex;flex-direction:column;gap:8px">
+              @foreach($lin as $i => $l)
+                <div class="cu-lin" data-row>
+                  <input class="inp" name="cuota_lineas[{{ $i }}][d]" value="{{ $l['d'] ?? '' }}" maxlength="200" placeholder="Honorarios de asesoría fiscal y contable">
+                  <input class="inp mono" name="cuota_lineas[{{ $i }}][q]" value="{{ $l['q'] ?? '1' }}" inputmode="decimal" data-c-q>
+                  <input class="inp mono" name="cuota_lineas[{{ $i }}][p]" value="{{ $l['p'] ?? '' }}" inputmode="decimal" placeholder="0,00" data-c-p>
+                  <select class="sel" name="cuota_lineas[{{ $i }}][iva]" data-c-i>@foreach($ivas as $v => $lb)<option value="{{ $v }}" @selected((string) ($l['iva'] ?? $c->cuota_iva) === (string) $v)>{{ $lb }}</option>@endforeach</select>
+                  <button class="btn soft sm" type="button" data-row-del aria-label="Quitar línea">×</button>
+                </div>
+              @endforeach
+            </div>
+            <template data-row-tpl="cuota"><div class="cu-lin" data-row>
+              <input class="inp" name="cuota_lineas[__][d]" maxlength="200" placeholder="Ej.: Nóminas (por trabajador)">
+              <input class="inp mono" name="cuota_lineas[__][q]" value="1" inputmode="decimal" data-c-q>
+              <input class="inp mono" name="cuota_lineas[__][p]" inputmode="decimal" placeholder="0,00" data-c-p>
+              <select class="sel" name="cuota_lineas[__][iva]" data-c-i>@foreach($ivas as $v => $lb)<option value="{{ $v }}" @selected((string) $c->cuota_iva === (string) $v)>{{ $lb }}</option>@endforeach</select>
+              <button class="btn soft sm" type="button" data-row-del aria-label="Quitar línea">×</button>
+            </div></template>
+            <button class="btn soft sm" type="button" data-row-add="cuota" style="align-self:flex-start">+ Añadir concepto</button>
+          </div>
+          <div class="fgrid g200">
+            <label class="fld full"><span>Servicios incluidos · se imprimen en la factura</span><textarea class="txa" name="cuota_incluye" rows="3" maxlength="420" placeholder="Contabilidad, modelos trimestrales y anuales, hasta 2 nóminas, atención por WhatsApp…">{{ $old('cuota_incluye', $c->cuota_incluye) }}</textarea></label>
             <label class="fld"><span>Periodicidad</span><select class="sel" name="cuota_periodicidad" data-c-per>@foreach(config('agcloud.cuota.periodicidad') as $p)<option @selected($old('cuota_periodicidad', $c->cuota_periodicidad) === $p)>{{ $p }}</option>@endforeach</select></label>
-            <label class="fld"><span>IVA</span><select class="sel" name="cuota_iva" data-c-iva>@foreach(config('agcloud.cuota.iva') as $v => $l)<option value="{{ $v }}" @selected((string) $old('cuota_iva', $c->cuota_iva) === (string) $v)>{{ $l }}</option>@endforeach</select></label>
             <label class="fld"><span>Fecha de inicio</span><input class="inp" type="date" name="cuota_inicio" value="{{ $old('cuota_inicio', $c->cuota_inicio?->toDateString()) }}"></label>
             <label class="fld"><span>Forma de cobro</span><select class="sel" name="cuota_forma_cobro">@foreach(config('agcloud.cuota.forma_cobro') as $p)<option @selected($old('cuota_forma_cobro', $c->cuota_forma_cobro) === $p)>{{ $p }}</option>@endforeach</select></label>
             <label class="fld"><span>Cuenta de cargo</span><select class="sel" name="cuota_cuenta">
               <option value="">{{ count($c->seccion('bancos')) ? 'Elige una cuenta' : 'Sin cuentas: añádelas en Datos bancarios' }}</option>
               @foreach($c->seccion('bancos') as $i => $b)<option value="{{ $i }}" @selected((string) $old('cuota_cuenta', $c->cuota_cuenta) === (string) $i)>{{ Formato::iban($b['iban'] ?? '') }}{{ ! empty($b['principal']) ? ' · Principal' : '' }}</option>@endforeach
             </select></label>
-            <label class="fld full"><span>Concepto en factura</span><input class="inp" name="cuota_concepto" value="{{ $old('cuota_concepto', $c->cuota_concepto) }}"></label>
-            <label class="fld full"><span>Observaciones</span><textarea class="txa" name="cuota_observaciones" placeholder="Servicios incluidos, revisiones de precio, descuentos pactados…">{{ $old('cuota_observaciones', $c->cuota_observaciones) }}</textarea></label>
+            <label class="fld full"><span>Observaciones internas</span><textarea class="txa" name="cuota_observaciones" placeholder="Revisiones de precio, descuentos pactados… (no salen en la factura)">{{ $old('cuota_observaciones', $c->cuota_observaciones) }}</textarea></label>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
             <div class="sumbox"><span>Base</span><b data-c-base>0,00 €</b></div>
@@ -111,6 +143,10 @@
             <div class="sumbox l"><span>Total por periodo</span><b data-c-tot>0,00 €</b></div>
           </div>
           <span style="font-size:13px;color:#6A6A65" data-c-anual>Escribe el importe acordado con el cliente.</span>
+          @if($c->exists && $c->lineasCuota())
+            <a class="btn lime" style="align-self:flex-start" href="{{ route('facturacion.create', ['cuota' => $c->id]) }}">Facturar la cuota ahora</a>
+            <span class="hint muted" style="margin-top:-8px">También se carga sola al elegir a este cliente en Facturación › Nueva factura (con la empresa del despacho elegida).</span>
+          @endif
         </form>
         @endif
 

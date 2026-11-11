@@ -170,6 +170,16 @@ class FacturaController extends Controller
     public function create(Request $request)
     {
         $c = $this->emisor($request);
+        // La cuota del cliente la factura siempre el despacho: si se está trabajando con otra empresa, se cambia
+        if ($request->query('cuota') && (! $c || ! $c->es_despacho)) {
+            $desp = Cliente::despacho();
+            if (! $desp) {
+                return redirect()->route('escritorio')->with('aviso', 'Da de alta primero los datos del despacho para poder facturar las cuotas.');
+            }
+            $request->session()->put('cliente_activo', $desp->id);
+
+            return redirect()->to($request->fullUrl())->with('aviso', 'Facturas como '.$desp->nombre.' (el despacho).');
+        }
         if (! $c) {
             return $this->sinEmisor();
         }
@@ -205,6 +215,24 @@ class FacturaController extends Controller
                 $dr['receptor_nif'] = $dr['receptor_nif'] ?: $cli['nif'];
             }
         }
+        if ($request->query('cuota') && $c->es_despacho) {
+            $cli = Cliente::where('es_despacho', false)->findOrFail((int) $request->query('cuota'));
+            $fecha = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('fecha')) && $request->query('fecha') <= $hoy ? (string) $request->query('fecha') : $hoy;
+            $per = Cliente::periodoCuota((string) $cli->cuota_periodicidad, \Carbon\CarbonImmutable::parse($fecha));
+            $obs = trim(($per ? 'Periodo facturado: '.$per.'.' : '').($cli->cuota_incluye ? ' Incluye: '.preg_replace('/\s*\R\s*/', ', ', trim($cli->cuota_incluye)) : ''));
+            $banco = $cli->seccion('bancos')[(int) $cli->cuota_cuenta] ?? (collect($cli->seccion('bancos'))->first(fn ($b) => ! empty($b['principal'])) ?? []);
+            $dr = array_merge($dr, ['fecha' => $fecha, 'receptor_nombre' => $cli->nombre, 'receptor_nif' => (string) $cli->nif,
+                'receptor_dir' => trim(implode(', ', array_filter([$cli->domicilio, trim($cli->cp.' '.$cli->municipio), $cli->provincia])), ', '),
+                'fe_cp' => (string) $cli->cp, 'fe_municipio' => (string) $cli->municipio, 'fe_provincia' => (string) $cli->provincia,
+                'observaciones' => mb_substr($obs, 0, 500),
+                'forma_pago' => in_array($cli->cuota_forma_cobro, Factura::FORMAS_PAGO, true) ? $cli->cuota_forma_cobro : 'Transferencia',
+                'pago_dias' => $cli->cuota_forma_cobro === 'Domiciliación SEPA' ? '0' : $dr['pago_dias'],
+                'iban' => (string) ($banco['iban'] ?? ''),
+                'lineas' => array_map(fn ($l) => ['d' => $l['d'], 'q' => Formato::num($l['q']), 'p' => Formato::num($l['p']), 'iva' => (string) (0 + $l['iva']), 'sup' => false], $cli->lineasCuota()) ?: $dr['lineas']]);
+            if ($request->query('serie') && collect($cfg->series)->contains('cod', $request->query('serie'))) {
+                $dr['serie'] = (string) $request->query('serie');
+            }
+        }
         $old = $request->old();
         if ($old) {
             $dr = array_merge($dr, array_intersect_key($old, $dr));
@@ -226,7 +254,8 @@ class FacturaController extends Controller
         if ($c->es_despacho) {
             foreach (Cliente::where('es_despacho', false)->orderBy('nombre')->get() as $x) {
                 $out[mb_strtolower($x->nombre)] = ['nombre' => $x->nombre, 'nif' => (string) $x->nif, 'dir' => (string) $x->domicilio, 'cp' => (string) $x->cp, 'municipio' => (string) $x->municipio, 'provincia' => (string) $x->provincia,
-                    'ibans' => collect($x->seccion('bancos'))->pluck('iban')->filter()->values()->all()];
+                    'ibans' => collect($x->seccion('bancos'))->pluck('iban')->filter()->values()->all(),
+                    'cuota' => $x->lineasCuota() ? route('facturacion.create', ['cuota' => $x->id]) : null];
             }
         }
         foreach (Factura::where('cliente_id', $c->id)->whereNotNull('receptor_nombre')->orderByDesc('id')->limit(500)->get() as $f) {

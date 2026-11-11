@@ -94,8 +94,8 @@
   });
 
   // ---------- IBAN ----------
-  var BANCOS = { '0049': ['Banco Santander', 'BSCHESMMXXX'], '0030': ['Banco Santander', 'ESPCESMMXXX'], '0075': ['Banco Santander', 'POPUESMMXXX'], '0182': ['BBVA', 'BBVAESMMXXX'], '2100': ['CaixaBank', 'CAIXESBBXXX'], '2038': ['CaixaBank', 'CAHMESMMXXX'], '0081': ['Banco Sabadell', 'BSABESBBXXX'], '0128': ['Bankinter', 'BKBKESMMXXX'], '3058': ['Cajamar', 'CCRIES2AXXX'], '1465': ['ING', 'INGDESMMXXX'], '0073': ['Openbank', 'OPENESMMXXX'], '2080': ['Abanca', 'CAGLESMMXXX'], '2085': ['Ibercaja', 'CAZRES2ZXXX'], '2095': ['Kutxabank', 'BASKES2BXXX'], '0239': ['EVO Banco', 'EVOBESMMXXX'], '1491': ['Triodos Bank', 'TRIOESMMXXX'], '2103': ['Unicaja', 'UCJAES2MXXX'], '2048': ['Unicaja (Liberbank)', 'CECAESMM048'], '0237': ['Cajasur', 'CSURES2CXXX'], '0487': ['Banco Mare Nostrum', 'GBMNESMMXXX'], '3035': ['Laboral Kutxa', 'CLPEES2MXXX'], '0061': ['Banca March', 'BMARES2MXXX'], '0186': ['Banco Mediolanum', 'BFIVESBBXXX'], '0019': ['Deutsche Bank', 'DEUTESBBXXX'], '3025': ["Caixa d'Enginyers", 'CDENESBBXXX'], '3183': ['Arquia Bank', 'CASDESBBXXX'], '0234': ['Banco Caminos', 'CCOCESMMXXX'], '0083': ['Renta 4 Banco', 'RENBESMMXXX'], '0138': ['Bankoa', 'BKOAES22XXX'], '1583': ['Revolut Bank', 'REVOESM2XXX'] };
-  function bankOf(v) { var s = String(v).replace(/\s+/g, '').toUpperCase(); if (s.indexOf('ES') !== 0 || s.length < 8) return null; var c = s.slice(4, 8); return BANCOS[c] || (c.indexOf('30') === 0 ? ['Caja Rural / cooperativa de crédito (' + c + ')', 'BCOEESMM' + c.slice(1)] : null); }
+  var BANCOS = window.AGC_BANCOS || {};
+  function bankOf(v) { var s = String(v).replace(/\s+/g, '').toUpperCase(); if (s.indexOf('ES') !== 0 || s.length < 8) return null; return BANCOS[s.slice(4, 8)] || null; }
   function ibanOk(v) {
     var s = String(v).replace(/\s+/g, '').toUpperCase();
     if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(s) || (s.indexOf('ES') === 0 && s.length !== 24)) return false;
@@ -107,11 +107,12 @@
     var f = i.form, hint = $('[data-iban-hint]', i.closest('.fld') || i.parentNode);
     var run = function () {
       var s = i.value.replace(/\s+/g, ''), b = bankOf(s);
-      if (b && f) { var e = f.querySelector('[name="d[entidad]"]'), bic = f.querySelector('[name="d[bic]"]'); if (e && !e.value) e.value = b[0]; if (bic && !bic.value) bic.value = b[1]; }
+      // La entidad y el BIC dependen del código de entidad del IBAN: se rellenan siempre que se reconoce
+      if (b && f) { var e = f.querySelector('[name="d[entidad]"]'), bic = f.querySelector('[name="d[bic]"]'); if (e) e.value = b[0]; if (bic && b[1]) bic.value = b[1]; }
       if (!hint) return;
       if (s.length < 8) { hint.textContent = ''; return; }
       if (s.length >= 24 && !ibanOk(s)) { hint.textContent = 'IBAN no válido: revisa los dígitos de control'; hint.className = 'hint err'; return; }
-      hint.textContent = b ? b[0] + ' · BIC ' + b[1] + (s.length >= 24 ? ' · IBAN correcto' : '') : 'Entidad no reconocida: escribe la entidad y el BIC a mano';
+      hint.textContent = b ? b[0] + (b[1] ? ' · BIC ' + b[1] : ' · sin BIC registrado: escríbelo a mano') + (s.length >= 24 ? ' · IBAN correcto' : '') : 'Entidad ' + s.slice(4, 8) + ' no registrada en el Banco de España: revisa el IBAN';
       hint.className = 'hint' + (b ? '' : ' err');
     };
     on(i, 'input', run); run();
@@ -146,18 +147,26 @@
     var p = $('[data-pass]'); if (p) { p.value = out.join(''); p.type = 'text'; }
   });
 
-  // ---------- Cuota ----------
+  // ---------- Cuota (tarifa con varias líneas) ----------
   var cf = $('[data-cuota]');
   if (cf) {
     var MULT = { Mensual: 12, Trimestral: 4, Semestral: 2, Anual: 1 };
     var calc = function () {
-      // IVA redondeado al céntimo antes de sumar (1.234,50 × 21 % = 259,25 → total 1.493,75)
+      // IVA redondeado al céntimo por línea antes de sumar
       var r2 = function (x) { return Math.round((x + Number.EPSILON) * 100) / 100; };
-      var imp = r2(pnum($('[data-c-imp]', cf).value)), iva = r2(imp * (+$('[data-c-iva]', cf).value || 0) / 100), mult = MULT[$('[data-c-per]', cf).value];
-      $('[data-c-base]', cf).textContent = eu(imp) + ' €'; $('[data-c-ivat]', cf).textContent = eu(iva) + ' €'; $('[data-c-tot]', cf).textContent = eu(imp + iva) + ' €';
-      $('[data-c-anual]', cf).textContent = !imp ? 'Escribe el importe acordado con el cliente.' : mult ? 'Equivale a ' + eu(r2((imp + iva) * mult)) + ' € al año con IVA.' : 'Importe de referencia por cada trámite.';
+      var base = 0, iva = 0;
+      $$('[data-row]', cf).forEach(function (row) {
+        var q = $('[data-c-q]', row), p = $('[data-c-p]', row), i = $('[data-c-i]', row);
+        var b = r2(pnum(q ? q.value : 1) * pnum(p ? p.value : 0));
+        base += b; iva += r2(b * (+(i ? i.value : 0) || 0) / 100);
+      });
+      base = r2(base); iva = r2(iva);
+      var mult = MULT[$('[data-c-per]', cf).value];
+      $('[data-c-base]', cf).textContent = eu(base) + ' €'; $('[data-c-ivat]', cf).textContent = eu(iva) + ' €'; $('[data-c-tot]', cf).textContent = eu(base + iva) + ' €';
+      $('[data-c-anual]', cf).textContent = !base ? 'Escribe los conceptos y precios acordados con el cliente.' : mult ? 'Equivale a ' + eu(r2((base + iva) * mult)) + ' € al año con IVA.' : 'Importe de referencia por cada trámite.';
     };
-    $$('input, select', cf).forEach(function (i) { on(i, 'input', calc); on(i, 'change', calc); });
+    on(cf, 'input', calc); on(cf, 'change', calc);
+    on(cf, 'click', function (e) { if (e.target.closest && (e.target.closest('[data-row-del]') || e.target.closest('[data-row-add]'))) setTimeout(calc, 0); });
     calc();
   }
 
@@ -336,6 +345,15 @@
     var onCli = function (fill) {
       var r = find(cli.value);
       if (nuevo) nuevo.style.display = cli.value.trim() && !r ? '' : 'none';
+      // Cliente del despacho con tarifa y factura aún sin conceptos: se carga su cuota (líneas, incluido, cobro)
+      if (r && fill && r.cuota) {
+        var vacia = $$('[name^="lineas["][name$="[d]"]', fcf).every(function (x) { return !x.value.trim(); }) && $$('[name^="lineas["][name$="[p]"]', fcf).every(function (x) { return !x.value.trim(); });
+        if (vacia) {
+          var fe = $('[name="fecha"]', fcf), se = $('[name="serie"]', fcf);
+          window.location = r.cuota + '&fecha=' + encodeURIComponent(fe ? fe.value : '') + '&serie=' + encodeURIComponent(se ? se.value : '');
+          return;
+        }
+      }
       if (r && fill) {
         $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir; if (!iban.value && r.ibans[0]) iban.value = r.ibans[0];
         [['[data-fc-cp]', 'cp'], ['[data-fc-mun]', 'municipio'], ['[data-fc-prov]', 'provincia']].forEach(function (x) { var el = $(x[0], fcf); if (el && r[x[1]] != null) el.value = r[x[1]]; });
