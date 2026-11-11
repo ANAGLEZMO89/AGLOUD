@@ -233,6 +233,9 @@ abstract class TerceroController extends Controller
         $tipo = Tercero::CLASES[$clase][3];
         if ($factura) {
             abort_unless($factura->cliente_id === $c->id && $factura->clase === $tipo, 404);
+            if ($factura->asiento_id) {
+                throw ValidationException::withMessages(['form' => 'Esta factura ya está contabilizada. Para cambiarla, borra antes su asiento en Contabilidad › Libro diario (vuelve a la bandeja).']);
+            }
         }
         $d = $request->validate([
             'tercero_id' => ['required', 'integer'], 'num' => ['required', 'string', 'max:60'], 'fecha' => ['required', 'date', 'before_or_equal:today'],
@@ -289,6 +292,9 @@ abstract class TerceroController extends Controller
         $clase = $this->clase;
         $c = $this->ctx($request);
         abort_unless($c && $factura->cliente_id === $c->id && $factura->clase === Tercero::CLASES[$clase][3], 404);
+        if ($factura->asiento_id) {
+            return back()->with('aviso', 'Esta factura ya está contabilizada. Borra antes su asiento en Contabilidad › Libro diario.');
+        }
         Auditoria::registrar('gestion.factura_recibida.baja', 'Eliminada la factura '.$factura->num.' de '.$factura->tercero?->nombre, $factura);
         $factura->delete();
 

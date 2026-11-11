@@ -419,6 +419,55 @@
     on(disForm, 'input', function (e) { if (e.target.type === 'color' || e.target.tagName === 'TEXTAREA') disRefresh(); });
   }
 
+  // ---------- Contabilidad: asiento manual y bandeja ----------
+  var apF = $('[data-asiento]');
+  if (apF) {
+    var ctas = {}; try { ctas = JSON.parse(apF.getAttribute('data-cuentas') || '{}'); } catch (e) {}
+    var apBox = $('[data-ap-lines]', apF), apN = 9000;
+    var a9 = function (v) { v = String(v || '').replace(/\D/g, ''); return v.length >= 9 ? v.slice(0, 9) : (v + '000000000').slice(0, 9); };
+    var nomDe = function (v) {
+      var c = a9(v); if (!String(v || '').replace(/\D/g, '')) return '';
+      if (ctas[c]) return ctas[c];
+      var k4 = a9(c.slice(0, 4)), k3 = a9(c.slice(0, 3));
+      return ctas[k4] || ctas[k3] || '⚠ No existe en el plan de cuentas';
+    };
+    var apCalc = function () {
+      var d = 0, h = 0;
+      $$('[data-ap-line]', apBox).forEach(function (row) {
+        d += pnum($('[data-k="d"]', row).value); h += pnum($('[data-k="h"]', row).value);
+        var n = $('[data-ap-nom]', row); n.textContent = nomDe($('[data-k="c"]', row).value);
+        n.style.color = /^⚠/.test(n.textContent) ? '#B42318' : '#3C3C3C';
+      });
+      d = Math.round(d * 100) / 100; h = Math.round(h * 100) / 100;
+      $('[data-ap-sd]', apF).textContent = eu(d); $('[data-ap-sh]', apF).textContent = eu(h);
+      var cu = $('[data-ap-cuadre]', apF), ok = Math.abs(d - h) < 0.005 && d > 0;
+      cu.textContent = ok ? '✓ Cuadra' : (d || h ? 'Diferencia ' + eu(d - h) : '');
+      cu.style.color = ok ? '#2E7D32' : '#B42318';
+    };
+    var apWire = function (row) {
+      on($('[data-ap-del]', row), 'click', function () { if ($$('[data-ap-line]', apBox).length > 2) { row.remove(); apCalc(); } });
+      ['d', 'h'].forEach(function (k) {
+        on($('[data-k="' + k + '"]', row), 'keydown', function (e) {
+          if (e.key !== '=') return; e.preventDefault();
+          var d = 0, h = 0; $$('[data-ap-line]', apBox).forEach(function (r) { if (r !== row) { d += pnum($('[data-k="d"]', r).value); h += pnum($('[data-k="h"]', r).value); } });
+          var dif = Math.round((k === 'd' ? h - d : d - h) * 100) / 100; if (dif > 0) { e.target.value = eu(dif); apCalc(); }
+        });
+      });
+    };
+    $$('[data-ap-line]', apBox).forEach(apWire);
+    on($('[data-ap-add]', apF), 'click', function () {
+      var row = $('[data-ap-tpl]').content.firstElementChild.cloneNode(true), n = apN++;
+      $$('[data-k]', row).forEach(function (el) { el.name = 'l[' + n + '][' + el.getAttribute('data-k') + ']'; });
+      apBox.appendChild(row); apWire(row); $('input', row).focus();
+    });
+    on(apF, 'input', apCalc); apCalc();
+  }
+  var band = $('[data-bandeja]');
+  if (band) {
+    var todas = $('[data-band-todas]', band);
+    on(todas, 'change', function () { $$('[data-band-k]', band).forEach(function (c) { c.checked = todas.checked; }); });
+  }
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

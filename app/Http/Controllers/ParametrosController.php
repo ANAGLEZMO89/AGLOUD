@@ -6,6 +6,7 @@ use App\Models\Oportunidad;
 use App\Models\Tarea;
 use App\Models\Tercero;
 use App\Services\Auditoria;
+use App\Services\Contabilidad;
 use App\Support\Formato;
 use App\Support\Parametros;
 use Illuminate\Http\Request;
@@ -138,6 +139,22 @@ class ParametrosController extends Controller
             'vacaciones' => ['required', 'integer', 'min:0', 'max:60'], 'prioridad' => ['required', Rule::in(array_keys(Tarea::PRIORIDADES))]]);
 
         return ['jornada_semanal' => (float) $d['jornada_semanal'], 'jornada_diaria' => (float) $d['jornada_diaria'], 'vacaciones' => (int) $d['vacaciones'], 'prioridad' => $d['prioridad']];
+    }
+
+    private function datosContabilidad(Request $r): array
+    {
+        $claves = array_keys(Parametros::defecto('contabilidad'));
+        $r->validate(collect($claves)->mapWithKeys(fn ($k) => [$k => ['required', 'regex:/^\d{3,9}$/']])->all(), ['*.regex' => 'Las cuentas tienen de 3 a 9 cifras.']);
+        $out = [];
+        foreach ($claves as $k) {
+            $v = (string) $r->input($k);
+            if (! Contabilidad::existeEnPgc(Contabilidad::a9($v))) {
+                throw ValidationException::withMessages([$k => 'La cuenta '.$v.' no existe en el plan de cuentas.']);
+            }
+            $out[$k] = $v;
+        }
+
+        return $out;
     }
 
     private function datosCrm(Request $r): array

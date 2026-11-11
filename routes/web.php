@@ -8,6 +8,7 @@ use App\Http\Controllers\CalendarioController;
 use App\Http\Controllers\ClienteAccesoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ClienteSeccionController;
+use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
@@ -72,6 +73,26 @@ Route::middleware('auth')->group(function () {
                 Route::delete('/{tercero}', [$ctl, 'borrar'])->whereNumber('tercero')->name('destroy');
             });
         }
+
+        // Contabilidad de la empresa elegida
+        Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
+            Route::get('/', [ContabilidadController::class, 'index'])->name('index');
+            Route::get('/bandeja', [ContabilidadController::class, 'bandeja'])->name('bandeja');
+            Route::post('/bandeja', [ContabilidadController::class, 'contabilizar'])->name('contabilizar');
+            Route::get('/diario', [ContabilidadController::class, 'diario'])->name('diario');
+            Route::delete('/asientos/{asiento}', [ContabilidadController::class, 'borrar'])->whereNumber('asiento')->name('borrar');
+            Route::get('/apuntes', [ContabilidadController::class, 'apuntes'])->name('apuntes');
+            Route::post('/apuntes', [ContabilidadController::class, 'guardarAsiento'])->name('apuntes.guardar');
+            Route::get('/mayor', [ContabilidadController::class, 'mayor'])->name('mayor');
+            Route::get('/sumas-y-saldos', [ContabilidadController::class, 'sumas'])->name('sumas');
+            Route::get('/cuentas-anuales', [ContabilidadController::class, 'cuentasAnuales'])->name('anuales');
+            Route::get('/ejercicios', [ContabilidadController::class, 'ejercicios'])->name('ejercicios');
+            Route::post('/ejercicios', [ContabilidadController::class, 'abrirEjercicio'])->name('ejercicios.abrir');
+            Route::post('/ejercicios/{ejercicio}/cerrar', [ContabilidadController::class, 'cerrarEjercicio'])->whereNumber('ejercicio')->name('ejercicios.cerrar');
+            Route::post('/ejercicios/{ejercicio}/reabrir', [ContabilidadController::class, 'reabrirEjercicio'])->whereNumber('ejercicio')->name('ejercicios.reabrir');
+            Route::post('/ejercicios/{ejercicio}/bloqueo', [ContabilidadController::class, 'bloqueo'])->whereNumber('ejercicio')->name('ejercicios.bloqueo');
+            Route::post('/subcuentas', [ContabilidadController::class, 'guardarCuenta'])->name('subcuentas');
+        });
 
         // Calendario y tareas del despacho
         Route::get('/calendario', [CalendarioController::class, 'index'])->name('calendario');

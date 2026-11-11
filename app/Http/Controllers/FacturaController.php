@@ -8,6 +8,7 @@ use App\Models\FacturacionConfig;
 use App\Models\Presupuesto;
 use App\Models\RegistroFacturacion;
 use App\Services\Auditoria;
+use App\Services\Contabilidad;
 use App\Services\Facturacion;
 use App\Services\Facturae;
 use App\Support\Formato;
@@ -152,6 +153,15 @@ class FacturaController extends Controller
             return back()->with('aviso', $e->getMessage());
         }
         Auditoria::registrar('factura.anulacion', 'Registro de anulación de '.$factura->num, $factura);
+        $contra = null;
+        try {
+            $contra = app(Contabilidad::class)->anularEmitida($factura->fresh(), $request->user()->id);
+        } catch (InvalidArgumentException) {
+            // ejercicio bloqueado o cerrado: se ajustará a mano en Contabilidad
+        }
+        if ($contra) {
+            return back()->with('ok', 'Registro de anulación de '.$factura->num.' generado y encadenado. En Contabilidad se ha registrado el contraasiento nº '.$contra->numero.'.');
+        }
 
         return back()->with('ok', 'Registro de anulación de '.$factura->num.' generado y encadenado. La factura se conserva marcada como anulada.');
     }

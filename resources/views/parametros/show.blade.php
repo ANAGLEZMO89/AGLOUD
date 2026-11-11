@@ -124,6 +124,18 @@
       </div>
     @endif
 
+    @if($modulo === 'contabilidad')
+      <div class="card" style="padding:18px 20px;gap:12px">
+        <span style="font-size:16px;font-weight:700">Cuentas que se usan al contabilizar las facturas</span>
+        <span class="hint muted">Para todas las empresas. Puedes escribir la cuenta con 3 o 4 cifras (se completa con ceros) o una subcuenta de 9.</span>
+        <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px">
+          @foreach(['ventas' => 'Ventas / prestación de servicios', 'compras' => 'Compras (facturas de proveedores)', 'gasto_servicios' => 'Gastos de acreedores «Servicios»', 'gasto_profesional' => 'Gastos de profesionales', 'gasto_arrendamiento' => 'Arrendamientos', 'iva_repercutido' => 'IVA repercutido', 'iva_soportado' => 'IVA soportado', 'ret_soportada' => 'Retenciones que nos practican', 'ret_practicada' => 'Retenciones que practicamos', 'suplidos' => 'Suplidos facturados', 'banco' => 'Banco por defecto'] as $k => $l)
+            <label class="lbl-s">{{ $l }}<input class="inp mono" name="{{ $k }}" value="{{ old($k, $p[$k]) }}" maxlength="9"><span class="hint muted">{{ \App\Services\Contabilidad::nombre(\App\Services\Contabilidad::a9((string) $p[$k])) }}</span></label>
+          @endforeach
+        </div>
+      </div>
+    @endif
+
     @if($modulo === 'calendario')
       <div class="card" style="padding:18px 20px;gap:12px">
         <span style="font-size:16px;font-weight:700">Qué se muestra en el calendario</span>

@@ -93,7 +93,7 @@ return [
             ['tareas', 'Tareas y horario', 'tareas.index'],
         ]],
         ['label' => 'Áreas', 'items' => [
-            ['contabilidad', 'Contabilidad', null],
+            ['contabilidad', 'Contabilidad', 'contabilidad.index'],
             ['fiscal', 'Fiscal', null],
             ['laboral', 'Laboral y SS', null],
             ['facturacion', 'Facturación', 'facturacion.index'],

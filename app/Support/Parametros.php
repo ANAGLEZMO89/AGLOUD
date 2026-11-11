@@ -22,6 +22,7 @@ class Parametros
         'acreedores' => ['Acreedores', 'Gestión', 'acreedores.index'],
         'calendario' => ['Calendario', 'Gestión', 'calendario'],
         'tareas' => ['Tareas y horario', 'Gestión', 'tareas.index'],
+        'contabilidad' => ['Contabilidad', 'Áreas', 'contabilidad.index'],
     ];
 
     /** Pestañas de cada módulo (además de «Parámetros») */
@@ -51,6 +52,8 @@ class Parametros
             'acreedores' => ['forma_pago' => 'Domiciliación SEPA', 'pago_dias' => 0, 'tipo' => 'Servicios', 'retencion' => 0],
             'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true],
             'tareas' => ['jornada_semanal' => 40, 'jornada_diaria' => 8, 'vacaciones' => 22, 'prioridad' => 'Media'],
+            'contabilidad' => ['ventas' => '705', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
+                'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572'],
             default => [],
         };
     }
