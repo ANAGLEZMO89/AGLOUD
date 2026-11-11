@@ -44,11 +44,12 @@
     <div class="ne-aviso"><b>⚠ {{ $nAv }} {{ $nAv === 1 ? 'concepto no es' : 'conceptos no son' }} por convenio</b>@foreach($av['generales'] as $x)<span>{{ $x }}</span>@endforeach<span>Las líneas afectadas están marcadas en amarillo.</span></div>
   @endif
 
-  @unless($ed['cat'])
+  @foreach($av['info'] ?? [] as $x)<div class="msg" style="font-weight:500;background:#E3ECFF;color:#1D3A8A">{{ $x }}</div>@endforeach
+  @unless($ed['cat'] || Nomina::esAutonomo($w))
     <div class="msg warn" style="font-weight:500">{{ $w['nombre'] }} no tiene asignada una categoría de un convenio cargado: el salario no se puede comparar con el convenio. Asígnala en la ficha › Contrato (las tablas se cargan en Gestión › Convenios).</div>
   @endunless
   <div class="ne-head">
-    @foreach([['C.C.C.', $w['ccc'] ?: '—'], ['Grupo', $w['grupo']], ['Contrato', Nomina::codigo($w['contrato'])], ['Ocupación', $w['cno'] ?: '—'], ['Categoría profesional', ($w['convCat'] ?: $w['cat']) ?: '—'], ['Nº afiliación', $w['naf']], ['Nº documento', $w['nif']]] as [$l, $v])
+    @foreach([['C.C.C.', $w['ccc'] ?: '—'], ['Grupo', $w['grupo']], ['Contrato', Nomina::esAutonomo($w) ? 'RETA · '.($w['autTipo'] ?? 'Autónomo') : Nomina::codigo($w['contrato'])], ['Ocupación', $w['cno'] ?: '—'], ['Categoría profesional', ($w['convCat'] ?: $w['cat']) ?: '—'], ['Nº afiliación', $w['naf']], ['Nº documento', $w['nif']]] as [$l, $v])
       <div><span>{{ $l }}</span><b class="mono12">{{ $v }}</b></div>
     @endforeach
   </div>

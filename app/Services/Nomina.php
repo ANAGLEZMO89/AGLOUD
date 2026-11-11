@@ -342,7 +342,8 @@ class Nomina
                 $out[$i] = 'No es por convenio: el convenio fija '.Formato::eur((float) $l['conv']).'.';
             }
         }
-        $g = self::esAutonomo($w) ? ['Trabajador en el RETA: esta nómina no lleva cotización al Régimen General (ni del trabajador ni de la empresa) y no va a los seguros sociales; solo retención de IRPF. Si la empresa le paga la cuota de autónomos, añádela como concepto salarial: es rendimiento del trabajo.'] : [];
+        $info = self::esAutonomo($w) ? ['Trabajador en el RETA: esta nómina no lleva cotización al Régimen General (ni del trabajador ni de la empresa) y no va a los seguros sociales; solo retención de IRPF. Si la empresa le paga la cuota de autónomos, añádela como concepto salarial: es rendimiento del trabajo.'] : [];
+        $g = [];
         $des = (self::temporal($w) ? self::TIPOS['des_tmp'][0] : self::TIPOS['des_ind'][0]) * 100;
         if (isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' && abs((float) $doc['tipos']['des_t'] - $des) > 0.0001) {
             $g[] = 'Desempleo al '.Formato::num((float) $doc['tipos']['des_t']).' %: el tipo legal es el '.Formato::num($des).' %.';
@@ -351,7 +352,7 @@ class Nomina
             $g[] = 'IRPF al '.Formato::num((float) $doc['tipos']['irpf']).' %: el calculado con el algoritmo de la AEAT es el '.Formato::num($ipAuto).' %.';
         }
 
-        return ['lineas' => $out, 'generales' => $g];
+        return ['lineas' => $out, 'generales' => $g, 'info' => $info];
     }
 
     private static function escala(float $b): float
