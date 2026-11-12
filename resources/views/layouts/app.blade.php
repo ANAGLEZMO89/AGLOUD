@@ -19,12 +19,15 @@
     $menu = $portal ? config('agcloud.menu_portal') : config('agcloud.menu');
     $activo = $activo ?? '';
 @endphp
-<div class="app" id="app">
+<div class="app {{ ($_COOKIE['agc_side'] ?? '') === 'min' ? 'side-min' : '' }}" id="app">
   <aside class="side">
-    <a class="brand" href="{{ $portal ? route('portal.inicio') : route('escritorio') }}">
-      <img src="{{ asset('img/logo-ga-128.png') }}" alt="GA">
-      <div><b>AG CLOUD</b><small>{{ $portal ? 'Portal del cliente' : 'por GA AGOPYME' }}</small></div>
-    </a>
+    <div class="side-top">
+      <a class="brand" href="{{ $portal ? route('portal.inicio') : route('escritorio') }}">
+        <img src="{{ asset('img/logo-ga-128.png') }}" alt="GA">
+        <div><b>AG CLOUD</b><small>{{ $portal ? 'Portal del cliente' : 'por GA AGOPYME' }}</small></div>
+      </a>
+      <button class="side-tog" type="button" data-side-tog aria-label="Recoger o desplegar el menú" title="Recoger o desplegar el menú">‹</button>
+    </div>
     @if(! $portal && ($ctx ?? null))
       <a class="side-area {{ $ctx->es_despacho ? 'desp' : 'cli' }}" href="{{ route('escritorio', ['cambiar' => 1]) }}" title="Cambiar de empresa">
         <small>{{ $ctx->es_despacho ? 'Área del despacho' : 'Área del cliente' }}</small><b>{{ $ctx->nombre }}</b><span>Cambiar empresa</span>

@@ -734,6 +734,15 @@
     });
   });
 
+  // ---------- Menú lateral: recoger y desplegar (se recuerda en una cookie) ----------
+  $$('[data-side-tog]').forEach(function (b) {
+    on(b, 'click', function () {
+      var app = $('#app'); if (!app) return;
+      var min = app.classList.toggle('side-min');
+      document.cookie = 'agc_side=' + (min ? 'min' : 'max') + ';path=/;max-age=31536000;SameSite=Lax';
+    });
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

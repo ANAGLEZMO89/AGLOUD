@@ -762,3 +762,20 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .ne-vars{display:flex;flex-direction:column;gap:8px}
 .ne-var{display:grid;grid-template-columns:minmax(200px,1fr) 260px 130px;gap:8px}
 @media (max-width:700px){.ne-var{grid-template-columns:1fr}}
+
+/* Menú lateral recogible */
+.app{transition:grid-template-columns .18s ease}
+.side-top{display:flex;align-items:center;gap:8px}
+.side-top .brand{flex:1;min-width:0}
+.side-tog{width:28px;height:28px;flex:none;border-radius:50%;border:1px solid #2A2A2A;background:#1C1C1C;color:#F4F4F0;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 0 2px}
+.side-tog:hover{background:var(--lime);color:var(--ink);border-color:var(--lime)}
+@media (min-width:901px){
+  .app.side-min{grid-template-columns:64px minmax(0,1fr)}
+  .app.side-min .side{padding:20px 10px;align-items:center;overflow:hidden}
+  .app.side-min .side-top{flex-direction:column;gap:14px}
+  .app.side-min .brand{padding:0}
+  .app.side-min .brand div,.app.side-min .side-area,.app.side-min .nav,.app.side-min .ucard .tx,.app.side-min .side-foot form{display:none}
+  .app.side-min .ucard{padding:6px;background:none}
+  .app.side-min .side-tog{transform:rotate(180deg)}
+}
+@media (max-width:900px){.side-tog{display:none}}
