@@ -19,7 +19,8 @@
           @php
             $i = $loop->index;
             $spec0 = SeccionesAlta::spec($id, $c->tipo);
-            $badge = $spec0 ? (count($c->seccion($id)) ?: '') : ($id === 'general' && $c->exists ? '✓' : ($id === 'cuota' && $c->cuota_importe ? '✓' : ($id === 'logo' && ($c->logo_documento_id || $c->firma_documento_id) ? '✓' : '')));
+            $nReg = $spec0 ? count($c->seccion($id)) : 0;
+            $badge = $spec0 ? ($nReg ? '✓'.($nReg > 1 ? ' '.$nReg : '') : '') : ($id === 'general' && $c->exists ? '✓' : ($id === 'cuota' && $c->cuota_importe ? '✓' : ($id === 'logo' && ($c->logo_documento_id || $c->firma_documento_id) ? '✓' : '')));
             $deshab = $nuevo && $id !== 'general';
           @endphp
           @if($deshab)

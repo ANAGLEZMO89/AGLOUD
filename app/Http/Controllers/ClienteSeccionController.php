@@ -119,7 +119,7 @@ class ClienteSeccionController extends Controller
         $cliente->save();
         Auditoria::registrar('cliente.seccion', ($idx === null ? 'Añade ' : 'Edita ').$spec['one'].' en la ficha de '.$cliente->nombre, $cliente, $cliente->id);
 
-        return redirect()->route('clientes.edit', [$cliente, 'sec' => $seccion])->with('ok', ucfirst($spec['one']).' guardado.');
+        return redirect()->route('clientes.edit', [$cliente, 'sec' => $seccion])->with('ok', ucfirst($spec['one']).(in_array($seccion, ['bancos', 'acts'], true) ? ' guardada.' : ' guardado.'));
     }
 
     public function borrar(Cliente $cliente, string $seccion, int $idx)
@@ -133,7 +133,7 @@ class ClienteSeccionController extends Controller
         $cliente->save();
         Auditoria::registrar('cliente.seccion', 'Elimina '.$spec['one'].' de la ficha de '.$cliente->nombre, $cliente, $cliente->id);
 
-        return redirect()->route('clientes.edit', [$cliente, 'sec' => $seccion])->with('ok', ucfirst($spec['one']).' eliminado.');
+        return redirect()->route('clientes.edit', [$cliente, 'sec' => $seccion])->with('ok', ucfirst($spec['one']).(in_array($seccion, ['bancos', 'acts'], true) ? ' eliminada.' : ' eliminado.'));
     }
 
     // ----------------------------------------------------------- logo y firma
