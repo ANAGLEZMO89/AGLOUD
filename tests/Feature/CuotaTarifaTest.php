@@ -34,8 +34,15 @@ class CuotaTarifaTest extends TestCase
         $c = $this->cliente('Bar El Puerto SL', 'B21345673', ['domicilio' => 'C/ Mayor 1', 'cp' => '21001', 'municipio' => 'Huelva']);
         $otra = $this->cliente('Otra SL', 'B21987656');
         $as = $this->usuario(User::ASESOR);
+        // SEPA sin cuenta del cliente → error; con su cuenta, se guarda
+        $this->actingAs($as)->put(route('clientes.update', $c), ['sec' => 'cuota', 'cuota_periodicidad' => 'Mensual', 'cuota_forma_cobro' => 'Domiciliación SEPA',
+            'cuota_lineas' => [['d' => 'Honorarios', 'q' => '1', 'p' => '100', 'iva' => '21']]])->assertSessionHasErrors('form');
+        $c->setSeccion('bancos', [['iban' => 'ES9121000418450200051332', 'entidad' => 'CaixaBank', 'sepa' => 'MAND-1', 'principal' => true]]);
+        $c->save();
+        $desp->setSeccion('bancos', [['iban' => 'ES7921000813610123456789', 'entidad' => 'CaixaBank', 'principal' => true], ['iban' => 'ES6000491500051234567892', 'entidad' => 'Santander', 'principal' => false]]);
+        $desp->save();
 
-        $this->actingAs($as)->put(route('clientes.update', $c), ['sec' => 'cuota', 'cuota_tarifa' => 'Sociedad completa', 'cuota_periodicidad' => 'Mensual', 'cuota_forma_cobro' => 'Domiciliación SEPA',
+        $this->actingAs($as)->put(route('clientes.update', $c), ['sec' => 'cuota', 'cuota_tarifa' => 'Sociedad completa', 'cuota_periodicidad' => 'Mensual', 'cuota_forma_cobro' => 'Domiciliación SEPA', 'cuota_cuenta' => '0',
             'cuota_incluye' => "Contabilidad\nModelos trimestrales", 'cuota_lineas' => [
                 ['d' => 'Honorarios de asesoría', 'q' => '1', 'p' => '120,00', 'iva' => '21'],
                 ['d' => 'Nóminas', 'q' => '2', 'p' => '15', 'iva' => '21'],
@@ -56,6 +63,21 @@ class CuotaTarifaTest extends TestCase
         $this->actingAs($as)->withSession(['cliente_activo' => $desp->id])->get($url)->assertOk()
             ->assertSee('value="Bar El Puerto SL"', false)->assertSee('value="B21345673"', false)
             ->assertSee('value="Nóminas"', false)->assertSee('value="120,00"', false)
-            ->assertSee('Periodo facturado: noviembre 2026. Incluye: Contabilidad, Modelos trimestrales', false);
+            ->assertSee('Periodo facturado: noviembre 2026. Incluye: Contabilidad, Modelos trimestrales', false)
+            ->assertSee('value="ES9121000418450200051332"', false);
+
+        // Transferencia: sin elegir cuenta del despacho → error; con la segunda cuenta, la factura sale con ella y sin la del cliente
+        $this->actingAs($as)->put(route('clientes.update', $c), ['sec' => 'cuota', 'cuota_periodicidad' => 'Mensual', 'cuota_forma_cobro' => 'Transferencia',
+            'cuota_lineas' => [['d' => 'Honorarios', 'q' => '1', 'p' => '100', 'iva' => '21']]])->assertSessionHasErrors('form');
+        $this->actingAs($as)->put(route('clientes.update', $c), ['sec' => 'cuota', 'cuota_periodicidad' => 'Mensual', 'cuota_forma_cobro' => 'Transferencia', 'cuota_cuenta' => '0', 'cuota_cuenta_despacho' => '1',
+            'cuota_lineas' => [['d' => 'Honorarios', 'q' => '1', 'p' => '100', 'iva' => '21']]])->assertSessionHas('ok');
+        $c->refresh();
+        $this->assertNull($c->cuota_cuenta);
+        $this->assertSame('1', (string) $c->cuota_cuenta_despacho);
+        $html = $this->actingAs($as)->withSession(['cliente_activo' => $desp->id])->get($url)->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<option value="ES6000491500051234567892"\s+selected/', $html);
+        $this->assertStringNotContainsString('name="iban" value="ES9121000418450200051332"', $html);
+        // Ficha del despacho: sin sección de cuota
+        $this->actingAs($as)->withSession(['cliente_activo' => $desp->id])->get(route('clientes.edit', [$desp, 'sec' => 'general']))->assertOk()->assertDontSee('<span>Cuota</span>', false)->assertSee('Datos bancarios');
     }
 }

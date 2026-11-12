@@ -31,7 +31,7 @@
         @endforeach
       </nav>
       <div class="pc">
-        <div style="display:flex;flex-direction:column;gap:3px"><span class="sec-t">{{ $secs[$sec] }}</span><span class="sec-d">{{ SeccionesAlta::DESC[$sec] }}</span></div>
+        <div style="display:flex;flex-direction:column;gap:3px"><span class="sec-t">{{ $secs[$sec] }}</span><span class="sec-d">{{ $c->es_despacho && $sec === 'bancos' ? 'Cuentas del despacho. Salen en las facturas para que los clientes que pagan por transferencia ingresen en ellas; la principal se propone por defecto.' : ($c->es_despacho && $sec === 'general' ? 'Datos del despacho como emisor de las facturas a tus clientes.' : SeccionesAlta::DESC[$sec]) }}</span></div>
 
         @if($errors->has('form'))<div class="ferr">{{ $errors->first('form') }}</div>@endif
         @if($errors->any() && ! $errors->has('form') && ! $errors->has('sub'))<div class="ferr">{{ $errors->first() }}</div>@endif
@@ -133,11 +133,16 @@
             <label class="fld full"><span>Servicios incluidos · se imprimen en la factura</span><textarea class="txa" name="cuota_incluye" rows="3" maxlength="420" placeholder="Contabilidad, modelos trimestrales y anuales, hasta 2 nóminas, atención por WhatsApp…">{{ $old('cuota_incluye', $c->cuota_incluye) }}</textarea></label>
             <label class="fld"><span>Periodicidad</span><select class="sel" name="cuota_periodicidad" data-c-per>@foreach(config('agcloud.cuota.periodicidad') as $p)<option @selected($old('cuota_periodicidad', $c->cuota_periodicidad) === $p)>{{ $p }}</option>@endforeach</select></label>
             <label class="fld"><span>Fecha de inicio</span><input class="inp" type="date" name="cuota_inicio" value="{{ $old('cuota_inicio', $c->cuota_inicio?->toDateString()) }}"></label>
-            <label class="fld"><span>Forma de cobro</span><select class="sel" name="cuota_forma_cobro">@foreach(config('agcloud.cuota.forma_cobro') as $p)<option @selected($old('cuota_forma_cobro', $c->cuota_forma_cobro) === $p)>{{ $p }}</option>@endforeach</select></label>
-            <label class="fld"><span>Cuenta de cargo</span><select class="sel" name="cuota_cuenta">
-              <option value="">{{ count($c->seccion('bancos')) ? 'Elige una cuenta' : 'Sin cuentas: añádelas en Datos bancarios' }}</option>
-              @foreach($c->seccion('bancos') as $i => $b)<option value="{{ $i }}" @selected((string) $old('cuota_cuenta', $c->cuota_cuenta) === (string) $i)>{{ Formato::iban($b['iban'] ?? '') }}{{ ! empty($b['principal']) ? ' · Principal' : '' }}</option>@endforeach
-            </select></label>
+            <label class="fld"><span>Forma de cobro</span><select class="sel" name="cuota_forma_cobro" data-cuota-fp>@foreach(config('agcloud.cuota.forma_cobro') as $p)<option @selected($old('cuota_forma_cobro', $c->cuota_forma_cobro) === $p)>{{ $p }}</option>@endforeach</select></label>
+            @php $bDesp = \App\Models\Cliente::despacho()?->seccion('bancos') ?? []; @endphp
+            <label class="fld" data-cuota-cta="Domiciliación SEPA"><span>Cuenta del cliente · cargo SEPA</span><select class="sel" name="cuota_cuenta">
+              <option value="">{{ count($c->seccion('bancos')) ? 'Elige la cuenta del cliente' : 'Sin cuentas: añádelas en Datos bancarios' }}</option>
+              @foreach($c->seccion('bancos') as $i => $b)<option value="{{ $i }}" @selected((string) $old('cuota_cuenta', $c->cuota_cuenta) === (string) $i)>{{ Formato::iban($b['iban'] ?? '') }}{{ ! empty($b['principal']) ? ' · Principal' : '' }}{{ empty($b['sepa']) ? ' · sin mandato SEPA' : ' · mandato '.$b['sepa'] }}</option>@endforeach
+            </select><span class="hint muted">Se carga el recibo en esta cuenta del cliente. Necesita el mandato SEPA firmado.</span></label>
+            <label class="fld" data-cuota-cta="Transferencia"><span>Cuenta del despacho · ingreso</span><select class="sel" name="cuota_cuenta_despacho">
+              <option value="">{{ $bDesp ? 'Elige la cuenta del despacho' : 'Sin cuentas: añádelas en Datos del despacho' }}</option>
+              @foreach($bDesp as $i => $b)<option value="{{ $i }}" @selected((string) $old('cuota_cuenta_despacho', $c->cuota_cuenta_despacho ?? (! empty($b['principal']) ? $i : '')) === (string) $i)>{{ Formato::iban($b['iban'] ?? '') }}{{ ! empty($b['entidad']) ? ' · '.$b['entidad'] : '' }}{{ ! empty($b['principal']) ? ' · Principal' : '' }}</option>@endforeach
+            </select><span class="hint muted">El cliente hace la transferencia a esta cuenta del despacho; sale impresa en la factura.</span></label>
             <label class="fld full"><span>Observaciones internas</span><textarea class="txa" name="cuota_observaciones" placeholder="Revisiones de precio, descuentos pactados… (no salen en la factura)">{{ $old('cuota_observaciones', $c->cuota_observaciones) }}</textarea></label>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
@@ -222,7 +227,7 @@
               @endforeach
             </div>
           @elseif(! $sub)
-            <div class="emptybox">{{ $spec['empty'] }}</div>
+            <div class="emptybox">{{ $c->es_despacho && $sec === 'bancos' ? 'Sin cuentas del despacho. Añade al menos una para cobrar a tus clientes por transferencia.' : $spec['empty'] }}</div>
           @endif
         </div>
         @endif

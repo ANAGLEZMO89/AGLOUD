@@ -225,14 +225,15 @@ class FacturaController extends Controller
             $fecha = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('fecha')) && $request->query('fecha') <= $hoy ? (string) $request->query('fecha') : $hoy;
             $per = Cliente::periodoCuota((string) $cli->cuota_periodicidad, CarbonImmutable::parse($fecha));
             $obs = trim(($per ? 'Periodo facturado: '.$per.'.' : '').($cli->cuota_incluye ? ' Incluye: '.preg_replace('/\s*\R\s*/', ', ', trim($cli->cuota_incluye)) : ''));
-            $banco = $cli->seccion('bancos')[(int) $cli->cuota_cuenta] ?? (collect($cli->seccion('bancos'))->first(fn ($b) => ! empty($b['principal'])) ?? []);
+            [$ibanCli, $ibanDesp] = self::cuentasCuota($cli, $c);
             $dr = array_merge($dr, ['fecha' => $fecha, 'receptor_nombre' => $cli->nombre, 'receptor_nif' => (string) $cli->nif,
                 'receptor_dir' => trim(implode(', ', array_filter([$cli->domicilio, trim($cli->cp.' '.$cli->municipio), $cli->provincia])), ', '),
                 'fe_cp' => (string) $cli->cp, 'fe_municipio' => (string) $cli->municipio, 'fe_provincia' => (string) $cli->provincia,
                 'observaciones' => mb_substr($obs, 0, 500),
                 'forma_pago' => in_array($cli->cuota_forma_cobro, Factura::FORMAS_PAGO, true) ? $cli->cuota_forma_cobro : 'Transferencia',
                 'pago_dias' => $cli->cuota_forma_cobro === 'Domiciliación SEPA' ? '0' : $dr['pago_dias'],
-                'iban' => (string) ($banco['iban'] ?? ''),
+                'iban' => $cli->cuota_forma_cobro === 'Domiciliación SEPA' ? $ibanCli : '',
+                'iban_emisor' => $cli->cuota_forma_cobro === 'Transferencia' ? $ibanDesp : '',
                 'lineas' => array_map(fn ($l) => ['d' => $l['d'], 'q' => Formato::num($l['q']), 'p' => Formato::num($l['p']), 'iva' => (string) (0 + $l['iva']), 'sup' => false], $cli->lineasCuota()) ?: $dr['lineas']]);
             if ($request->query('serie') && collect($cfg->series)->contains('cod', $request->query('serie'))) {
                 $dr['serie'] = (string) $request->query('serie');
@@ -242,7 +243,7 @@ class FacturaController extends Controller
         if ($old) {
             $dr = array_merge($dr, array_intersect_key($old, $dr));
         }
-        $emIbans = collect($c->seccion('bancos'))->pluck('iban')->filter()->values()->all();
+        $emIbans = collect($c->seccion('bancos'))->pluck('iban')->map(fn ($x) => strtoupper(preg_replace('/\s/', '', (string) $x)))->filter()->unique()->values()->all();
         $dr['iban_emisor'] = $dr['iban_emisor'] ?: ($emIbans[0] ?? '');
         $proximos = collect($cfg->series)->mapWithKeys(fn ($s) => [$s['cod'] => Facturacion::numTexto($s['cod'], (int) substr($dr['fecha'], 0, 4), Facturacion::siguienteNumero($c, $s['cod'], (int) substr($dr['fecha'], 0, 4)))]);
 
@@ -250,6 +251,21 @@ class FacturaController extends Controller
             'cfg' => $cfg, 'dr' => $dr, 'rect' => $rect, 'proximos' => $proximos, 'emIbans' => $emIbans,
             'receptores' => $this->clientesReceptores($c), 'hoy' => $hoy,
         ]);
+    }
+
+    /**
+     * Cuentas de la cuota de un cliente del despacho: [IBAN del cliente para el cargo SEPA, IBAN del emisor para la transferencia].
+     * La del cliente sale de su ficha; la de ingreso, de las cuentas del despacho (la elegida en la cuota, o la principal).
+     */
+    public static function cuentasCuota(Cliente $cli, Cliente $emisor): array
+    {
+        $bc = $cli->seccion('bancos');
+        $cliB = $cli->cuota_cuenta !== null && $cli->cuota_cuenta !== '' && isset($bc[(int) $cli->cuota_cuenta]) ? $bc[(int) $cli->cuota_cuenta] : (collect($bc)->first(fn ($b) => ! empty($b['principal'])) ?? ($bc[0] ?? []));
+        $be = $emisor->seccion('bancos');
+        $empB = $cli->cuota_cuenta_despacho !== null && $cli->cuota_cuenta_despacho !== '' && isset($be[(int) $cli->cuota_cuenta_despacho]) ? $be[(int) $cli->cuota_cuenta_despacho] : (collect($be)->first(fn ($b) => ! empty($b['principal'])) ?? ($be[0] ?? []));
+        $norm = fn ($b) => strtoupper(preg_replace('/\s/', '', (string) ($b['iban'] ?? '')));
+
+        return [$norm($cliB), $norm($empB)];
     }
 
     /** Clientes a los que factura esta empresa: los del despacho (si factura el despacho) y los ya usados */
@@ -260,6 +276,7 @@ class FacturaController extends Controller
             foreach (Cliente::where('es_despacho', false)->orderBy('nombre')->get() as $x) {
                 $out[mb_strtolower($x->nombre)] = ['nombre' => $x->nombre, 'nif' => (string) $x->nif, 'dir' => (string) $x->domicilio, 'cp' => (string) $x->cp, 'municipio' => (string) $x->municipio, 'provincia' => (string) $x->provincia,
                     'ibans' => collect($x->seccion('bancos'))->pluck('iban')->filter()->values()->all(),
+                    'fp' => (string) $x->cuota_forma_cobro, 'ibanSepa' => self::cuentasCuota($x, $c)[0], 'ibanDesp' => self::cuentasCuota($x, $c)[1],
                     'cuota' => $x->lineasCuota() ? route('facturacion.create', ['cuota' => $x->id]) : null];
             }
         }
@@ -332,7 +349,8 @@ class FacturaController extends Controller
             $tf === 'R1' && ! $rect => 'Las rectificativas se crean desde la factura original (botón «Rectificar»).',
             $tf !== 'R1' && $rect !== null => 'Para rectificar elige una serie de rectificativas.',
             $fp === 'Domiciliación SEPA' && ! Validacion::iban($iban) => 'Para domiciliar hace falta un IBAN válido del cliente.',
-            $iban !== '' && ! Validacion::iban($iban) => 'El IBAN del cliente no es válido.',
+            $fp === 'Domiciliación SEPA' && $iban !== '' && ! Validacion::iban($iban) => 'El IBAN del cliente no es válido.',
+            $fp === 'Transferencia' && count($c->seccion('bancos')) > 0 && ! Validacion::iban($ibanEm) => 'Para cobrar por transferencia indica la cuenta de la empresa en la que el cliente debe ingresar (añádela en Datos bancarios de la empresa).',
             $ibanEm !== '' && ! Validacion::iban($ibanEm) => 'El IBAN de la empresa no es válido.',
             default => null,
         };
@@ -358,7 +376,7 @@ class FacturaController extends Controller
             'serie' => $ser['cod'], 'tf' => $tf, 'fecha' => $request->input('fecha'),
             'receptor_nombre' => trim((string) $request->input('receptor_nombre')) ?: null, 'receptor_nif' => $nif ?: null, 'receptor_dir' => trim((string) $request->input('receptor_dir')) ?: null,
             'lineas' => $L, 'ret_pct' => (float) $request->input('ret_pct'), 'forma_pago' => $fp, 'pago_dias' => $dias,
-            'iban' => $iban ?: null, 'iban_emisor' => $fp === 'Transferencia' ? ($ibanEm ?: null) : null, 'observaciones' => trim((string) $request->input('observaciones')) ?: null,
+            'iban' => $fp === 'Domiciliación SEPA' ? ($iban ?: null) : null, 'iban_emisor' => $fp === 'Transferencia' ? ($ibanEm ?: null) : null, 'observaciones' => trim((string) $request->input('observaciones')) ?: null,
             'modo' => $cfg->modoEfectivo(),
             'datos_fe' => $electronica ? ['cp' => $feCp, 'municipio' => trim((string) $request->input('fe_municipio')), 'provincia' => trim((string) $request->input('fe_provincia')) ?: Facturae::provinciaDeCp($feCp),
                 'dir3_oc' => strtoupper(trim((string) $request->input('dir3_oc'))), 'dir3_og' => strtoupper(trim((string) $request->input('dir3_og'))), 'dir3_ut' => strtoupper(trim((string) $request->input('dir3_ut')))] : null,

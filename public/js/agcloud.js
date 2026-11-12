@@ -355,7 +355,12 @@
         }
       }
       if (r && fill) {
-        $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir; if (!iban.value && r.ibans[0]) iban.value = r.ibans[0];
+        $('[data-fc-nif]', fcf).value = r.nif; $('[data-fc-dir]', fcf).value = r.dir;
+        var fps = $('[data-fc-fp]', fcf);
+        if (r.fp && fps && [].some.call(fps.options, function (o) { return o.value === r.fp; })) { fps.value = r.fp; fps.dispatchEvent(new Event('change')); }
+        if (r.ibanSepa) iban.value = r.ibanSepa; else if (!iban.value && r.ibans[0]) iban.value = r.ibans[0];
+        var ems = $('[name="iban_emisor"]', fcf);
+        if (r.ibanDesp && ems && [].some.call(ems.options, function (o) { return o.value === r.ibanDesp; })) ems.value = r.ibanDesp;
         [['[data-fc-cp]', 'cp'], ['[data-fc-mun]', 'municipio'], ['[data-fc-prov]', 'provincia']].forEach(function (x) { var el = $(x[0], fcf); if (el && r[x[1]] != null) el.value = r[x[1]]; });
       }
       fillIbans(r);
@@ -366,6 +371,7 @@
     var onFp = function () {
       var v = fp.value, bank = v === 'Transferencia' || v === 'Domiciliación SEPA';
       $('[data-fc-bank]', fcf).style.display = bank ? '' : 'none';
+      $$('[data-fc-cli-bank]', fcf).forEach(function (x) { x.style.display = v === 'Domiciliación SEPA' ? '' : 'none'; });
       $('[data-fc-em]', fcf).style.display = v === 'Transferencia' ? '' : 'none';
       $('[data-fc-dias]', fcf).style.display = ['Tarjeta', 'Bizum', 'Efectivo'].indexOf(v) >= 0 ? 'none' : '';
     };
@@ -741,6 +747,13 @@
       var min = app.classList.toggle('side-min');
       document.cookie = 'agc_side=' + (min ? 'min' : 'max') + ';path=/;max-age=31536000;SameSite=Lax';
     });
+  });
+
+  // ---------- Ficha del cliente › Cuota: la cuenta depende de la forma de cobro ----------
+  $$('[data-cuota-fp]').forEach(function (s) {
+    var f = s.form;
+    var upd = function () { $$('[data-cuota-cta]', f).forEach(function (x) { x.style.display = x.getAttribute('data-cuota-cta') === s.value ? '' : 'none'; }); };
+    on(s, 'change', upd); upd();
   });
 
   // ---------- 2FA: código de recuperación ----------

@@ -213,6 +213,9 @@ class ClienteController extends Controller
     private function datosDrawer(Cliente $c, string $sec, $item): array
     {
         $secs = SeccionesAlta::secciones($c->tipo);
+        if ($c->es_despacho) {
+            unset($secs['cuota']); // el despacho no se cobra cuota a sí mismo
+        }
         $keys = array_keys($secs);
         $spec = SeccionesAlta::spec($sec, $c->tipo);
         $lista = $spec ? $c->seccion($sec) : [];
@@ -397,6 +400,7 @@ class ClienteController extends Controller
                 'cuota_inicio' => ['nullable', 'date'],
                 'cuota_forma_cobro' => ['required', Rule::in(config('agcloud.cuota.forma_cobro'))],
                 'cuota_cuenta' => ['nullable', 'string', 'max:40'],
+                'cuota_cuenta_despacho' => ['nullable', 'string', 'max:40'],
                 'cuota_observaciones' => ['nullable', 'string', 'max:2000'],
             ]);
             $L = [];
@@ -419,7 +423,36 @@ class ClienteController extends Controller
             if ($base < 0) {
                 $this->fallo('El importe de la cuota no puede ser negativo.');
             }
-            $cliente->fill($request->only(['cuota_periodicidad', 'cuota_inicio', 'cuota_forma_cobro', 'cuota_cuenta', 'cuota_observaciones']));
+            // Cuentas según la forma de cobro: SEPA → cuenta del cliente (cargo); transferencia → cuenta del despacho (ingreso)
+            $forma = (string) $request->input('cuota_forma_cobro');
+            $bancosCli = $cliente->seccion('bancos');
+            $bancosDesp = Cliente::despacho()?->seccion('bancos') ?? [];
+            $cCli = (string) $request->input('cuota_cuenta', '');
+            $cDesp = (string) $request->input('cuota_cuenta_despacho', '');
+            if ($forma === 'Domiciliación SEPA') {
+                if (! $bancosCli) {
+                    $this->fallo('Para cobrar por domiciliación SEPA, añade antes la cuenta del cliente en «Datos bancarios».');
+                }
+                if ($cCli === '' || ! isset($bancosCli[(int) $cCli])) {
+                    $this->fallo('Elige la cuenta del cliente en la que se cargará el recibo SEPA.');
+                }
+                if (! Validacion::iban((string) ($bancosCli[(int) $cCli]['iban'] ?? ''))) {
+                    $this->fallo('El IBAN de la cuenta elegida del cliente no es válido. Revísalo en «Datos bancarios».');
+                }
+                $cDesp = '';
+            } elseif ($forma === 'Transferencia') {
+                if (! $bancosDesp) {
+                    $this->fallo('Para cobrar por transferencia, añade antes las cuentas del despacho en «Datos del despacho» › Datos bancarios.');
+                }
+                if ($cDesp === '' || ! isset($bancosDesp[(int) $cDesp])) {
+                    $this->fallo('Elige la cuenta del despacho en la que el cliente hará la transferencia.');
+                }
+                $cCli = '';
+            } else {
+                [$cCli, $cDesp] = ['', ''];
+            }
+            $request->merge(['cuota_cuenta' => $cCli !== '' ? $cCli : null, 'cuota_cuenta_despacho' => $cDesp !== '' ? $cDesp : null]);
+            $cliente->fill($request->only(['cuota_periodicidad', 'cuota_inicio', 'cuota_forma_cobro', 'cuota_cuenta', 'cuota_cuenta_despacho', 'cuota_observaciones']));
             $cliente->cuota_tarifa = trim((string) $request->input('cuota_tarifa')) ?: null;
             $cliente->cuota_incluye = trim((string) $request->input('cuota_incluye')) ?: null;
             $cliente->cuota_lineas = $L ?: null;
@@ -431,7 +464,9 @@ class ClienteController extends Controller
             $cliente->save();
             Auditoria::registrar('cliente.cuota', 'Cuota actualizada de '.$cliente->nombre, $cliente, $cliente->id);
 
-            return $this->siguiente($request, $cliente, 'cuota', 'Cuota guardada.');
+            $sinMandato = $forma === 'Domiciliación SEPA' && empty($bancosCli[(int) $cCli]['sepa']);
+
+            return $this->siguiente($request, $cliente, 'cuota', 'Cuota guardada.'.($sinMandato ? ' Atención: la cuenta del cliente no tiene la referencia del mandato SEPA firmado; sin mandato no se puede girar el recibo (Reglamento UE 260/2012).' : ''));
         }
 
         $v = $this->validarGeneral($request, $cliente);

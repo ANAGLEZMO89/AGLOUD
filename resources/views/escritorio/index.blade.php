@@ -69,7 +69,8 @@
           @if($ctx->es_despacho)
             <a class="btn sm" style="background:#1C1C1C" href="{{ route('clientes.index') }}">Clientes</a>
             <a class="btn sm" style="background:#1C1C1C" href="{{ route('documentos.index') }}">Documentos</a>
-            @if(auth()->user()->esAdmin())<a class="btn sm lime" href="{{ route('admin.equipo') }}">Gestión del despacho</a>@endif
+            <a class="btn sm lime" href="{{ route('clientes.edit', [$ctx, 'sec' => 'general']) }}">Datos del despacho</a>
+            @if(auth()->user()->esAdmin())<a class="btn sm" style="background:#1C1C1C" href="{{ route('admin.equipo') }}">Gestión del despacho</a>@endif
           @else
             <a class="btn sm" style="background:#1C1C1C" href="{{ route('documentos.index') }}">Documentos</a>
             <a class="btn sm lime" href="{{ route('clientes.show', $ctx) }}">Ficha del cliente</a>

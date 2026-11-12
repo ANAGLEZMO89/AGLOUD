@@ -76,9 +76,9 @@
           <label class="lbl-s" data-fc-dias>Vencimiento<select class="sel" name="pago_dias">@foreach(FC::DIAS as $v => $l)<option value="{{ $v }}" @selected((string) $dr['pago_dias'] === (string) $v)>{{ $l }}</option>@endforeach</select></label>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:12px" data-fc-bank>
-          <label class="lbl-s">Cuenta bancaria del cliente<select class="sel" data-fc-iban-sel><option value="">Elegir una cuenta del cliente…</option></select></label>
-          <label class="lbl-s">IBAN · puedes cambiarlo a mano<input class="inp mono" name="iban" value="{{ $dr['iban'] }}" placeholder="ES00 0000 0000 0000 0000 0000" maxlength="40" data-iban data-fc-iban><span class="hint err" data-iban-hint></span></label>
-          <label class="lbl-s" data-fc-em>Cuenta de la empresa para el ingreso
+          <label class="lbl-s" data-fc-cli-bank>Cuenta del cliente · cargo SEPA<select class="sel" data-fc-iban-sel><option value="">Elegir una cuenta del cliente…</option></select></label>
+          <label class="lbl-s" data-fc-cli-bank>IBAN del cliente · puedes cambiarlo a mano<input class="inp mono" name="iban" value="{{ $dr['iban'] }}" placeholder="ES00 0000 0000 0000 0000 0000" maxlength="40" data-iban data-fc-iban><span class="hint err" data-iban-hint></span></label>
+          <label class="lbl-s" data-fc-em>Cuenta de la empresa · el cliente ingresa aquí
             <select class="sel" name="iban_emisor">
               @forelse($emIbans as $ib)<option value="{{ $ib }}" @selected($dr['iban_emisor'] === $ib)>{{ trim(chunk_split($ib, 4, ' ')) }}</option>@empty<option value="">Añade una cuenta en los datos de alta de la empresa</option>@endforelse
             </select>

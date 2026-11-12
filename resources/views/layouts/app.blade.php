@@ -64,6 +64,7 @@
       @if($u->esAdmin() && (! ($ctx ?? null) || $ctx->es_despacho))
         <div class="nav-grp">
           <div class="nav-lbl">Despacho</div>
+          @if($dsp = \App\Models\Cliente::despacho())<a class="nav-it {{ $activo === 'despacho' ? 'on' : '' }}" href="{{ route('clientes.edit', [$dsp, 'sec' => 'general']) }}"><span>Datos del despacho</span></a>@endif
           <a class="nav-it {{ $activo === 'equipo' ? 'on' : '' }}" href="{{ route('admin.equipo') }}"><span>Equipo y accesos</span></a>
           <a class="nav-it {{ $activo === 'auditoria' ? 'on' : '' }}" href="{{ route('admin.auditoria') }}"><span>Registro de accesos</span></a>
           <a class="nav-it {{ $activo === 'copias' ? 'on' : '' }}" href="{{ route('admin.copias') }}"><span>Copias de seguridad</span></a>
