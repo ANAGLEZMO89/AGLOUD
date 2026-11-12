@@ -42,7 +42,11 @@
   $salarialT = array_sum($g1);
 @endphp
 <style>
-.rc{font:10.5px/1.35 Helvetica,Arial,sans-serif;color:#000}
+.rc{font:11px/1.4 Helvetica,Arial,sans-serif;color:#000;display:flex;flex-direction:column;min-height:271mm}
+.rc .grow{flex:1 1 auto;display:flex;flex-direction:column}
+.rc .grow>table{flex:1 1 auto;height:100%}
+.rc .h100{height:100%}
+.rc tr.fill>td{height:100%}
 .rc table{width:100%;border-collapse:collapse}
 .rc td,.rc th{padding:3px 6px;vertical-align:top}
 .rc .r{text-align:right}.rc .c{text-align:center}.rc .b{font-weight:700}.rc .m{font-family:'Courier New',Courier,monospace;white-space:nowrap}
@@ -74,16 +78,18 @@
       <td style="border:0"><span class="lbl">{{ $l }}</span><b>{{ $v }}</b></td>
     @endforeach
   </tr></table>
-  <table><tr>
-    <td style="width:56%;padding:0 8px 0 0"><table class="md"><tr><th>Devengos</th><th class="r">Cuantía</th><th class="r">Precio</th><th class="r">Importe</th></tr>
+  <div class="grow"><table class="h100"><tr>
+    <td style="width:56%;padding:0 8px 0 0;height:100%"><table class="md h100"><tr><th>Devengos</th><th class="r">Cuantía</th><th class="r">Precio</th><th class="r">Importe</th></tr>
       @foreach($lin as $l)<tr><td>{{ $l['cod'] ? '['.$l['cod'].'] ' : '' }}{{ $tag($l) }}</td><td class="r m">{{ isset($l['cant']) && $l['cant'] ? Formato::num($l['cant']) : '' }}</td><td class="r m">{{ isset($l['precio']) && $l['precio'] ? Formato::num($l['precio']) : '' }}</td><td class="r m">{{ $E($l['importe']) }}</td></tr>@endforeach
+      <tr class="fill"><td colspan="4" style="border:0"></td></tr>
       <tr><td class="b" colspan="3">Total devengado</td><td class="r m b">{{ $E($n['dev']) }}</td></tr></table></td>
-    <td style="width:44%;padding:0 0 0 8px"><table class="md"><tr><th>Deducciones</th><th class="r">%</th><th class="r">Importe</th></tr>
+    <td style="width:44%;padding:0 0 0 8px;height:100%"><table class="md h100"><tr><th>Deducciones</th><th class="r">%</th><th class="r">Importe</th></tr>
       @foreach($ss as [$l, $p, $v])<tr><td>{{ $l }}</td><td class="r m">{{ $p }}</td><td class="r m">{{ $E($v) }}</td></tr>@endforeach
       @if($n['irpf'] || $n['ip'])<tr><td>IRPF</td><td class="r m">{{ Formato::num($n['ip']) }}</td><td class="r m">{{ $E($n['irpf']) }}</td></tr>@endif
       @foreach($otras as [$l, $v])<tr><td>{{ $l }}</td><td></td><td class="r m">{{ $E($v) }}</td></tr>@endforeach
+      <tr class="fill"><td colspan="3" style="border:0"></td></tr>
       <tr><td class="b" colspan="2">Total deducciones</td><td class="r m b">{{ $E($totDed) }}</td></tr></table></td>
-  </tr></table>
+  </tr></table></div>
   <div class="md-k" style="margin:12px 0">
     <div><span class="lbl">Total devengado</span><span class="v">{{ $E($n['dev']) }} €</span></div>
     <div><span class="lbl">Total deducciones</span><span class="v">{{ $E($totDed) }} €</span></div>
@@ -107,7 +113,7 @@
       <td><span class="lbl">Trabajador</span><b>{{ $w['nombre'] }}</b><br>NIF {{ $w['nif'] }} · Nº afiliación {{ $w['naf'] }}<br>Categoría {{ $cat ?: '—' }} · Grupo de cotización {{ $w['grupo'] }}<br>Antigüedad {{ Formato::fecha($w['alta']) }} · Contrato {{ $contrato }}</td></tr>
     <tr><td colspan="2">Periodo de liquidación: <b>{{ $per }}</b> &nbsp; · &nbsp; Total días: <b>30</b> &nbsp; · &nbsp; Recibo: <b>{{ $titRec }}</b>@if($fecha) &nbsp; · &nbsp; Fecha de pago: <b>{{ $fecha }}</b>@endif</td></tr>
   </table>
-  <table class="of" style="margin-top:6px">
+  <div class="grow" style="margin-top:6px"><table class="of">
     <tr class="sec"><td>I. DEVENGOS</td><td class="r" style="width:110px">TOTALES</td></tr>
     <tr><td class="b">1. Percepciones salariales</td><td></td></tr>
     @foreach($g1 as $k => $v)
@@ -127,9 +133,10 @@
     <tr><td class="b">4. Valor de los productos recibidos en especie</td><td class="r m">{{ $Ez($n['esp'] ?? 0) }}</td></tr>
     <tr><td class="b">5. Otras deducciones</td><td class="r m">{{ $Ez($n['emb']) }}</td></tr>
     @foreach(array_filter($n['deducciones'] ?? [], fn ($d) => ($d['id'] ?? '') !== 'ant') as $d)<tr><td class="ind" style="color:#333">· {{ $d['concepto'] }}</td><td class="r m" style="color:#333">{{ $E($d['importe']) }}</td></tr>@endforeach
+    <tr class="fill"><td></td><td></td></tr>
     <tr class="sec"><td>B. TOTAL A DEDUCIR</td><td class="r m">{{ $E($totDed) }}</td></tr>
     <tr><td class="liq">LÍQUIDO TOTAL A PERCIBIR (A − B)</td><td class="r m liq">{{ $E($n['liq']) }}</td></tr>
-  </table>
+  </table></div>
   <table style="margin-top:8px"><tr><td style="width:50%">{{ $c->municipio ?: $c->provincia }}, {{ $fecha ?: '____ de ____________ de ______' }}<br><span class="lbl" style="margin-top:4px">Firma y sello de la empresa</span>{!! $firmaHtml ?: '<div style="height:42px"></div>' !!}</td><td><span class="lbl">Recibí</span><div style="height:42px"></div>{{ $w['nombre'] }}</td></tr></table>
   <table class="of" style="margin-top:8px">
     <tr class="sec"><td colspan="4">DETERMINACIÓN DE LAS BASES DE COTIZACIÓN A LA SEGURIDAD SOCIAL Y CONCEPTOS DE RECAUDACIÓN CONJUNTA Y DE LA BASE SUJETA A RETENCIÓN DEL IRPF Y APORTACIÓN DE LA EMPRESA</td></tr>
@@ -160,7 +167,7 @@
     <tr><td><span class="lbl">Categoría profesional</span><b>{{ $cat ?: '—' }}</b></td><td><span class="lbl">Contrato</span><b class="m">{{ $contrato }}</b></td><td><span class="lbl">Antigüedad</span><b class="m">{{ Formato::fecha($w['alta']) }}</b></td><td><span class="lbl">Coef. parcialidad</span><b class="m">{{ Formato::num(Nomina::n($w['jor'] ?? 100) / 100) }}</b></td></tr>
     <tr><td><span class="lbl">Periodo de liquidación</span><b class="m">{{ $per }}</b></td><td><span class="lbl">Total días</span><b class="m">30</b></td><td><span class="lbl">Recibo</span><b>{{ $titRec }}</b></td><td><span class="lbl">Fecha de pago</span><b class="m">{{ $fecha ?: '—' }}</b></td></tr>
   </table>
-  <table class="bx cl" style="margin-top:6px">
+  <div class="grow" style="margin-top:6px"><table class="bx cl">
     <tr><th class="r" style="width:58px">Cuantía</th><th class="r" style="width:66px">Precio</th><th style="width:34px">Cód.</th><th style="text-align:left">Concepto</th><th class="r" style="width:90px">Devengos</th><th class="r" style="width:90px">Deducciones</th></tr>
     @php $filas = 0; @endphp
     @foreach($lin as $l)
@@ -173,9 +180,9 @@
     @endforeach
     @if($n['irpf'] || $n['ip'])<tr class="col"><td class="r m">{{ Formato::num($n['ip']) }}</td><td class="r m">{{ $E($n['baseIrpf']) }}</td><td></td><td>Tributación I.R.P.F.</td><td></td><td class="r m">{{ $E($n['irpf']) }}</td></tr>@php $filas++; @endphp @endif
     @foreach($otras as [$l, $v])<tr class="col"><td></td><td></td><td></td><td>{{ $l }}</td><td></td><td class="r m">{{ $E($v) }}</td></tr>@php $filas++; @endphp @endforeach
-    @for($i = $filas; $i < 16; $i++)<tr class="col"><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>@endfor
+    <tr class="col fill"><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>
     <tr style="border-top:1px solid #000" class="b"><td colspan="4" class="r">TOTALES</td><td class="r m">{{ $E($n['dev']) }}</td><td class="r m">{{ $E($totDed) }}</td></tr>
-  </table>
+  </table></div>
   <table class="grid" style="margin-top:6px">
     <tr class="c">@foreach(['Rem. total', 'P.P. extras', 'Base S.S.', 'Base A.T. y desemp.', 'Base sujeta I.R.P.F.', 'T. devengado', 'T. a deducir'] as $l)<td><span class="lbl" style="text-align:center">{{ $l }}</span></td>@endforeach</tr>
     <tr>@foreach([$remTotal, $n['prorB'], $n['base'], $n['baseAT'], $n['baseIrpf'], $n['dev'], $totDed] as $v)<td class="r m">{{ $E($v) }}</td>@endforeach</tr>
