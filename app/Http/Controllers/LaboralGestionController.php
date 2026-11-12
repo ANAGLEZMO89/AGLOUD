@@ -180,10 +180,10 @@ class LaboralGestionController extends LaboralController
             if (! Validacion::iban($wi)) {
                 return back()->withInput()->withErrors(['ficha' => $x['w']['nombre'].' no tiene un IBAN válido en su ficha.']);
             }
-            if (round($x['n']['liq'], 2) <= 0) {
+            if (round($x['t']['liq'], 2) <= 0) {
                 continue;
             }
-            $pagos[] = ['nombre' => $x['w']['nombre'], 'iban' => $wi, 'bic' => Validacion::banco($wi)[1] ?? '', 'importe' => round($x['n']['liq'], 2), 'id' => $x['w']['id']];
+            $pagos[] = ['nombre' => $x['w']['nombre'], 'iban' => $wi, 'bic' => Validacion::banco($wi)[1] ?? '', 'importe' => round($x['t']['liq'], 2), 'id' => $x['w']['id']];
         }
         if (! $pagos) {
             return back()->withInput()->withErrors(['ficha' => 'No hay líquidos a pagar en los trabajadores marcados.']);
@@ -347,8 +347,8 @@ class LaboralGestionController extends LaboralController
         if (in_array($request->query('exportar'), ['excel', 'csv'], true)) {
             return $this->csv($request->query('exportar'), 'calculo-nominas-'.$b['anio'].'-'.str_pad((string) $b['mes'], 2, '0', STR_PAD_LEFT), 'Cálculo de nóminas · '.Nomina::MESES[$b['mes'] - 1].' '.$b['anio'],
                 ['Trabajador', 'NIF', 'CCC', 'Contrato', 'Categoría', 'Grupo', 'Devengado', 'Base CC', 'SS trabajador', 'IRPF %', 'IRPF', 'Líquido', 'SS empresa', 'Coste empresa'],
-                array_map(fn ($x) => [$x['w']['nombre'], $x['w']['nif'], $x['w']['ccc'], Nomina::codigo($x['w']['contrato']), $x['w']['convCat'] ?: $x['w']['cat'], $x['w']['grupo'], Formato::num($x['n']['dev']), Formato::num($x['n']['base']),
-                    Formato::num($x['n']['ssT']), Formato::num($x['n']['ip']), Formato::num($x['n']['irpf']), Formato::num($x['n']['liq']), Formato::num($x['n']['ssE']), Formato::num($x['n']['dev'] + $x['n']['ssE'])], $noms));
+                array_map(fn ($x) => [$x['w']['nombre'], $x['w']['nif'], $x['w']['ccc'], Nomina::codigo($x['w']['contrato']), $x['w']['convCat'] ?: $x['w']['cat'], $x['w']['grupo'], Formato::num($x['t']['dev']), Formato::num($x['t']['base']),
+                    Formato::num($x['t']['ssT']), Formato::num($x['t']['ip']), Formato::num($x['t']['irpf']), Formato::num($x['t']['liq']), Formato::num($x['t']['ssE']), Formato::num($x['t']['dev'] + $x['t']['ssE'])], $noms));
         }
         $plant = collect($todas)->pluck('w');
 
@@ -392,7 +392,7 @@ class LaboralGestionController extends LaboralController
     private function anual(Cliente $c, int $anio, array $meses, array $P): array
     {
         $svc = app(Nomina::class);
-        $plant = Nomina::asalariados($c);
+        $plant = Nomina::plantilla($c); // también los del RETA: sus retribuciones llevan retención
         $inc = Nomina::incidenciasAnio($c, $anio);
         $porMes = [];
         $porTrab = [];
@@ -402,7 +402,7 @@ class LaboralGestionController extends LaboralController
                 if (! Nomina::activo($w, $anio, $m)) {
                     continue;
                 }
-                $n = $svc->nomina($w, $anio, $m, $inc, (float) $P['at']);
+                $n = $svc->recibosMes($w, $anio, $m, $inc, (float) $P['at'])['t'];
                 $porMes[$m]['perc'] += $n['baseIrpf'];
                 $porMes[$m]['ret'] += $n['irpf'];
                 $porMes[$m]['n']++;

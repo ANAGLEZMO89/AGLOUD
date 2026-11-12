@@ -29,13 +29,13 @@
         <div class="lb-grid lb-rem lb-head"><span><input type="checkbox" data-lb-todos checked aria-label="Marcar todos" style="accent-color:#0B0B0B"></span><span>Trabajador</span><span>IBAN</span><span>Banco</span><span class="r">Líquido</span></div>
         @php $tot = 0; @endphp
         @forelse($noms as $x)
-          @php $iban = strtoupper(preg_replace('/\s/', '', (string) $x['w']['iban'])); $ok = Validacion::iban($iban); $on = $ok && ($selOld === null || in_array((string) $x['w']['id'], (array) $selOld, true)); if ($on) $tot += $x['n']['liq']; @endphp
+          @php $iban = strtoupper(preg_replace('/\s/', '', (string) $x['w']['iban'])); $ok = Validacion::iban($iban); $on = $ok && ($selOld === null || in_array((string) $x['w']['id'], (array) $selOld, true)); if ($on) $tot += $x['t']['liq']; @endphp
           <label class="lb-grid lb-rem lb-row" style="cursor:{{ $ok ? 'pointer' : 'default' }}">
-            <span><input type="checkbox" name="t[]" value="{{ $x['w']['id'] }}" data-liq="{{ round($x['n']['liq'], 2) }}" @checked($on) @disabled(! $ok) style="accent-color:#0B0B0B;width:17px;height:17px"></span>
+            <span><input type="checkbox" name="t[]" value="{{ $x['w']['id'] }}" data-liq="{{ round($x['t']['liq'], 2) }}" @checked($on) @disabled(! $ok) style="accent-color:#0B0B0B;width:17px;height:17px"></span>
             <span class="ell" style="font-weight:600">{{ $x['w']['nombre'] }}</span>
             <span class="mono12">@if($ok){{ Formato::iban($iban) }}@else<a href="{{ route('laboral.ficha', [$x['w']['id'], 'sec' => 'personal']) }}" style="color:#8A1C1C;font-family:inherit">Falta el IBAN en la ficha</a>@endif</span>
             <span class="ell" style="font-size:12.5px;color:#3C3C3C">{{ $ok ? (Validacion::banco($iban)[0] ?? '') : '' }}</span>
-            <span class="r m" style="font-weight:700">{{ Formato::eur($x['n']['liq']) }}</span>
+            <span class="r m" style="font-weight:700">{{ Formato::eur($x['t']['liq']) }}</span>
           </label>
         @empty
           <div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65">No hay nóminas este mes.</div>

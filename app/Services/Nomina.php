@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\Cliente;
+use App\Models\JornadaAusencia;
 use App\Models\LaboralConfig;
 use App\Models\LaboralMes;
+use App\Models\LaboralMovimiento;
 use App\Models\NominaMes;
 use App\Models\Trabajador;
 use App\Support\Formato;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -232,14 +235,52 @@ class Nomina
     /** Pagas extraordinarias: [id, código, concepto, mes de cobro] */
     public const PAGAS_EXTRA = [['pv', '90', 'Paga de verano', 6], ['pn', '91', 'Paga de Navidad', 12]];
 
-    /** Clases de concepto: cómo cotiza y tributa cada devengo */
-    public const CLASES = ['salarial' => 'Salarial (cotiza y tributa)', 'hx' => 'Horas extraordinarias', 'extra' => 'Paga extraordinaria', 'no_salarial' => 'No salarial (dietas, kilometraje)'];
+    /** Tipos de recibo del Integral de nóminas (clave guardada => nombre) */
+    public const RECIBOS = ['Nómina' => 'Nómina', 'Extra' => 'Paga extra', 'Atrasos' => 'Atrasos', 'Finiquito' => 'Finiquito', 'Sal. tramitación' => 'Salarios de tramitación'];
+
+    /**
+     * Clases de concepto: cómo cotiza y tributa cada devengo (art. 147 LGSS y art. 7 LIRPF).
+     * Desde el RDL 16/2013 el plus de transporte, el quebranto de moneda o el desgaste de útiles cotizan como salario.
+     */
+    public const CLASES = [
+        'salarial' => 'Salarial (cotiza y tributa)',
+        'hx' => 'Horas extraordinarias',
+        'extra' => 'Paga extraordinaria',
+        'especie' => 'En especie (cotiza y tributa, no se cobra)',
+        'tributa' => 'IT y mejoras de IT (no cotiza, tributa)',
+        'no_salarial' => 'Dietas y gastos de viaje (exentos)',
+        'exento' => 'Indemnización exenta (ni cotiza ni tributa)',
+    ];
+
+    /** Catálogo de conceptos retributivos para añadir a la nómina: [código, concepto, clase] */
+    public const CATALOGO = [
+        ['01', 'Salario base', 'salarial'], ['02', 'Plus de convenio', 'salarial'], ['03', 'Antigüedad (trienios o quinquenios)', 'salarial'],
+        ['04', 'Complemento personal (ad personam)', 'salarial'], ['05', 'Mejora voluntaria', 'salarial'], ['06', 'Plus de transporte', 'salarial'],
+        ['07', 'Plus de nocturnidad', 'salarial'], ['08', 'Plus de turnicidad', 'salarial'], ['09', 'Plus de peligrosidad, toxicidad o penosidad', 'salarial'],
+        ['11', 'Plus de asistencia y puntualidad', 'salarial'], ['12', 'Plus de productividad o incentivos', 'salarial'], ['13', 'Comisiones sobre ventas', 'salarial'],
+        ['14', 'Recargo por trabajo en festivo', 'salarial'], ['15', 'Horas complementarias', 'salarial'], ['16', 'Plus de disponibilidad o guardias', 'salarial'],
+        ['17', 'Plus de responsabilidad o jefatura', 'salarial'], ['18', 'Quebranto de moneda', 'salarial'], ['19', 'Plus de ropa de trabajo o desgaste de útiles', 'salarial'],
+        ['20', 'Plus de desplazamiento', 'salarial'], ['22', 'Vacaciones no disfrutadas', 'salarial'], ['23', 'Atrasos de convenio', 'salarial'],
+        ['24', 'Salarios de tramitación', 'salarial'], ['10', 'Horas extraordinarias', 'hx'],
+        ['90', 'Paga de verano', 'extra'], ['91', 'Paga de Navidad', 'extra'], ['92', 'Paga de beneficios', 'extra'],
+        ['30', 'Dietas', 'no_salarial'], ['31', 'Plus de distancia y kilometraje', 'no_salarial'], ['32', 'Gastos de locomoción', 'no_salarial'],
+        ['40', 'Prestación IT por pago delegado', 'tributa'], ['41', 'Complemento de IT a cargo de la empresa', 'tributa'],
+        ['50', 'Retribución en especie (vivienda, vehículo, seguro…)', 'especie'], ['51', 'Seguro médico pagado por la empresa', 'especie'],
+        ['60', 'Indemnización por despido o cese', 'exento'], ['61', 'Indemnización por fin de contrato temporal', 'exento'],
+    ];
+
+    /** Deducciones habituales para añadir a la nómina */
+    public const CATALOGO_DED = ['Anticipo', 'Préstamo de la empresa', 'Cuota sindical', 'Seguro médico', 'Compra de productos de la empresa', 'Pensión compensatoria o de alimentos', 'Otras deducciones'];
+
+    /** Organismos que suelen ordenar embargos de salario */
+    public const ORGANISMOS_EMBARGO = ['Juzgado', 'Agencia Tributaria (AEAT)', 'Tesorería General de la Seguridad Social', 'Ayuntamiento o Diputación', 'Junta de Andalucía', 'Otro organismo'];
 
     /**
      * Conceptos automáticos de la nómina del mes: salario base y complementos de la ficha (con la referencia
-     * del convenio si hay categoría), pagas extra prorrateadas o en su mes, y las variables del mes.
+     * del convenio si hay categoría), pagas extra prorrateadas o en su mes (salvo que vayan en recibo aparte),
+     * las variables del mes, los conceptos y deducciones fijos del trabajador y sus embargos.
      */
-    public static function conceptos(array $w, int $m, array $inc, ?array $P = null): array
+    public static function conceptos(array $w, int $m, array $inc, ?array $P = null, ?int $anio = null, bool $sinPagas = false): array
     {
         $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
         $pro = ! empty($w['prorr']) && $pagas === 14;
@@ -257,7 +298,7 @@ class Nomina
             foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mesCobro]) {
                 if ($pro) {
                     $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($sb / 12, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => $convBase !== null ? round($convBase / 12, 2) : null];
-                } elseif ($m === $mesCobro) {
+                } elseif ($m === $mesCobro && ! $sinPagas) {
                     $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($sb, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => $convBase];
                 }
             }
@@ -269,63 +310,238 @@ class Nomina
                 $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $v, 'clase' => $cl, 'origen' => 'variable', 'conv' => null];
             }
         }
+        // Variables del mes escritas a mano (pantalla Variables)
+        foreach ($inc['lineas'] ?? [] as $i => $x) {
+            if (trim((string) ($x['concepto'] ?? '')) !== '' && (float) ($x['importe'] ?? 0) != 0) {
+                $L[] = ['id' => 'v'.$i, 'cod' => (string) ($x['cod'] ?? ''), 'concepto' => $x['concepto'], 'importe' => round((float) $x['importe'], 2),
+                    'clase' => array_key_exists($x['clase'] ?? '', self::CLASES) ? $x['clase'] : 'salarial', 'origen' => 'variable', 'conv' => null];
+            }
+        }
+        // Conceptos fijos del trabajador (guardados desde el Integral con «Todos los meses»)
+        foreach ($w['concFijos'] ?? [] as $i => $x) {
+            $L[] = ['id' => 'f'.$i, 'cod' => (string) ($x['cod'] ?? ''), 'concepto' => $x['concepto'], 'importe' => round((float) $x['importe'], 2),
+                'cant' => $x['cant'] ?? null, 'precio' => $x['precio'] ?? null,
+                'clase' => array_key_exists($x['clase'] ?? '', self::CLASES) ? $x['clase'] : 'salarial', 'origen' => 'fijo', 'fijo' => true, 'conv' => null];
+        }
         $D = [];
         foreach ([['ant', 'Anticipos', 'anticipo'], ['emb', 'Embargo', 'embargo']] as [$id, $nom, $k]) {
             if ($g($k)) {
                 $D[] = ['id' => $id, 'concepto' => $nom, 'importe' => $g($k)];
             }
         }
+        foreach ($w['dedFijas'] ?? [] as $x) {
+            $D[] = ['id' => 'od', 'concepto' => $x['concepto'], 'importe' => round((float) $x['importe'], 2), 'fijo' => true];
+        }
+        foreach (self::embargosActivos($w, $anio, $m) as $e) {
+            $D[] = $e;
+        }
 
         return ['lineas' => $L, 'deducciones' => $D, 'tipos' => []];
     }
 
-    /** Calcula la nómina a partir de sus conceptos (automáticos o editados en el Integral de nóminas) */
+    /** Calcula la nómina (o el recibo) a partir de sus conceptos, automáticos o editados en el Integral de nóminas */
     public static function computar(array $w, array $doc, float $ip, float $at = 0): array
     {
+        $recibo = $doc['recibo'] ?? 'Nómina';
         $L = array_values(array_filter($doc['lineas'] ?? [], fn ($l) => ($l['activo'] ?? true) && (float) ($l['importe'] ?? 0) != 0));
-        $D = array_values(array_filter($doc['deducciones'] ?? [], fn ($l) => (float) ($l['importe'] ?? 0) != 0));
         $sum = fn ($f) => array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($L, $f)));
+        $cl = fn ($l) => $l['clase'] ?? 'salarial';
         $sb = $sum(fn ($l) => ($l['id'] ?? '') === 'sb');
         $pl = $sum(fn ($l) => ($l['id'] ?? '') === 'pl');
-        $hx = $sum(fn ($l) => $l['clase'] === 'hx');
-        $die = $sum(fn ($l) => $l['clase'] === 'no_salarial' && ($l['id'] ?? '') !== 'km');
+        $hx = $sum(fn ($l) => $cl($l) === 'hx');
         $km = $sum(fn ($l) => ($l['id'] ?? '') === 'km');
-        $extra = $sum(fn ($l) => $l['clase'] === 'extra' && ($l['cobro'] ?? '') !== 'prorrateada');
-        $pror = $sum(fn ($l) => $l['clase'] === 'extra' && ($l['cobro'] ?? '') === 'prorrateada');
-        $salarial = $sum(fn ($l) => $l['clase'] === 'salarial');
+        $die = $sum(fn ($l) => $cl($l) === 'no_salarial') - $km;
+        $extra = $sum(fn ($l) => $cl($l) === 'extra' && ($l['cobro'] ?? '') !== 'prorrateada');
+        $pror = $sum(fn ($l) => $cl($l) === 'extra' && ($l['cobro'] ?? '') === 'prorrateada');
+        $esp = $sum(fn ($l) => $cl($l) === 'especie');
+        $trib = $sum(fn ($l) => $cl($l) === 'tributa');
+        $exe = $sum(fn ($l) => $cl($l) === 'exento');
+        $salarial = $sum(fn ($l) => in_array($cl($l), ['salarial', 'especie'], true));
         $otr = $salarial - $sb - $pl;
         $dev = $sum(fn ($l) => true);
-        // Prorrata de las pagas que se cobran en su mes: entra en la base de cotización todos los meses
         $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
         $prorrateadas = ! empty($w['prorr']) && $pagas === 14;
-        $prorB = $pagas === 14 ? ($prorrateadas ? $pror : round(($sb ?: self::n($w['salBase'] ?? 0)) * 2 / 12, 2)) : 0;
-        $jor = self::n($w['jor'] ?? 100) ?: 100;
-        $minB = (self::BASE_MIN[(int) ($w['grupo'] ?? 7)] ?? self::BASE_MIN[7]) * $jor / 100;
-        // Base de contingencias comunes (sin horas extra) y base de AT y EP, desempleo, FP y FOGASA (con horas extra)
-        $base = min(max($salarial + ($prorrateadas ? $pror : $prorB), $minB), self::BASE_MAX);
-        $baseAT = min($base + $hx, self::BASE_MAX);
+        if ($recibo === 'Nómina') {
+            // Prorrata de las pagas que se cobran en su mes: entra en la base de cotización todos los meses
+            $prorB = $pagas === 14 ? ($prorrateadas ? $pror : round(($sb ?: self::n($w['salBase'] ?? 0)) * 2 / 12, 2)) : 0;
+            $jor = self::n($w['jor'] ?? 100) ?: 100;
+            $minB = (self::BASE_MIN[(int) ($w['grupo'] ?? 7)] ?? self::BASE_MIN[7]) * $jor / 100;
+            // Base de contingencias comunes (sin horas extra) y base de AT y EP, desempleo, FP y FOGASA (con horas extra)
+            $base = min(max($salarial + ($prorrateadas ? $pror : $prorB), $minB), self::BASE_MAX);
+        } else {
+            // Recibos aparte: la paga extra ya cotiza con la prorrata mensual; atrasos, finiquito y salarios de tramitación
+            // cotizan por sus conceptos salariales (en la liquidación complementaria o en la del mes de la baja)
+            $prorB = 0;
+            $base = $recibo === 'Extra' ? 0 : min($salarial, self::BASE_MAX);
+        }
+        $baseAT = $recibo === 'Extra' ? 0 : min($base + $hx, self::BASE_MAX);
         $tmp = self::temporal($w);
         $des = $tmp ? self::TIPOS['des_tmp'] : self::TIPOS['des_ind'];
         $desT = isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' ? (float) $doc['tipos']['des_t'] / 100 : $des[0];
         $T = ['cc' => $base * self::TIPOS['cc'][0], 'mei' => $base * self::TIPOS['mei'][0], 'des' => $baseAT * $desT, 'fp' => $baseAT * self::TIPOS['fp'][0], 'hx' => $hx * self::TIPOS['cc'][0]];
         $E = ['cc' => $base * self::TIPOS['cc'][1], 'mei' => $base * self::TIPOS['mei'][1], 'des' => $baseAT * $des[1], 'fog' => $baseAT * self::TIPOS['fog'][1], 'fp' => $baseAT * self::TIPOS['fp'][1], 'at' => $baseAT * $at / 100, 'hx' => $hx * self::TIPOS['cc'][1]];
-        if (self::esAutonomo($w)) {
-            // Trabajador en el RETA: no cotiza al Régimen General por esta retribución; solo retención de IRPF
-            [$base, $baseAT, $prorB] = [0, 0, 0];
+        if (self::esAutonomo($w) || $recibo === 'Extra') {
+            // RETA: no cotiza al Régimen General por esta retribución. Paga extra en recibo aparte: cotizada con la prorrata.
+            [$base, $baseAT, $prorB] = [0, 0, self::esAutonomo($w) ? 0 : $prorB];
             $T = array_map(fn () => 0, $T);
             $E = array_map(fn () => 0, $E);
         }
         $T = array_map(fn ($v) => round($v, 2), $T);
         $E = array_map(fn ($v) => round($v, 2), $E);
-        $ssT = array_sum($T);
-        $baseIrpf = $dev - $die - $km;
+        $ssT = round(array_sum($T), 2);
+        $baseIrpf = $dev - $die - $km - $exe;
         $irpf = round($baseIrpf * $ip / 100, 2);
-        $ded = array_sum(array_map(fn ($l) => (float) $l['importe'], $D));
+        // Embargos: importe del art. 607 LEC sobre el salario neto, o importe fijo; nunca más que lo pendiente
+        $neto = max(0, $dev - $die - $km - $exe - $esp - $ssT - $irpf);
+        $smi = self::SMI_ANUAL / ($prorrateadas || $pagas === 12 ? 12 : 14) * ($extra > 0 && $recibo === 'Nómina' ? 2 : 1);
+        $libre = self::embargable($neto, $smi);
+        $D = [];
+        foreach ($doc['deducciones'] ?? [] as $d) {
+            if (! empty($d['ref'])) {
+                $pend = max(0, (float) ($d['pend'] ?? 0));
+                $imp = ($d['modo'] ?? 'lec') === 'fijo' ? (float) ($d['cuota'] ?? 0) : $libre;
+                $d['importe'] = round(max(0, min($imp, $pend, ($d['modo'] ?? 'lec') === 'fijo' ? $neto : $libre)), 2);
+                if (($d['modo'] ?? 'lec') !== 'fijo') {
+                    $libre -= $d['importe'];
+                }
+                $neto -= $d['importe'];
+            }
+            if ((float) ($d['importe'] ?? 0) != 0) {
+                $D[] = $d;
+            }
+        }
+        $ded = round(array_sum(array_map(fn ($l) => (float) $l['importe'], $D)), 2);
         $ant = array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($D, fn ($l) => ($l['id'] ?? '') === 'ant')));
         $emb = $ded - $ant;
 
-        return compact('sb', 'pl', 'extra', 'prorB', 'hx', 'otr', 'die', 'km', 'ant', 'emb', 'dev', 'base', 'baseAT', 'T', 'E', 'ssT', 'ip', 'baseIrpf', 'irpf', 'tmp', 'pror', 'desT')
-            + ['mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded, 2), 'ssE' => array_sum($E), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
+        return compact('sb', 'pl', 'extra', 'prorB', 'hx', 'otr', 'die', 'km', 'ant', 'emb', 'dev', 'base', 'baseAT', 'T', 'E', 'ssT', 'ip', 'baseIrpf', 'irpf', 'tmp', 'pror', 'desT', 'esp', 'trib', 'exe', 'recibo')
+            + ['mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded - $esp, 2), 'ssE' => round(array_sum($E), 2), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
+    }
+
+    /** Parte embargable de un salario neto mensual según la escala del art. 607 LEC (el SMI es inembargable) */
+    public static function embargable(float $neto, float $smi): float
+    {
+        $x = $neto - $smi;
+        $r = 0;
+        foreach ([0.30, 0.50, 0.60, 0.75] as $p) {
+            if ($x <= 0) {
+                return round($r, 2);
+            }
+            $t = min($x, $smi);
+            $r += $t * $p;
+            $x -= $t;
+        }
+
+        return round($r + max(0, $x) * 0.90, 2);
+    }
+
+    /** Embargos del trabajador vigentes en el mes, con lo que queda pendiente (descontado lo retenido en nóminas guardadas anteriores) */
+    public static function embargosActivos(array $w, ?int $anio, int $m): array
+    {
+        $out = [];
+        $ym = $anio ? sprintf('%04d-%02d', $anio, $m) : null;
+        foreach ($w['embargos'] ?? [] as $e) {
+            if (! empty($e['levantado']) || ($ym && (($e['desde'] ?? '0000-00') > $ym))) {
+                continue;
+            }
+            $ret = $ym && ! empty($w['id']) ? self::retenidoEmbargo((int) $w['id'], (string) $e['id'], $ym) : 0;
+            $pend = round((float) $e['total'] - $ret, 2);
+            if ($pend <= 0) {
+                continue;
+            }
+            $out[] = ['id' => 'emb', 'ref' => $e['id'], 'concepto' => 'Embargo · '.$e['organismo'].($e['expediente'] ? ' · exp. '.$e['expediente'] : ''),
+                'modo' => $e['modo'] ?? 'lec', 'cuota' => (float) ($e['cuota'] ?? 0), 'pend' => $pend, 'total' => (float) $e['total'], 'importe' => 0];
+        }
+
+        return $out;
+    }
+
+    private static array $retenidos = [];
+
+    /** Lo ya retenido de un embargo en las nóminas guardadas de meses anteriores */
+    public static function retenidoEmbargo(int $tid, string $ref, string $ym): float
+    {
+        self::$retenidos[$tid] ??= NominaMes::where('trabajador_id', $tid)->get()->map(fn ($g) => [sprintf('%04d-%02d', $g->anio, $g->mes), $g->datos['retenido'] ?? []])->all();
+        $t = 0;
+        foreach (self::$retenidos[$tid] as [$k, $r]) {
+            if ($k < $ym) {
+                $t += (float) ($r[$ref] ?? 0);
+            }
+        }
+
+        return round($t, 2);
+    }
+
+    /** Conceptos por defecto de un recibo aparte (paga extra, atrasos, finiquito o salarios de tramitación) */
+    public static function conceptosRecibo(array $w, string $recibo, int $anio, int $m, ?array $P = null): array
+    {
+        $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
+        $pro = ! empty($w['prorr']) && $pagas === 14;
+        $sb = self::n($w['salBase'] ?? 0) ?: round(self::n($w['sal'] ?? 0) / $pagas, 2);
+        $pl = self::n($w['plus'] ?? 0);
+        $L = [];
+        if ($recibo === 'Extra') {
+            foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mc]) {
+                if (! $pro && $pagas === 14) {
+                    $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $m === $mc ? round($sb, 2) : 0, 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
+                }
+            }
+        } elseif ($recibo === 'Atrasos') {
+            $L[] = ['id' => 'atr', 'cod' => '23', 'concepto' => 'Atrasos de convenio', 'importe' => 0, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
+        } elseif ($recibo === 'Sal. tramitación') {
+            $L[] = ['id' => 'stm', 'cod' => '24', 'concepto' => 'Salarios de tramitación', 'importe' => 0, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
+        } elseif ($recibo === 'Finiquito') {
+            $L = self::finiquito($w, $anio, $m, $P, $sb, $pl, $pagas, $pro);
+        }
+
+        return ['lineas' => $L, 'deducciones' => [], 'tipos' => [], 'recibo' => $recibo];
+    }
+
+    /** Finiquito: vacaciones no disfrutadas, partes proporcionales de las pagas y la indemnización que fija el ET según la causa de la baja */
+    private static function finiquito(array $w, int $anio, int $m, ?array $P, float $sb, float $pl, int $pagas, bool $pro): array
+    {
+        $fin = Carbon::parse($w['baja'] ?: Carbon::create($anio, $m, 1)->endOfMonth()->toDateString())->startOfDay();
+        $alta = Carbon::parse($w['alta'] ?: $fin->toDateString())->startOfDay();
+        $anual = self::n($w['sal'] ?? 0) ?: ($sb + $pl) * $pagas;
+        $diario = round($anual / 365, 2);
+        $L = [];
+        // Vacaciones: días del convenio (30 naturales si no dice otra cosa) en proporción a lo trabajado en el año, menos las disfrutadas
+        $ini = $alta->greaterThan($fin->copy()->startOfYear()) ? $alta->copy() : $fin->copy()->startOfYear();
+        $vacAnio = (float) ($P['conv']['vacaciones'] ?? 30) ?: 30;
+        $devengadas = $vacAnio * ($ini->diffInDays($fin) + 1) / 365;
+        $disfrutadas = ! empty($w['id']) ? JornadaAusencia::where('trabajador_id', $w['id'])->where('tipo', 'Vacaciones')->get()
+            ->sum(function ($a) use ($ini, $fin) {
+                $d = $a->desde->greaterThan($ini) ? $a->desde : $ini;
+                $h = $a->hasta->lessThan($fin) ? $a->hasta : $fin;
+
+                return $h->greaterThanOrEqualTo($d) ? $d->diffInDays($h) + 1 : 0;
+            }) : 0;
+        $pend = round(max(0, $devengadas - $disfrutadas), 2);
+        $L[] = ['id' => 'vac', 'cod' => '22', 'concepto' => 'Vacaciones no disfrutadas', 'cant' => $pend, 'precio' => $diario, 'importe' => round($pend * $diario, 2), 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
+        // Partes proporcionales de las pagas que no se cobran prorrateadas (devengo anual hasta su mes de cobro)
+        if ($pagas === 14 && ! $pro) {
+            foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mc]) {
+                $desde = Carbon::create($fin->month > $mc ? $fin->year : $fin->year - 1, $mc, 1)->addMonthNoOverflow()->startOfMonth();
+                $desde = $alta->greaterThan($desde) ? $alta->copy() : $desde;
+                $dias = $fin->greaterThanOrEqualTo($desde) ? $desde->diffInDays($fin) + 1 : 0;
+                $L[] = ['id' => 'pp'.$id, 'cod' => $cod, 'concepto' => 'Parte proporcional '.mb_strtolower($nom), 'cant' => $dias, 'precio' => round($sb / 365, 4),
+                    'importe' => round($sb * $dias / 365, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
+            }
+        }
+        // Indemnización legal según la causa de la baja (art. 49.1.c, 53.1.b y 56 ET)
+        $causa = ! empty($w['id']) ? (string) LaboralMovimiento::where('trabajador_id', $w['id'])->where('tipo', 'Baja')->orderByDesc('fecha')->value('detalle') : '';
+        $dpa = ['Fin de contrato' => 12, 'Despido objetivo' => 20][$causa] ?? 0;
+        if ($dpa) {
+            $anios = ($alta->diffInDays($fin) + 1) / 365;
+            $imp = round($diario * $dpa * $anios, 2);
+            if ($dpa === 20) {
+                $imp = min($imp, round($anual, 2)); // tope de 12 mensualidades
+            }
+            $L[] = ['id' => 'ind', 'cod' => $dpa === 12 ? '61' : '60', 'concepto' => 'Indemnización por '.mb_strtolower($causa).' ('.$dpa.' días por año)', 'cant' => round($dpa * $anios, 2), 'precio' => $diario,
+                'importe' => $imp, 'clase' => 'exento', 'origen' => 'calculo', 'conv' => null];
+        }
+
+        return $L;
     }
 
     /** Avisos de lo que no sale del convenio o de la ley */
@@ -336,8 +552,8 @@ class Nomina
             if (($l['activo'] ?? true) === false) {
                 continue;
             }
-            if (($l['origen'] ?? '') === 'manual') {
-                $out[$i] = 'Concepto añadido a mano: no es por convenio.';
+            if (in_array($l['origen'] ?? '', ['manual', 'fijo'], true)) {
+                $out[$i] = ($l['origen'] === 'fijo' ? 'Concepto fijo añadido a mano' : 'Concepto añadido a mano').': no es por convenio.';
             } elseif (isset($l['conv']) && $l['conv'] !== null && abs((float) $l['importe'] - (float) $l['conv']) > 0.005) {
                 $out[$i] = 'No es por convenio: el convenio fija '.Formato::eur((float) $l['conv']).'.';
             }
@@ -349,7 +565,7 @@ class Nomina
             $g[] = 'Desempleo al '.Formato::num((float) $doc['tipos']['des_t']).' %: el tipo legal es el '.Formato::num($des).' %.';
         }
         if ($ipAuto !== null && isset($doc['tipos']['irpf']) && $doc['tipos']['irpf'] !== null && $doc['tipos']['irpf'] !== '' && abs((float) $doc['tipos']['irpf'] - $ipAuto) > 0.0001) {
-            $g[] = 'IRPF al '.Formato::num((float) $doc['tipos']['irpf']).' %: el calculado con el algoritmo de la AEAT es el '.Formato::num($ipAuto).' %.';
+            $g[] = 'IRPF al '.Formato::num((float) $doc['tipos']['irpf']).' %: el que corresponde (ficha del trabajador o algoritmo de la AEAT) es el '.Formato::num($ipAuto).' %.';
         }
 
         return ['lineas' => $out, 'generales' => $g, 'info' => $info];
@@ -476,32 +692,69 @@ class Nomina
 
     private static array $guardadas = [];
 
-    /** Nómina editada (borrador o emitida) de un trabajador y mes, si existe */
-    public static function guardada(int $trabajadorId, int $anio, int $m): ?NominaMes
+    /** Recibo editado (borrador o emitido) de un trabajador y mes, si existe */
+    public static function guardada(int $trabajadorId, int $anio, int $m, string $recibo = 'Nómina'): ?NominaMes
     {
         $k = $trabajadorId.'|'.$anio;
-        self::$guardadas[$k] ??= NominaMes::where('trabajador_id', $trabajadorId)->where('anio', $anio)->where('recibo', 'Nómina')->get()->keyBy('mes')->all();
+        self::$guardadas[$k] ??= NominaMes::where('trabajador_id', $trabajadorId)->where('anio', $anio)->get()->keyBy(fn ($g) => $g->mes.'|'.$g->recibo)->all();
 
-        return self::$guardadas[$k][$m] ?? null;
+        return self::$guardadas[$k][$m.'|'.$recibo] ?? null;
+    }
+
+    /** Recibos aparte (paga extra, atrasos, finiquito…) guardados para un trabajador y mes */
+    public static function otrosRecibos(int $trabajadorId, int $anio, int $m): array
+    {
+        self::guardada($trabajadorId, $anio, $m);
+
+        return collect(self::$guardadas[$trabajadorId.'|'.$anio])->filter(fn ($g) => $g->mes === $m && $g->recibo !== 'Nómina')
+            ->sortBy(fn ($g) => array_search($g->recibo, array_keys(self::RECIBOS), true))->pluck('recibo')->values()->all();
     }
 
     public static function olvidarGuardadas(): void
     {
         self::$guardadas = [];
+        self::$retenidos = [];
     }
 
-    /** Nómina del mes: la editada en el Integral de nóminas si existe; si no, la automática */
-    public function nomina(array $w, int $anio, int $m, array $incAnio, float $at): array
+    /** Nómina (o recibo aparte) del mes: la editada en el Integral de nóminas si existe; si no, la automática */
+    public function nomina(array $w, int $anio, int $m, array $incAnio, float $at, string $recibo = 'Nómina'): array
     {
         $ip = (float) $this->tipoIrpf($w, $anio, $m, $incAnio)['tipo'];
-        if (! empty($w['id']) && ($g = self::guardada((int) $w['id'], $anio, $m))) {
-            $doc = $g->datos ?? [];
+        $g = ! empty($w['id']) ? self::guardada((int) $w['id'], $anio, $m, $recibo) : null;
+        if ($g) {
+            $doc = ($g->datos ?? []) + ['recibo' => $recibo];
             $ipG = isset($doc['tipos']['irpf']) && $doc['tipos']['irpf'] !== null && $doc['tipos']['irpf'] !== '' ? (float) $doc['tipos']['irpf'] : $ip;
 
             return self::computar($w, $doc, $ipG, $at) + ['estado' => $g->estado, 'ipAuto' => $ip];
         }
+        $doc = $recibo === 'Nómina'
+            ? self::conceptos($w, $m, $incAnio[$m][$w['id'] ?? ''] ?? [], null, $anio, ! empty($w['id']) && self::guardada((int) $w['id'], $anio, $m, 'Extra') !== null)
+            : self::conceptosRecibo($w, $recibo, $anio, $m);
 
-        return self::calcular($w, $m, $incAnio[$m][$w['id'] ?? ''] ?? [], $ip, $at) + ['estado' => null, 'ipAuto' => $ip];
+        return self::computar($w, $doc + ['recibo' => $recibo], $ip, $at) + ['estado' => null, 'ipAuto' => $ip];
+    }
+
+    /** Totales de varios recibos del mismo mes (para pagos, contabilidad y modelos 111 y 190) */
+    public static function sumar(array $ns): array
+    {
+        $t = [];
+        foreach (['dev', 'ssT', 'ssE', 'irpf', 'liq', 'baseIrpf', 'ded', 'ant', 'emb', 'die', 'km', 'base', 'baseAT', 'hx', 'esp', 'exe'] as $k) {
+            $t[$k] = round(array_sum(array_map(fn ($n) => (float) ($n[$k] ?? 0), $ns)), 2);
+        }
+
+        return $t + ['ip' => (float) ($ns[0]['ip'] ?? 0)];
+    }
+
+    /** Todos los recibos de un trabajador en un mes: la nómina y los recibos aparte guardados */
+    public function recibosMes(array $w, int $anio, int $m, array $incAnio, float $at): array
+    {
+        $n = $this->nomina($w, $anio, $m, $incAnio, $at);
+        $otros = [];
+        foreach (! empty($w['id']) ? self::otrosRecibos((int) $w['id'], $anio, $m) : [] as $r) {
+            $otros[] = ['recibo' => $r, 'n' => $this->nomina($w, $anio, $m, $incAnio, $at, $r)];
+        }
+
+        return ['n' => $n, 'otros' => $otros, 't' => self::sumar(array_merge([$n], array_column($otros, 'n')))];
     }
 
     /** Nóminas del mes de los trabajadores en alta: [[w, n], ...] */
@@ -512,7 +765,7 @@ class Nomina
         $at ??= (float) self::config($c)['at'];
 
         return $plantilla->filter(fn ($w) => self::activo($w, $anio, $m))
-            ->map(fn ($w) => ['w' => $w, 'n' => $this->nomina($w, $anio, $m, $incAnio, $at)])->values()->all();
+            ->map(fn ($w) => ['w' => $w] + $this->recibosMes($w, $anio, $m, $incAnio, $at))->values()->all();
     }
 
     // -------------------------------------------------------------- contratos

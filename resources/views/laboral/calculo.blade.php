@@ -2,7 +2,7 @@
 @php
   use App\Services\Nomina; use App\Support\Formato;
   $E = fn ($v) => Formato::eur($v);
-  $sum = fn ($k) => array_sum(array_map(fn ($x) => is_callable($k) ? $k($x) : $x['n'][$k], $noms));
+  $sum = fn ($k) => array_sum(array_map(fn ($x) => is_callable($k) ? $k($x) : $x['t'][$k], $noms));
   $mesL = Nomina::MESES[$mes - 1].' '.$anio;
   $fq = array_filter($f + ['anio' => $anio, 'mes' => $mes], fn ($v) => $v !== '');
 @endphp
@@ -38,7 +38,7 @@
         <a class="lb-grid lb-calc lb-row" href="{{ route('laboral.integral', ['anio' => $anio, 'mes' => $mes, 't' => $x['w']['id']]) }}">
           <span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="font-weight:600">{{ $x['w']['nombre'] }}</span><span class="ell" style="font-size:12px;color:#6A6A65">{{ $x['w']['convCat'] ?: $x['w']['cat'] }} · grupo {{ $x['w']['grupo'] }}</span></span>
           <span class="mono12">{{ $x['w']['ccc'] }}</span><span><span class="lb-code">{{ Nomina::codigo($x['w']['contrato']) }}</span></span>
-          <span class="r m">{{ $E($x['n']['dev']) }}</span><span class="r m">{{ $E($x['n']['base']) }}</span><span class="r m">{{ $E($x['n']['ssT']) }}</span><span class="r m">{{ Formato::num($x['n']['ip']) }}</span><span class="r m">{{ $E($x['n']['irpf']) }}</span><span class="r m" style="font-weight:700">{{ $E($x['n']['liq']) }}</span><span class="r m">{{ $E($x['n']['dev'] + $x['n']['ssE']) }}</span>
+          <span class="r m">{{ $E($x['t']['dev']) }}</span><span class="r m">{{ $E($x['t']['base']) }}</span><span class="r m">{{ $E($x['t']['ssT']) }}</span><span class="r m">{{ Formato::num($x['t']['ip']) }}</span><span class="r m">{{ $E($x['t']['irpf']) }}</span><span class="r m" style="font-weight:700">{{ $E($x['t']['liq']) }}</span><span class="r m">{{ $E($x['t']['dev'] + $x['t']['ssE']) }}</span>
         </a>
       @empty
         <div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65">Ninguna nómina coincide con los filtros.</div>

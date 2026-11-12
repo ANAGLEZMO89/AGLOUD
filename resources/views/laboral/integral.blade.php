@@ -15,13 +15,13 @@
     <div class="card" style="flex:0 1 280px;padding:8px;gap:2px;min-width:0">
       <a class="lb-im {{ $sel ? '' : 'on' }}" href="{{ route('laboral.integral', $q) }}"><span class="t">Resumen de la empresa</span><span class="s">{{ count($noms) }} nóminas · {{ $mesL }}</span></a>
       @foreach($noms as $x)
-        <a class="lb-im {{ $sel && $sel['w']['id'] === $x['w']['id'] ? 'on' : '' }}" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}"><span class="t">{{ $x['w']['nombre'] }}</span><span class="s">{{ Nomina::esAutonomo($x['w']) ? 'RETA' : $x['w']['cat'] }} · líquido {{ $E($x['n']['liq']) }}</span></a>
+        <a class="lb-im {{ $sel && $sel['w']['id'] === $x['w']['id'] ? 'on' : '' }}" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}"><span class="t">{{ $x['w']['nombre'] }}</span><span class="s">{{ Nomina::esAutonomo($x['w']) ? 'RETA' : $x['w']['cat'] }} · líquido {{ $E($x['t']['liq']) }}</span></a>
       @endforeach
     </div>
     <div style="flex:1 1 560px;display:flex;flex-direction:column;gap:16px;min-width:0">
       @if(! $sel)
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
-          @foreach([['Trabajadores en alta', (string) count($noms), $plantilla->count().' en plantilla'], ['Coste empresa · '.mb_strtolower(Nomina::MESES[$mes - 1]), $E($sum(fn ($x) => $x['n']['dev']) + $sum(fn ($x) => $x['n']['ssE'])), 'Bruto más Seguridad Social'], ['Líquido a pagar', $E($sum(fn ($x) => $x['n']['liq'])), 'Neto de las nóminas'], ['Retenciones IRPF', $E($sum(fn ($x) => $x['n']['irpf'])), 'Pasan al modelo 111']] as [$l, $v, $s])
+          @foreach([['Trabajadores en alta', (string) count($noms), $plantilla->count().' en plantilla'], ['Coste empresa · '.mb_strtolower(Nomina::MESES[$mes - 1]), $E($sum(fn ($x) => $x['t']['dev']) + $sum(fn ($x) => $x['t']['ssE'])), 'Bruto más Seguridad Social'], ['Líquido a pagar', $E($sum(fn ($x) => $x['t']['liq'])), 'Neto de las nóminas'], ['Retenciones IRPF', $E($sum(fn ($x) => $x['t']['irpf'])), 'Pasan al modelo 111']] as [$l, $v, $s])
             <div class="card" style="gap:6px;padding:16px 18px"><span style="font-size:13px;color:#6A6A65">{{ $l }}</span><span style="font:600 24px/1.1 var(--mono);letter-spacing:-.03em">{{ $v }}</span><span style="font-size:12.5px;color:#3C3C3C">{{ $s }}</span></div>
           @endforeach
         </div>
@@ -40,10 +40,10 @@
             @foreach($noms as $x)
               <a class="lb-grid lb-nom lb-row" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}">
                 <span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="font-weight:600">{{ $x['w']['nombre'] }}</span><span style="font-size:12px;color:#6A6A65">{{ $x['w']['cat'] }}</span></span>
-                <span class="r m">{{ $E($x['n']['dev']) }}</span><span class="r m">{{ $E($x['n']['base']) }}</span><span class="r m">{{ $E($x['n']['ssT']) }}</span><span class="r m">{{ $E($x['n']['irpf']) }}</span><span class="r m" style="font-weight:700">{{ $E($x['n']['liq']) }}</span><span class="r m">{{ $E($x['n']['ssE']) }}</span>
+                <span class="r m">{{ $E($x['t']['dev']) }}</span><span class="r m">{{ $E($x['t']['base']) }}</span><span class="r m">{{ $E($x['t']['ssT']) }}</span><span class="r m">{{ $E($x['t']['irpf']) }}</span><span class="r m" style="font-weight:700">{{ $E($x['t']['liq']) }}</span><span class="r m">{{ $E($x['t']['ssE']) }}</span>
               </a>
             @endforeach
-            <div class="lb-grid lb-nom" style="padding:12px 0 4px;font-weight:700"><span>Totales</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['dev'])) }}</span><span></span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssT'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['irpf'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['liq'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['n']['ssE'])) }}</span></div>
+            <div class="lb-grid lb-nom" style="padding:12px 0 4px;font-weight:700"><span>Totales</span><span class="r m">{{ $E($sum(fn ($x) => $x['t']['dev'])) }}</span><span></span><span class="r m">{{ $E($sum(fn ($x) => $x['t']['ssT'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['t']['irpf'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['t']['liq'])) }}</span><span class="r m">{{ $E($sum(fn ($x) => $x['t']['ssE'])) }}</span></div>
             @if(! $noms)<div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65;line-height:1.5">No hay trabajadores en alta este mes.</div>@endif
           </div>
         </div>

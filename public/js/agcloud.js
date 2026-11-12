@@ -697,6 +697,43 @@
     });
   });
 
+  // ---------- Integral de nóminas: añadir líneas, catálogo de conceptos, cuantía × precio, IRPF de la AEAT ----------
+  var neNum = function (v) { v = String(v || '').replace(/\./g, '').replace(',', '.').trim(); var n = parseFloat(v); return isNaN(n) ? null : n; };
+  var neFmt = function (n) { return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  $$('form[data-ne]').forEach(function (f) {
+    var cat = {};
+    try { cat = JSON.parse(f.getAttribute('data-ne-cat') || '{}'); } catch (e) { cat = {}; }
+    var cuenta = { conc: 1, ded: 1 };
+    var enlazar = function (row) {
+      var c = row.querySelector('[data-ne-concepto]');
+      if (c) on(c, 'change', function () {
+        var k = cat[c.value.trim()]; if (!k) return;
+        var cod = row.querySelector('[data-ne-cod]'); if (cod) cod.value = k[0];
+        var cl = row.querySelector('[data-ne-clase]'); if (cl) cl.value = k[1];
+      });
+      var ca = row.querySelector('[data-ne-cant]'), pr = row.querySelector('[data-ne-precio]'), im = row.querySelector('[data-ne-imp]');
+      var mult = function () { var a = neNum(ca.value), b = neNum(pr.value); if (a !== null && b !== null && a && b) im.value = neFmt(Math.round(a * b * 100) / 100); };
+      if (ca && pr && im) { on(ca, 'input', mult); on(pr, 'input', mult); }
+    };
+    f.querySelectorAll('.ne-row, .ne-var').forEach(enlazar);
+    f.querySelectorAll('[data-ne-add]').forEach(function (b) {
+      on(b, 'click', function () {
+        var tipo = b.getAttribute('data-ne-add');
+        var tpl = f.querySelector('[data-ne-tpl="' + tipo + '"]'); if (!tpl) return;
+        var n = tpl.cloneNode(true);
+        n.removeAttribute('data-ne-tpl'); n.hidden = false;
+        var i = cuenta[tipo]++;
+        n.querySelectorAll('[name]').forEach(function (el) { el.name = el.name.replace('__i__', i); el.disabled = false; });
+        tpl.parentNode.insertBefore(n, tpl);
+        enlazar(n);
+        var first = n.querySelector('input:not([type=hidden])'); if (first) first.focus();
+      });
+    });
+    f.querySelectorAll('[data-ne-aeat]').forEach(function (b) {
+      on(b, 'click', function () { var i = f.querySelector('[data-ne-irpf]'); if (i) { i.value = ''; i.focus(); } });
+    });
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

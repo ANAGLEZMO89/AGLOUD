@@ -119,7 +119,7 @@ class LaboralTest extends TestCase
         $inc = LaboralMes::firstOrFail()->incidencias;
         $this->assertSame(100.0, (float) $inc[$t->id]['hx']);
         $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id)->assertOk()->assertSee('Emitir nómina');
-        $this->en()->get('/laboral/nominas?anio=2026&mes=11&vista=variables&t='.$t->id)->assertOk()->assertSee('Variables del mes');
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11&vista=variables&t='.$t->id)->assertOk()->assertSee('Variables de noviembre')->assertSee('Otras variables del mes');
         $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Horas extraordinarias')->assertSee('Dietas');
         foreach ([1, 2, 3] as $m) {
             $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11&modelo='.$m)->assertOk();
@@ -317,7 +317,7 @@ class LaboralTest extends TestCase
         $this->assertSame('Borrador', $g->estado);
         $this->assertSame(1600.0, (float) collect($g->datos['lineas'])->firstWhere('id', 'sb')['importe']);
         $this->en()->get($url)->assertOk()->assertSee('Borrador guardado')->assertSee('No es por convenio')->assertSee('Concepto añadido a mano');
-        $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Plus festivo')->assertSee('Embargo juzgado')->assertSee('IRPF 2,00 %');
+        $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('Plus festivo')->assertSee('Embargo juzgado')->assertSee('Tributación I.R.P.F.')->assertSee('2,00');
         $n = app(Nomina::class)->nomina(Nomina::rellenar($t->ficha(), $t->cliente), 2026, 11, Nomina::incidenciasAnio($t->cliente, 2026), 0);
         $this->assertSame(2.0, (float) $n['ip']);
         $this->assertSame(25.0, (float) $n['ded']);
@@ -330,5 +330,59 @@ class LaboralTest extends TestCase
         $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'recalcular'])->assertRedirect();
         $this->assertSame(0, NominaMes::count());
         $this->en()->get($url)->assertOk()->assertSee('Calculada desde el convenio');
+    }
+
+    public function test_integral_recibos_fijos_embargos_y_variables_a_mano(): void
+    {
+        $this->assertSame(233.7, Nomina::embargable(2000, 1221));
+        $this->assertSame(0.0, Nomina::embargable(1000, 1221));
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha());
+        $t = Trabajador::firstOrFail();
+        $svc = app(Nomina::class);
+        $w = fn () => Nomina::rellenar($t->fresh()->ficha(), $t->cliente);
+        $inc = fn () => Nomina::incidenciasAnio($t->cliente, 2026);
+        // Concepto y deducción fijos + embargo de cantidad fija: se repiten el mes siguiente
+        $auto = array_map(fn ($l) => ['id' => $l['id'], 'cod' => $l['cod'], 'concepto' => $l['concepto'], 'importe' => (string) $l['importe'], 'clase' => $l['clase'], 'cobro' => $l['cobro'] ?? '', 'activo' => '1'],
+            Nomina::conceptos($w(), 11, [], null, 2026)['lineas']);
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'guardar', 'l' => $auto,
+            'nl' => [['concepto' => 'Plus de transporte', 'importe' => '60,00', 'clase' => 'salarial', 'fijo' => '1'], ['concepto' => 'Horas complementarias', 'cant' => '4', 'precio' => '12,50', 'clase' => 'salarial']],
+            'nd' => [['concepto' => 'Cuota sindical', 'importe' => '10,00', 'fijo' => '1']],
+            'emb_new' => ['organismo' => 'Juzgado', 'expediente' => '123/2026', 'total' => '300,00', 'modo' => 'fijo', 'cuota' => '200,00']])->assertSessionHasNoErrors();
+        $this->assertCount(1, $t->fresh()->datos['embargos']);
+        Nomina::olvidarGuardadas();
+        $nov = $svc->nomina($w(), 2026, 11, $inc(), 0);
+        $this->assertSame(50.0, (float) collect($nov['lineas'])->firstWhere('concepto', 'Horas complementarias')['importe']);
+        $this->assertSame(210.0, (float) $nov['ded']);
+        $dic = $svc->nomina($w(), 2026, 12, $inc(), 0);
+        $this->assertNotNull(collect($dic['lineas'])->firstWhere('concepto', 'Plus de transporte'));
+        $this->assertNull(collect($dic['lineas'])->firstWhere('concepto', 'Horas complementarias'));
+        $this->assertSame(110.0, (float) $dic['ded']); // 10 de cuota sindical + 100 pendientes del embargo
+        // La ficha no borra los fijos ni los embargos
+        $this->en()->post('/laboral/trabajador/'.$t->id, $this->ficha(['nom1' => 'María']));
+        $this->assertCount(1, $t->fresh()->datos['concFijos'] ?? []);
+        $this->assertCount(1, $t->fresh()->datos['embargos'] ?? []);
+        // Paga extra en recibo aparte: sale de la nómina de junio y se suma en los totales del mes
+        $this->assertNotNull(collect($svc->nomina($w(), 2026, 6, $inc(), 0)['lineas'])->firstWhere('id', 'pv'));
+        $this->en()->get('/laboral/nominas?anio=2026&mes=6&t='.$t->id.'&recibo=Extra')->assertOk()->assertSee('Este recibo todavía no existe');
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 6, 'recibo' => 'Extra', 'accion' => 'guardar',
+            'l' => [['id' => 'pv', 'cod' => '90', 'concepto' => 'Paga de verano', 'importe' => '1.500,00', 'clase' => 'extra', 'cobro' => 'en_su_mes', 'activo' => '1']]])->assertSessionHasNoErrors();
+        Nomina::olvidarGuardadas();
+        $this->assertNull(collect($svc->nomina($w(), 2026, 6, $inc(), 0)['lineas'])->firstWhere('id', 'pv'));
+        $ex = $svc->nomina($w(), 2026, 6, $inc(), 0, 'Extra');
+        $this->assertSame(0.0, (float) $ex['ssT']);
+        $this->assertGreaterThan(0, $ex['irpf']);
+        $todo = $svc->recibosMes($w(), 2026, 6, $inc(), 0);
+        $this->assertSame(round($todo['n']['liq'] + $ex['liq'], 2), $todo['t']['liq']);
+        foreach ([1, 2, 3] as $m) {
+            $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=6&recibo=Extra&modelo='.$m)->assertOk()->assertSee('Paga de verano');
+        }
+        // Finiquito propuesto con vacaciones no disfrutadas
+        $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id.'&recibo=Finiquito')->assertOk()->assertSee('Vacaciones no disfrutadas');
+        // Variables escritas a mano
+        $this->en()->post('/laboral/nominas/'.$t->id.'/variables', ['anio' => 2026, 'mes' => 10, 'vl' => [['concepto' => 'Plus de nocturnidad', 'clase' => 'salarial', 'importe' => '45,00'], ['concepto' => '', 'importe' => '']]])->assertRedirect();
+        $oct = $svc->nomina($w(), 2026, 10, $inc(), 0);
+        $l = collect($oct['lineas'])->firstWhere('concepto', 'Plus de nocturnidad');
+        $this->assertSame(45.0, (float) $l['importe']);
+        $this->assertSame('07', $l['cod']);
     }
 }
