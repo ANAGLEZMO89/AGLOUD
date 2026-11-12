@@ -58,7 +58,8 @@
 .rc .md-k .v{font:700 15px 'Courier New',monospace}
 .rc .md th{font-size:8.5px;text-transform:uppercase;color:#555;border-bottom:1px solid #c9c9c4;text-align:left}
 .rc .md td{border-bottom:1px solid #eee}
-.rc .of td{border:1px solid #000}
+.rc .of{font-size:9.5px}
+.rc .of td{border:1px solid #000;padding:1.5px 6px}
 .rc .of .sec{background:#eee;font-weight:700}
 .rc .of .ind{padding-left:18px}
 .rc .pie{margin-top:14px;font-size:9px;color:#333}
