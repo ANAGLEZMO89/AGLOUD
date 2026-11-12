@@ -516,7 +516,7 @@ class FacturaController extends Controller
         $in = fn ($k, $ops, $def) => in_array($e[$k] ?? null, $ops, true) ? $e[$k] : $def;
 
         return [
-            'modelo' => $in('modelo', ['clasica', 'moderna', 'minimal'], 'clasica'),
+            'modelo' => $in('modelo', ['clasica', 'moderna', 'minimal', 'lateral'], 'clasica'),
             'color' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($e['color'] ?? '')) ? strtoupper($e['color']) : '#0B0B0B',
             'forma' => $in('forma', ['recta', 'suave', 'redondeada'], 'suave'),
             'cabecera' => $in('cabecera', ['relleno', 'linea'], 'relleno'),

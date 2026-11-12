@@ -19,10 +19,10 @@
       $todas = Nomina::clausulas($P);
       $cl = array_values(array_filter($todas, fn ($k) => in_array($k, $w['claus'] ?? [], true), ARRAY_FILTER_USE_KEY));
       $texto = trim((string) ($w['contratoTexto'] ?? '')) ?: Nomina::plantillaDe($P, $code);
-      [$cuerpo, $nCl] = Nomina::renderContrato($texto, Nomina::valoresContrato($w, $c, $P));
-      $body = '<h1>CONTRATO DE TRABAJO · '.e(mb_strtoupper($w['contrato'])).'</h1><p>En '.$v($lugar).', a '.Formato::fecha($w['alta']).'.</p><h2>Reunidos</h2>'.$kv($empRows).'<br>'.$kv($trRows).'<p>Ambas partes se reconocen capacidad para contratar y convienen las siguientes</p><h2>Cláusulas</h2>'.$kv($conRows)
-        .$cuerpo
-        .implode('', array_map(fn ($x, $i) => '<p><b>'.(Nomina::ORDINALES[$nCl + $i] ?? '').'. '.e($x[0]).'.</b> '.e($x[1]).'</p>', $cl, array_keys($cl))).'<p>El presente contrato se comunicará al Servicio Público de Empleo en los 10 días siguientes a su concertación.</p>'.$firmas;
+      // Modelo oficial (estructura del SEPE); el texto propio de Parámetros de contrato, si se ha cambiado, va como cláusulas adicionales
+      $extraTxt = trim($texto) !== trim(Nomina::PLANTILLA_CONTRATO) ? Nomina::renderContrato($texto, Nomina::valoresContrato($w, $c, $P))[0] : '';
+      $body = view('laboral._contrato-oficial', ['c' => $c, 'w' => $w, 'P' => $P, 'rep' => $rep, 'cl' => $cl, 'extraTxt' => $extraTxt,
+          'firmaImg' => $firmaUrl ? '<img src="'.e($firmaUrl).'" style="max-height:56px;max-width:180px;margin:0 auto">' : ''])->render();
   } elseif ($tipo === 'copia') {
       $body = '<h1>COPIA BÁSICA DEL CONTRATO DE TRABAJO</h1><p>Artículo 8.4 del Estatuto de los Trabajadores. No incluye el DNI, el domicilio, el estado civil ni otros datos que puedan afectar a la intimidad personal.</p>'
         .$kv([['Empresa', $c->nombre], ['CIF', $c->nif], ['Trabajador', $w['nombre']], ['Modalidad', $w['contrato']], ['Fecha de inicio', Formato::fecha($w['alta'])], ['Fecha de fin', $temp ? Formato::fecha($w['fin']) : 'Indefinido'], ['Categoría', $w['convCat'] ?: $w['cat']], ['Jornada', Formato::num($w['jor'], 0).' % · '.$w['horas'].' h/semana'], ['Retribución bruta anual', Formato::eur($anual)], ['Convenio colectivo', $conv]])
@@ -49,7 +49,7 @@
 @endphp
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><title>{{ $titulos[$tipo] }} · {{ $w['nombre'] }}</title>
-<style>body{font:12px/1.55 Georgia,serif;margin:40px;color:#000;background:#fff}h1{font:700 15px Helvetica,Arial,sans-serif;text-align:center;margin:0 0 14px}h2{font:700 12px Helvetica,Arial,sans-serif;margin:14px 0 4px;text-transform:uppercase}table{width:100%;border-collapse:collapse}td{border:1px solid #000;padding:4px 6px;vertical-align:top;font:11px Helvetica,Arial,sans-serif}.l{width:36%;background:#f2f2f2}@page{size:A4;margin:14mm}</style>
+<style>body{font:12px/1.55 Georgia,serif;margin:40px;color:#000;background:#fff}h1{font:700 15px Helvetica,Arial,sans-serif;text-align:center;margin:0 0 14px}h2{font:700 12px Helvetica,Arial,sans-serif;margin:14px 0 4px;text-transform:uppercase}table{width:100%;border-collapse:collapse}td{border:1px solid #000;padding:4px 6px;vertical-align:top;font:11px Helvetica,Arial,sans-serif}.l{width:36%;background:#f2f2f2}@page{size:A4;margin:0}@media print{html,body{background:#fff}body{margin:0!important;max-width:none!important;padding:15mm!important;box-decoration-break:clone;-webkit-box-decoration-break:clone}}</style>
 </head><body>{!! $body !!}
 <script src="{{ asset('js/imprimir.js') }}"></script>
 </body></html>

@@ -7,10 +7,10 @@
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><title>{{ $p->num }}</title>
 <style>
-@page{size:A4;margin:16mm}body{font:12px/1.5 Helvetica,Arial,sans-serif;padding:16mm;color:#111;margin:0;background:#fff}@media print{body{padding:0}}
+body{font:12px/1.5 Helvetica,Arial,sans-serif;padding:16mm;color:#111;margin:0;background:#fff}
 table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:7px 8px;text-align:left;border-bottom:1px solid #ddd}
 th{background:{{ $col }};color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em}.r{text-align:right}
-</style>
+@page{size:A4;margin:0}@media print{html,body{background:#fff}body{margin:0!important;max-width:none!important;padding:15mm!important;box-decoration-break:clone;-webkit-box-decoration-break:clone}}</style>
 @if($imprimir)<script src="{{ asset('js/imprimir.js') }}"></script>@endif
 </head><body>
 <div style="display:flex;justify-content:space-between;gap:16px">

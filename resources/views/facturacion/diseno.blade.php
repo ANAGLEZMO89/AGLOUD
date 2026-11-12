@@ -43,7 +43,7 @@
       <form method="POST" action="{{ route('facturacion.diseno.guardar') }}" class="card" style="padding:18px 20px;gap:12px" data-dis-form>
         @csrf
         <span style="font-size:16px;font-weight:700">Diseño de la factura</span>
-        <div class="cfgrow"><span>Modelo</span>{!! $seg('est[modelo]', $est['modelo'], ['clasica' => 'Clásica', 'moderna' => 'Moderna', 'minimal' => 'Minimal']) !!}</div>
+        <div class="cfgrow"><span>Modelo</span>{!! $seg('est[modelo]', $est['modelo'], ['clasica' => 'Clásica', 'moderna' => 'Moderna', 'minimal' => 'Minimal', 'lateral' => 'Lateral']) !!}</div>
         <div class="cfgrow"><span>Color</span><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">@foreach(['#0B0B0B', '#1F3A5F', '#2F5D50', '#7A2E2E', '#5B4B8A', '#8A5A00'] as $col)<label style="cursor:pointer"><input type="radio" name="est[colorp]" value="{{ $col }}" class="hidden" data-color-pick @checked(strtoupper($est['color']) === $col)><span class="swatch" style="background:{{ $col }}"></span></label>@endforeach<input type="color" name="est[color]" value="{{ $est['color'] }}" title="Otro color" style="width:34px;height:28px;padding:0;border:1px solid #DADAD4;border-radius:6px;background:#fff;cursor:pointer" data-color-input></div></div>
         <div class="cfgrow"><span>Tipografía</span>{!! $seg('est[fuente]', $est['fuente'], ['sans' => 'Sin serifa', 'serif' => 'Con serifa']) !!}</div>
         <div class="cfgrow"><span>Esquinas</span>{!! $seg('est[forma]', $est['forma'], ['recta' => 'Rectas', 'suave' => 'Suaves', 'redondeada' => 'Redondeadas']) !!}</div>

@@ -27,7 +27,7 @@
   .aviso{font-family:system-ui,sans-serif;font-size:12px;color:#8A1C1C;background:#FDE7E7;padding:8px 12px;border-radius:8px;margin-bottom:18px}
   .nota{font-family:system-ui,sans-serif;font-size:11.5px;color:#666;margin-top:36px;border-top:1px solid #ddd;padding-top:8px}
   @media print{.aviso,.nota{display:none}body{margin:0 auto}}
-</style>
+@page{size:A4;margin:0}@media print{html,body{background:#fff}body{margin:0!important;max-width:none!important;padding:15mm!important;box-decoration-break:clone;-webkit-box-decoration-break:clone}}</style>
 </head>
 <body>
 @if(! $cuadra)<div class="aviso">La aplicación del resultado no suma el resultado del ejercicio ({{ Formato::eur($res) }}). Revísala en Registro Mercantil › Plantillas.</div>@endif

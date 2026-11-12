@@ -13,7 +13,7 @@
   tr.h td{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6A6A65;padding-top:14px}
   tr.r td{font-weight:700;background:#C8F031}
   .pie{margin-top:18px;font-size:11px;color:#6A6A65}
-</style>
+@page{size:A4;margin:0}@media print{html,body{background:#fff}body{margin:0!important;max-width:none!important;padding:15mm!important;box-decoration-break:clone;-webkit-box-decoration-break:clone}}</style>
 </head>
 <body>
   <h1>Modelo {{ $code }} · {{ $nombre }}</h1>
