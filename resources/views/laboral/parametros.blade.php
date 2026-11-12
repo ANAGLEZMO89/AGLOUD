@@ -8,7 +8,7 @@
   $habOld = old('_enviado') ? (array) old('hab', []) : $P['hab'];
   $clausOld = old('_enviado') ? (array) old('claus', []) : $P['claus'];
   $cats = old('_enviado') ? array_values((array) old('cats', [])) : $conv['cats'];
-  $MODELOS = [[1, 'Clásico', 'Cuantía, precio, devengos y deducciones en columnas, con las bases al pie'], [2, 'Moderno', 'Devengos y deducciones lado a lado, con resumen y coste de empresa'], [3, 'Oficial', 'Estructura de la Orden ESS/2098/2014, con la aportación de la empresa']];
+  $MODELOS = [[1, 'Clásico', 'Cuantía, precio, devengos y deducciones en columnas, con las bases al pie'], [2, 'Moderno', 'Devengos y deducciones lado a lado, con resumen y coste de empresa'], [3, 'Oficial', 'Estructura de la Orden ESS/2098/2014, con la aportación de la empresa'], [4, 'Justificativo', 'Recibo individual justificativo: devengos y deducciones agrupados con su detalle']];
   $modelo = (int) $o('modelo', $P['modelo']);
 @endphp
 @section('content')

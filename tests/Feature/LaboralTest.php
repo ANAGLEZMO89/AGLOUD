@@ -373,9 +373,10 @@ class LaboralTest extends TestCase
         $this->assertGreaterThan(0, $ex['irpf']);
         $todo = $svc->recibosMes($w(), 2026, 6, $inc(), 0);
         $this->assertSame(round($todo['n']['liq'] + $ex['liq'], 2), $todo['t']['liq']);
-        foreach ([1, 2, 3] as $m) {
-            $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=6&recibo=Extra&modelo='.$m)->assertOk()->assertSee('Paga de verano');
+        foreach ([1, 2, 3, 4] as $m) {
+            $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=6&recibo=Extra&modelo='.$m)->assertOk()->assertSee($m === 4 ? 'PAGA DE VERANO' : 'Paga de verano');
         }
+        $this->en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=6&modelo=4')->assertOk()->assertSee('RECIBO INDIVIDUAL JUSTIFICATIVO DEL PAGO DE SALARIO')->assertSee('Percepciones salariales');
         // Finiquito propuesto con vacaciones no disfrutadas
         $this->en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id.'&recibo=Finiquito')->assertOk()->assertSee('Vacaciones no disfrutadas');
         // Variables escritas a mano

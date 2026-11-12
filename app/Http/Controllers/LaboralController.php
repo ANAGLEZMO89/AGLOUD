@@ -590,7 +590,7 @@ class LaboralController extends Controller
         $ult = Carbon::create($anio, $mes, 1)->endOfMonth()->day;
         $mm = str_pad((string) $mes, 2, '0', STR_PAD_LEFT);
 
-        return view('laboral.recibo', ['c' => $c, 'w' => $w, 'n' => $n, 'P' => $P, 'modelo' => (int) ($request->query('modelo') ?: $P['modelo']),
+        return view('laboral.recibo', ['c' => $c, 'w' => $w, 'n' => $n, 'P' => $P, 'modelo' => in_array((int) $request->query('modelo'), [1, 2, 3, 4], true) ? (int) $request->query('modelo') : (int) $P['modelo'],
             'mesL' => Nomina::MESES[$mes - 1].' '.$anio, 'per' => '01/'.$mm.'/'.$anio.' a '.$ult.'/'.$mm.'/'.$anio, 'at' => (float) $P['at'],
             'ccc' => ($w['ccc'] ?? '') ?: ($P['cccs'][0] ?? ''), 'auto' => $request->boolean('imprimir'), 'recibo' => $recibo,
             'fechaPago' => $g?->fecha_pago?->toDateString() ?? Carbon::create($anio, $mes, 1)->endOfMonth()->toDateString()]);
@@ -795,7 +795,7 @@ class LaboralController extends Controller
         $redCert = $request->file('red_cert')?->getClientOriginalName() ?? ($request->boolean('red_cert_quitar') ? '' : $P['red']['cert']);
         $sepeCert = $request->file('sepe_cert')?->getClientOriginalName() ?? ($request->boolean('sepe_cert_quitar') ? '' : $P['sepe']['cert']);
         $this->guardarConfig($c, [
-            'modelo' => in_array((int) $request->input('modelo'), [1, 2, 3], true) ? (int) $request->input('modelo') : 1,
+            'modelo' => in_array((int) $request->input('modelo'), [1, 2, 3, 4], true) ? (int) $request->input('modelo') : 1,
             'useImg' => $request->boolean('useImg'),
             'red' => ['email' => $email, 'aut' => $s('red_aut', 40), 'cert' => mb_substr(basename((string) $redCert), 0, 120), 'certCad' => $certCad],
             'sepe' => ['aut' => $s('sepe_aut', 60), 'mismoCert' => $request->boolean('sepe_mismoCert'), 'cert' => mb_substr(basename((string) $sepeCert), 0, 120)],

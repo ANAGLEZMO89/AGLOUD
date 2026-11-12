@@ -1,4 +1,4 @@
-{{-- Recibo de salarios: 3 modelos (1 clásico, 2 moderno, 3 oficial de la Orden ESS/2098/2014). Variables: c, w, n, P, modelo, mesL, per, at, ccc [, recibo, fechaPago] --}}
+{{-- Recibo de salarios: 4 modelos (1 clásico, 2 moderno, 3 oficial de la Orden ESS/2098/2014, 4 justificativo). Variables: c, w, n, P, modelo, mesL, per, at, ccc [, recibo, fechaPago] --}}
 @php
   use App\Services\Nomina;
   use App\Support\Formato;
@@ -155,6 +155,84 @@
     <tr class="sec"><td colspan="3">TOTAL APORTACIÓN DE LA EMPRESA</td><td class="r m">{{ $E($n['ssE']) }}</td></tr>
   </table>
   @if($ibanM)<div class="pie">Líquido abonado por transferencia a la cuenta {{ $ibanM }}.</div>@endif
+
+@elseif($modelo === 4)
+  {{-- ============================ MODELO 4 · JUSTIFICATIVO ============================ --}}
+  @php
+    $up = fn ($t) => mb_strtoupper((string) $t);
+    $eu = fn ($v) => Formato::num($v).' €';
+    $grupos = array_filter([
+      '1. Percepciones salariales' => array_values(array_filter($lin, fn ($l) => in_array($l['clase'] ?? 'salarial', ['salarial', 'hx', 'especie'], true))),
+      '2. Percepciones no salariales' => array_values(array_filter($lin, fn ($l) => in_array($l['clase'] ?? '', ['no_salarial', 'tributa', 'exento'], true))),
+      '3. Pagas extraordinarias' => array_values(array_filter($lin, fn ($l) => ($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') !== 'prorrateada')),
+      '4. Prorrateo de las pagas extraordinarias' => array_values(array_filter($lin, fn ($l) => ($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') === 'prorrateada')),
+    ]);
+    $diasMes = (int) (preg_match('~(\d{2})/(\d{2})/(\d{4})\s*$~', $per, $mm) ? $mm[1] : 30);
+    $perTxt = preg_match('~^(\d{2})/(\d{2})/(\d{4}) a (\d{2})/(\d{2})/(\d{4})$~', $per, $pp)
+      ? 'del '.$pp[1].' de '.mb_strtolower(Nomina::MESES[(int) $pp[2] - 1]).' de '.$pp[3].' a '.$pp[4].' de '.mb_strtolower(Nomina::MESES[(int) $pp[5] - 1]).' de '.$pp[6] : $per;
+  @endphp
+  <style>
+    .j{font-size:12px;display:flex;flex-direction:column;flex:1 1 auto}
+    .j .caja{border:2px solid #ddd;padding:10px 12px;margin-bottom:8px}
+    .j h2{font:700 16px Helvetica,Arial,sans-serif;text-align:center;margin:2px 0 12px}
+    .j .gr{background:#e9e9e9;padding:10px 14px;line-height:1.55;font-size:11.5px}
+    .j h3{font:700 15px Helvetica,Arial,sans-serif;margin:8px 0 10px}
+    .j .gh{display:flex;justify-content:space-between;font-weight:700;border-bottom:1px solid #000;margin:10px 0 2px;max-width:72%}
+    .j .gl{padding-left:44px;line-height:1.35}
+    .j .dl{display:flex;max-width:60%;padding-left:50px;line-height:1.35}
+    .j .dl span:first-child{flex:1}
+    .j .tot{display:flex;justify-content:flex-end;gap:60px;margin:12px 0}
+    .j .tot b{min-width:110px;text-align:right;font-weight:400}
+    .j .liqb{background:#e9e9e9;padding:8px 12px;font-weight:700;min-width:110px;text-align:right}
+  </style>
+  <div class="j">
+    <div class="caja">
+      <h2>RECIBO INDIVIDUAL JUSTIFICATIVO DEL PAGO DE SALARIO{{ $recibo !== 'Nómina' ? ' · '.$up($titRec) : '' }}</h2>
+      <table><tr>
+        <td class="gr" style="width:50%"><b>{{ $up($c->nombre) }}</b><br>{{ $up($c->domicilio) }}<br>{{ $c->cp }}{{ $c->cp ? ', ' : '' }}{{ $up($c->municipio ?: $c->provincia) }}<br>
+          <table><tr><td style="padding:0">CCC: {{ $ccc ?: '—' }}</td><td style="padding:0">NIF: {{ $c->nif }}</td></tr></table></td>
+        <td style="width:12px;padding:0"></td>
+        <td class="gr"><b>{{ $up($w['nombre']) }}</b><br>
+          <table><tr><td style="padding:0">NIF: {{ $w['nif'] }}</td><td style="padding:0">NSS: {{ $w['naf'] }}</td></tr>
+            <tr><td style="padding:0" colspan="2">G.Profesional: {{ $up($cat ?: '—') }}</td></tr>
+            <tr><td style="padding:0">G.Cotización: {{ str_pad((string) $w['grupo'], 2, '0', STR_PAD_LEFT) }}</td><td style="padding:0">Fecha de antigüedad: {{ Formato::fecha($w['alta']) }}</td></tr></table></td>
+      </tr></table>
+      <table style="margin-top:8px"><tr><td style="padding:0">Periodo de liquidación: {{ $perTxt }}</td><td class="r" style="padding:0">Total días: {{ $diasMes }}</td></tr></table>
+    </div>
+    <div class="caja" style="flex:1 1 auto;display:flex;flex-direction:column;margin-bottom:0">
+      <table><tr><td style="padding:0"><h3>DEVENGOS</h3></td><td class="r" style="padding:0;width:140px"><div style="background:#e9e9e9;padding:6px 10px">TOTALES</div></td></tr></table>
+      @foreach($grupos as $tit => $ls)
+        <div class="gh"><span>{{ $tit }}</span><span>{{ $eu(array_sum(array_column($ls, 'importe'))) }}</span></div>
+        @foreach($ls as $l)<div class="gl">{{ $eu($l['importe']) }} por {{ $up($l['concepto']) }}{{ ! empty($l['cant']) && ! empty($l['precio']) ? ' ('.Formato::num($l['cant']).' × '.Formato::num($l['precio']).')' : '' }}</div>@endforeach
+      @endforeach
+      <div class="tot"><span>A.TOTAL DEVENGADO:</span><b>{{ $eu($n['dev']) }}</b></div>
+
+      <h3>DEDUCCIONES</h3>
+      @if($ss)
+        <div class="gh"><span>- Aportaciones del trabajador a la S.S. y conceptos de recaudación</span><span>{{ $eu($n['ssT']) }}</span></div>
+        @foreach($ss as [$l, $p, $v])<div class="dl"><span>{{ $p }} % por {{ $l === 'MEI' ? 'Mecanismo de Equidad Intergeneracional (MEI)' : ($l === 'Horas extraordinarias' ? 'Horas Extraordinarias' : ucwords($l)) }}</span><span>{{ $eu($v) }}</span></div>@endforeach
+      @endif
+      <div class="gh"><span>- Impuesto sobre la renta de las personas físicas (IRPF)</span><span>{{ $eu($n['irpf']) }}</span></div>
+      <div class="dl"><span>{{ Formato::num($n['ip']) }} % por Retribuciones Dinerarias</span><span>{{ $eu($n['irpf']) }}</span></div>
+      @if($otras)
+        <div class="gh"><span>- Otras deducciones</span><span>{{ $eu(array_sum(array_column($otras, 1))) }}</span></div>
+        @foreach($otras as [$l, $v])<div class="dl"><span>{{ $l }}</span><span>{{ $eu($v) }}</span></div>@endforeach
+      @endif
+      <div style="flex:1 1 auto;min-height:20px"></div>
+      <table><tr>
+        <td style="width:40%;padding:0"><span style="font-size:10px">SELLO Y FIRMA DE LA EMPRESA</span><br>{!! $firmaHtml ?: '<div style="height:60px"></div>' !!}</td>
+        <td style="padding:0">
+          <div class="tot" style="margin:0 0 12px"><span>B. TOTAL DEDUCIR:</span><b>{{ $eu($totDed) }}</b></div>
+          <div class="tot" style="margin:0;align-items:center"><span class="b">LÍQUIDO TOTAL A PERCIBIR (A-B):</span><span class="liqb">{{ $eu($n['liq']) }}</span></div>
+          <div class="r" style="font-size:10px;margin-top:6px">Recibí, el trabajador</div>
+        </td>
+      </tr></table>
+    </div>
+    <table style="margin-top:8px;font-size:9.5px" class="grid">
+      <tr><td colspan="7" class="b">Bases de cotización y aportación de la empresa · coste total {{ $eu($n['dev'] + $n['ssE']) }}@if($ibanM) · líquido abonado en {{ $ibanM }}@endif</td></tr>
+      <tr>@foreach([['Rem. total', $remTotal], ['P.P. extras', $n['prorB']], ['Base CC', $n['base']], ['Base AT y desempleo', $n['baseAT']], ['Base IRPF', $n['baseIrpf']], ['Aportación empresa', $n['ssE']], ['Coste total', $n['dev'] + $n['ssE']]] as [$l, $v])<td><span class="lbl">{{ $l }}</span><span class="m">{{ Formato::num($v) }}</span></td>@endforeach</tr>
+    </table>
+  </div>
 
 @else
   {{-- ============================ MODELO 1 · CLÁSICO ============================ --}}
