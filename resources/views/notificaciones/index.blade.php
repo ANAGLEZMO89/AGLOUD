@@ -21,7 +21,7 @@
   </div>
 
   @include('partials.tabs-modulo', ['modulo' => 'notificaciones', 'actual' => 'modulo'])
-  @if($errors->any() && ! $nuevo)<div class="ferr">{{ $errors->first() }}</div>@endif
+  @if($errors->any() && ! $nuevo && ! $errors->has('dehu'))<div class="ferr">{{ $errors->first() }}</div>@endif
 
   @if($avOpen)
   <form method="POST" action="{{ route('notificaciones.avisos') }}" class="card" style="padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px">
@@ -39,13 +39,21 @@
   </div>
 
   <div class="ntbar">
-    <span style="font-size:13px;font-weight:600">Registro manual · revisa las sedes con tu certificado y anota aquí lo que llegue</span>
-    <div style="display:flex;flex-wrap:wrap;gap:8px">
-      @foreach([['DEHú', 'Dirección Electrónica Habilitada única', 'https://dehu.redsara.es/'], ['AEAT', 'Sede electrónica de la AEAT', config('agcloud.organismos_url.AEAT')], ['TGSS', 'Sede electrónica de la TGSS', config('agcloud.organismos_url.TGSS')]] as [$o, $l, $href])
-        <a class="cn" href="{{ $href }}" target="_blank" rel="noopener noreferrer" title="{{ $l }}"><i></i><b>{{ $o }}</b><span>Abrir sede ↗</span></a>
-      @endforeach
+    <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 280px">
+      <span style="font-size:13px;font-weight:600">Notificaciones con el certificado digital {{ $desp ? 'de cada cliente' : 'de la ficha del cliente' }}</span>
+      <span style="font-size:12px;color:{{ $dehuEstado[1] ? '#BDBDB7' : '#F5C26B' }}">{{ $dehuEstado[0] }} Solo se listan: nada se abre hasta que pulses «Abrir en la DEHú».</span>
     </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      @foreach([['dehu', 'DEHú', 'Notificaciones DEHú', 'https://dehu.redsara.es/'], ['aeat', 'AEAT', 'Notificaciones AEAT', config('agcloud.organismos_url.AEAT')], ['ss', 'Seg. Social', 'Seguridad Social', config('agcloud.organismos_url.TGSS')]] as [$k, $o, $l, $href])
+        <a class="cn {{ $fuente === $k ? 'on' : '' }}" href="{{ $url(['fuente' => $fuente === $k ? null : $k, 'sel' => null]) }}" title="{{ $l }}" @if($fuente === $k) style="background:#0B0B0B;color:#fff" @endif><i></i><b>{{ $o }}</b><span>{{ $fuente === $k ? 'Quitar filtro' : 'Ver' }}</span></a>
+      @endforeach
+      <form method="POST" action="{{ route('notificaciones.dehu') }}">@csrf<button class="btn lime sm" type="submit" @disabled(! $dehuEstado[1])>Consultar ahora</button></form>
+    </div>
+    <span style="flex-basis:100%;font-size:12px;color:#BDBDB7">Las notificaciones de la AEAT y la Seguridad Social llegan también a la DEHú. Las que solo estén en su sede:
+      @foreach([['DEHú', 'https://dehu.redsara.es/'], ['Sede AEAT', config('agcloud.organismos_url.AEAT')], ['Sede TGSS', config('agcloud.organismos_url.TGSS')]] as [$o, $href])<a href="{{ $href }}" target="_blank" rel="noopener noreferrer" style="color:#C8F031">{{ $o }} ↗</a>@if(! $loop->last) · @endif @endforeach
+      y anótalas con «Registrar notificación».</span>
   </div>
+  @if($errors->has('dehu'))<div class="ferr">{{ $errors->first('dehu') }}</div>@endif
 
   <form method="GET" action="{{ route('notificaciones.index') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px" data-autoform>
     <div class="chipbar">
@@ -101,7 +109,18 @@
 
         @if($sel->pendiente())
           <span class="note-amber">Si nadie la abre antes del {{ Formato::fecha($sel->caducidad()) }} se da por notificada y el plazo empieza igualmente (art. 43.2 Ley 39/2015).</span>
-          @if($ask === 'acc')
+          @if($sel->dehu_id)
+            @if($ask === 'dehu')
+              <form method="POST" action="{{ route('notificaciones.comparecer', $sel) }}" class="askbox">
+                @csrf
+                <span style="font-weight:600">Vas a abrir esta notificación en la DEHú con el certificado de {{ $cli?->nombre }}.</span>
+                <span>Desde ese momento se entiende practicada (art. 43.2 Ley 39/2015) y empieza a correr el plazo que indique. El documento, sus anexos y el acuse se guardan en Documentos › Fiscal › Requerimientos y notificaciones, compartidos con el cliente.</span>
+                <label class="chk" style="gap:8px"><input type="checkbox" name="confirmo" value="1" required style="width:18px;height:18px;accent-color:#0B0B0B"><span style="font-size:13px;font-weight:600">Lo entiendo: abrirla hoy</span></label>
+                <div style="display:flex;gap:8px"><button class="pillbtn lime" type="submit">Abrir en la DEHú</button><a class="pillbtn" href="{{ $url(['sel' => $sel->id]) }}">Cancelar</a></div>
+              </form>
+            @endif
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pillbtn ink f1" href="{{ $url(['sel' => $sel->id, 'ask' => 'dehu']) }}">Abrir en la DEHú</a></div>
+          @elseif($ask === 'acc')
             <form method="POST" action="{{ route('notificaciones.abrir', $sel) }}" class="askbox">
               @csrf
               <span style="font-weight:600">{{ $sel->plazo_n ? 'Al abrirla empieza el plazo de '.$sel->plazoTexto().': si la abres hoy, vencería el '.Formato::fecha($prev).'.' : 'Esta notificación no abre ningún plazo.' }}</span>
@@ -116,11 +135,14 @@
               <div style="display:flex;gap:8px"><button class="pillbtn red" type="submit">Rechazar</button><a class="pillbtn wh" href="{{ $url(['sel' => $sel->id]) }}">Cancelar</a></div>
             </form>
           @endif
-          <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pillbtn ink f1" href="{{ $url(['sel' => $sel->id, 'ask' => 'acc']) }}">Abrir y aceptar</a><a class="pillbtn" href="{{ $url(['sel' => $sel->id, 'ask' => 'rej']) }}">Rechazar</a></div>
+          @unless($sel->dehu_id)<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pillbtn ink f1" href="{{ $url(['sel' => $sel->id, 'ask' => 'acc']) }}">Abrir y aceptar</a><a class="pillbtn" href="{{ $url(['sel' => $sel->id, 'ask' => 'rej']) }}">Rechazar</a></div>@endunless
         @else
           @if($sel->caducada)<span class="note-grey">Pasaron 10 días naturales sin abrirla: se considera notificada el {{ Formato::fecha($sel->acceso) }} y el plazo corre desde esa fecha.</span>@endif
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            @if($sel->documento_id)
+            @php $dDocs = $sel->dehu ? (json_decode($sel->dehu, true)['documentos'] ?? []) : []; @endphp
+            @if($dDocs)
+              @foreach(\App\Models\Documento::whereIn('id', $dDocs)->get(['id', 'nombre']) as $dd)<a class="pillbtn {{ $loop->first ? 'ink' : '' }}" href="{{ route('documentos.ver', $dd->id) }}" target="_blank" rel="noopener">{{ \Illuminate\Support\Str::limit($dd->nombre, 42) }}</a>@endforeach
+            @elseif($sel->documento_id)
               <a class="pillbtn ink" href="{{ route('documentos.ver', $sel->documento_id) }}" target="_blank" rel="noopener">Descargar justificante</a>
             @endif
             @if($sel->vence)<a class="pillbtn" href="{{ route('notificaciones.ics', $sel) }}">Añadir vencimiento al calendario</a>@endif
@@ -153,9 +175,12 @@
         <form method="POST" action="{{ route('notificaciones.actualizar', $sel) }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px">
           @csrf
           <label class="lbl-s">Responsable<select class="sel" name="responsable_id" data-change-submit><option value="">—</option>@foreach($equipo as $e)<option value="{{ $e->id }}" @selected($sel->responsable_id === $e->id)>{{ $e->name }}</option>@endforeach</select></label>
+          <label class="lbl-s">Plazo<input class="inp" type="number" name="plazo_n" min="0" max="365" value="{{ $sel->plazo_n }}"></label>
+          <label class="lbl-s">Días<select class="sel" name="plazo_tipo">@foreach(['h' => 'hábiles', 'n' => 'naturales', 'm' => 'meses'] as $k => $l)<option value="{{ $k }}" @selected($sel->plazo_tipo === $k)>{{ $l }}</option>@endforeach</select></label>
+          <label class="lbl-s">Actuación<input class="inp" name="accion" value="{{ $sel->accion }}" maxlength="120"></label>
           <label class="lbl-s" style="grid-column:1 / -1">Nota interna<textarea class="txa" name="nota" rows="2" maxlength="2000" placeholder="Qué hay que hacer, documentos pedidos al cliente…">{{ $sel->nota }}</textarea></label>
           <div style="grid-column:1 / -1;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-            <button class="btn sm" type="submit">Guardar nota</button>
+            <button class="btn sm" type="submit">Guardar</button>
           </div>
         </form>
         @if(auth()->user()->esAdmin())

@@ -119,6 +119,7 @@ class SeccionesAlta
                     ['archivo', 'Archivo (.pfx / .p12 / .cer)', 'file', '.pfx,.p12,.cer,.crt,.pem', true],
                     ['pass', 'Contraseña del certificado', 'password'],
                     ['aeat', 'Uso AEAT', 'tog'], ['ss', 'Uso Seg. Social', 'tog'], ['dehu', 'Uso DEHú', 'tog'],
+                    ['gd', 'Alta como Gran Destinatario en la DEHú (declaración responsable firmada con este certificado)', 'tog'],
                 ],
             ],
             default => null,
@@ -138,7 +139,7 @@ class SeccionesAlta
             'acts' => ['desc' => '', 'fIni' => '', 'fFin' => '', 'iva' => 'Régimen general', 'irpf' => $f->tipo === 'Sociedad' ? $irpf[3] : ($f->tipo === 'Comunidad de bienes' ? $irpf[4] : $irpf[1]), 'cnae' => '', 'iae' => '', 'ccc' => '', 'cccProv' => $f->provincia, 'principal' => $first, 'recEq' => false, 'caja' => false],
             'reps' => ['nif' => '', 'nombre' => '', 'cargo' => $f->tipo === 'Comunidad de bienes' ? 'Comunero' : ($f->tipo === 'Sociedad' ? 'Administrador único' : 'Apoderado'), 'pct' => '', 'nAcc' => '', 'vNom' => '', 'caduc' => '', 'rLegal' => $first, 'rLaboral' => false, 'socio' => $f->tipo !== 'Autónomo', 'admin' => $f->tipo === 'Sociedad' && $first],
             'regs' => ['fCrea' => '', 'tipo' => ! $first ? ($f->tipo === 'Comunidad de bienes' ? 'Modificación del contrato' : 'Nombramiento de cargos') : ($f->tipo === 'Comunidad de bienes' ? 'Contrato privado de constitución' : 'Constitución'), 'desc' => $first ? 'Constitución de '.$f->nombre : '', 'fReg' => '', 'notario' => '', 'prot' => '', 'tomo' => '', 'secc' => '', 'folio' => '', 'hoja' => '', 'insc' => '', 'rm' => $f->provincia, 'irus' => '', 'archivo' => null],
-            'certs' => ['tipo' => $f->tipo === 'Sociedad' ? $ct[1] : ($f->tipo === 'Comunidad de bienes' ? $ct[2] : $ct[0]), 'titular' => $f->nombre, 'nifT' => $f->nif, 'emisor' => 'FNMT-RCM', 'fEmi' => '', 'fCad' => '', 'archivo' => null, 'pass' => '', 'aeat' => true, 'ss' => false, 'dehu' => true],
+            'certs' => ['tipo' => $f->tipo === 'Sociedad' ? $ct[1] : ($f->tipo === 'Comunidad de bienes' ? $ct[2] : $ct[0]), 'titular' => $f->nombre, 'nifT' => $f->nif, 'emisor' => 'FNMT-RCM', 'fEmi' => '', 'fCad' => '', 'archivo' => null, 'pass' => '', 'aeat' => true, 'ss' => false, 'dehu' => true, 'gd' => false],
             default => [],
         };
     }
@@ -189,7 +190,7 @@ class SeccionesAlta
             'certs' => (function () use ($d, $f) {
                 $st = self::estadoCert($d['fCad'] ?? null);
 
-                return [[$d['tipo'] ?? '', ($d['titular'] ?? '').(! empty($d['empresaCert']) ? ' · '.$d['empresaCert'] : ''), $d['emisor'] ?? '', $f($d['fCad'] ?? ''), implode(', ', array_filter([! empty($d['aeat']) ? 'AEAT' : '', ! empty($d['ss']) ? 'SS' : '', ! empty($d['dehu']) ? 'DEHú' : '']))], $st[0], $st[1], $st[2]];
+                return [[$d['tipo'] ?? '', ($d['titular'] ?? '').(! empty($d['empresaCert']) ? ' · '.$d['empresaCert'] : ''), $d['emisor'] ?? '', $f($d['fCad'] ?? ''), implode(', ', array_filter([! empty($d['aeat']) ? 'AEAT' : '', ! empty($d['ss']) ? 'SS' : '', ! empty($d['dehu']) ? 'DEHú'.(! empty($d['gd']) ? ' (gran destinatario)' : '') : '']))], $st[0], $st[1], $st[2]];
             })(),
             default => [[], '', '', ''],
         };

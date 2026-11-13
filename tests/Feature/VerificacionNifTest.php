@@ -53,7 +53,7 @@ class VerificacionNifTest extends TestCase
         $this->assertTrue(app(VerificacionNif::class)->activo());
         $this->assertStringNotContainsString('clave-buena', (string) \DB::table('ajustes')->where('clave', 'aeat.certificado')->value('valor'));
         $this->actingAs($as)->post(route('admin.aeat.guardar'), ['certificado' => $this->p12('x'), 'pass' => 'x'])->assertForbidden();
-        $this->actingAs($admin)->get(route('parametros', 'clientes'))->assertOk()->assertSee('Verificación del NIF en la AEAT')->assertSee('GA AGOPYME SL');
+        $this->actingAs($admin)->get(route('parametros', 'clientes'))->assertOk()->assertSee('Certificado digital del despacho (global)')->assertSee('GA AGOPYME SL');
 
         $resp = null;
         $enviadas = 0;

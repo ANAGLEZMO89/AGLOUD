@@ -125,7 +125,7 @@ return [
             ['informes', 'Informes', null],
         ]],
         ['label' => 'Comunicación', 'items' => [
-            ['pt_msgs', 'Mi asesor', null],
+            ['notificaciones', 'Notificaciones', 'portal.notificaciones'], ['pt_msgs', 'Mi asesor', null],
         ]],
     ],
 
@@ -139,6 +139,9 @@ return [
         'AYTO' => 'Ayuntamiento',
         'OTRO' => 'Otro organismo',
     ],
+    // DEHú (servicio LEMA, gran destinatario): 'pro' producción, 'se' preproducción
+    'dehu' => ['entorno' => env('AGCLOUD_DEHU_ENTORNO', 'pro')],
+
     'organismos_url' => [
         'AEAT' => 'https://sede.agenciatributaria.gob.es/Sede/notificaciones.html',
         'TGSS' => 'https://sede.seg-social.gob.es/',

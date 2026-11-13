@@ -18,6 +18,9 @@ Schedule::command('agcloud:backup')->dailyAt('03:15')->timezone('Europe/Madrid')
 Schedule::command('agcloud:limpiar')->dailyAt('04:10')->timezone('Europe/Madrid');
 Schedule::command('auth:clear-resets')->dailyAt('04:20')->timezone('Europe/Madrid');
 
+// DEHú: lista lo pendiente de cada cliente con el certificado de su ficha (no abre nada)
+Schedule::command('agcloud:dehu')->dailyAt('06:40')->timezone('Europe/Madrid')->withoutOverlapping(60);
+
 // Notificaciones: caducidad de 10 días y resumen por correo a cada asesor
 Schedule::command('agcloud:resumen-notificaciones')->dailyAt('07:47')->timezone('Europe/Madrid')->withoutOverlapping(30);
 

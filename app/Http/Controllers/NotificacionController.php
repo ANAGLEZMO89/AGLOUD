@@ -9,6 +9,7 @@ use App\Models\Notificacion;
 use App\Models\User;
 use App\Services\AlmacenDocumentos;
 use App\Services\Auditoria;
+use App\Services\Dehu\NotificacionesDehu;
 use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
 use App\Support\Parametros;
@@ -17,11 +18,12 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Notificaciones administrativas (registro manual).
+ * Notificaciones administrativas.
  *
- * No hay conexión con DEHú, AEAT ni TGSS: el despacho anota lo que recibe y
- * la aplicación calcula la caducidad (10 días naturales) y el vencimiento del
- * plazo para actuar.
+ * - DEHú: se consultan con el certificado de la ficha de cada cliente (cada día y con «Consultar ahora»)
+ *   y solo se abren (comparecencia, art. 43 Ley 39/2015) cuando un usuario del despacho lo pide.
+ * - Lo que solo llega a otras sedes se sigue anotando a mano.
+ * La aplicación calcula la caducidad (10 días naturales) y el vencimiento del plazo para actuar.
  */
 class NotificacionController extends Controller
 {
@@ -53,6 +55,7 @@ class NotificacionController extends Controller
         $desp = (bool) $c->es_despacho;
         $chip = max(0, min(3, (int) $request->query('chip', 0)));
         $org = (string) $request->query('org', 'Todos');
+        $fuente = in_array($request->query('fuente'), ['dehu', 'aeat', 'ss'], true) ? (string) $request->query('fuente') : '';
         $q = trim((string) $request->query('q', ''));
         $hoy = Plazos::hoy();
 
@@ -69,6 +72,9 @@ class NotificacionController extends Controller
         $ql = mb_strtolower($q);
         $lista = $todas->filter($filtros[$chip])
             ->filter(fn ($n) => $org === 'Todos' || $n->organismo === $org)
+            ->filter(fn ($n) => match ($fuente) {
+                'dehu' => $n->canal === 'DEHú', 'aeat' => $n->organismo === 'AEAT', 'ss' => $n->organismo === 'TGSS', default => true
+            })
             ->filter(fn ($n) => $ql === '' || str_contains(mb_strtolower($n->tipo.' '.$n->asunto.' '.$n->cliente?->nombre.' '.$n->referencia), $ql))
             ->values();
 
@@ -87,12 +93,31 @@ class NotificacionController extends Controller
         return view('notificaciones.index', [
             'titulo' => 'Notificaciones', 'activo' => 'notificaciones', 'c' => $c, 'desp' => $desp,
             'lista' => $lista, 'kpis' => $kpis, 'chips' => $chips, 'chip' => $chip, 'org' => $org, 'q' => $q,
+            'fuente' => $fuente, 'dehuEstado' => self::estadoDehu($c),
             'sel' => $sel, 'ask' => (string) $request->query('ask', ''), 'avisos' => self::avisos(), 'avOpen' => $request->boolean('avisos'),
             'nuevo' => $request->boolean('nueva'),
             'clientes' => $desp ? Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get(['id', 'nombre', 'nif', 'asesor_id']) : collect([$c]),
             'equipo' => User::whereIn('role', User::ROLES_DESPACHO)->where('activo', true)->orderBy('name')->get(['id', 'name']),
-            'url' => fn (array $x = []) => route('notificaciones.index', array_filter(array_merge(['chip' => $chip ?: null, 'org' => $org === 'Todos' ? null : $org, 'q' => $q ?: null], $x), fn ($v) => $v !== null && $v !== '')),
+            'url' => fn (array $x = []) => route('notificaciones.index', array_filter(array_merge(['chip' => $chip ?: null, 'org' => $org === 'Todos' ? null : $org, 'fuente' => $fuente ?: null, 'q' => $q ?: null], $x), fn ($v) => $v !== null && $v !== '')),
         ]);
+    }
+
+    /** Estado de la conexión con la DEHú: [texto, listo] para un cliente o el resumen del despacho */
+    private static function estadoDehu(Cliente $c): array
+    {
+        $ult = fn (?array $s) => $s ? ' Última consulta: '.Formato::fecha(substr($s['at'], 0, 10)).' a las '.substr($s['at'], 11, 5).' · '.($s['ok'] ? $s['msg'] : 'error: '.$s['msg']).'.' : ' Aún no se ha consultado.';
+        if (! $c->es_despacho) {
+            [$x, $motivo] = NotificacionesDehu::certificado($c);
+
+            return $motivo
+                ? [$motivo.'. Revísalo en la ficha del cliente › Certificados digitales.', false]
+                : ['Conectada con el certificado de '.($x['titular'] ?? $c->nombre).'.'.$ult($c->datos['dehuSync'] ?? null), true];
+        }
+        $todos = Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->get();
+        $listos = $todos->filter(fn ($x) => NotificacionesDehu::certificado($x)[1] === null);
+        $err = $listos->filter(fn ($x) => isset($x->datos['dehuSync']) && ! $x->datos['dehuSync']['ok'])->count();
+
+        return [$listos->count().' de '.$todos->count().' clientes con el certificado listo para la DEHú.'.($err ? ' '.$err.' con error en la última consulta.' : '').' Se consulta cada día a las 06:40.', $listos->isNotEmpty()];
     }
 
     public function store(Request $request)
@@ -154,6 +179,48 @@ class NotificacionController extends Controller
             ->with('ok', 'Notificación registrada para '.$cli->nombre.'.'.($n->caducada ? ' Ya habían pasado 10 días naturales: se da por notificada el '.Formato::fecha($n->acceso).'.' : ''));
     }
 
+    /** «Consultar ahora»: lista en la DEHú lo pendiente del cliente (o de todos, desde el despacho). No abre nada. */
+    public function consultarDehu(Request $request, NotificacionesDehu $dehu)
+    {
+        $ctx = $request->attributes->get('ctx');
+        abort_unless($ctx, 403);
+        @set_time_limit(300);
+        $clientes = $ctx->es_despacho
+            ? Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get()->filter(fn ($c) => NotificacionesDehu::certificado($c)[1] === null)
+            : collect([$ctx]);
+        if ($clientes->isEmpty()) {
+            return back()->withErrors(['dehu' => 'Ningún cliente tiene listo el certificado para la DEHú (marcado «Uso DEHú», .p12/.pfx con contraseña, vigente y con el alta como Gran Destinatario).']);
+        }
+        $nuevas = 0;
+        $fallos = [];
+        foreach ($clientes as $c) {
+            try {
+                $nuevas += $dehu->sincronizar($c)['nuevas'];
+            } catch (\Throwable $e) {
+                $fallos[] = $c->nombre.': '.NotificacionesDehu::mensaje($e);
+            }
+        }
+        $ok = $clientes->count() - count($fallos);
+        $r = back()->with('ok', 'DEHú consultada'.($ctx->es_despacho ? ' para '.$ok.' de '.$clientes->count().' clientes' : '').': '.($nuevas ? $nuevas.' '.($nuevas === 1 ? 'notificación nueva' : 'notificaciones nuevas').' sin abrir.' : 'sin novedades.'));
+
+        return $fallos ? $r->withErrors(['dehu' => implode(' · ', array_slice($fallos, 0, 5)).(count($fallos) > 5 ? ' · y '.(count($fallos) - 5).' más' : '')]) : $r;
+    }
+
+    /** Abrir en la DEHú (comparecencia): desde este momento se entiende notificada y empieza el plazo */
+    public function comparecer(Request $request, Notificacion $notificacion, NotificacionesDehu $dehu)
+    {
+        $request->validate(['confirmo' => ['accepted']], ['confirmo.accepted' => 'Marca que entiendes que, al abrirla, empieza el plazo.']);
+        try {
+            $n = $dehu->comparecer($notificacion, $request->user()->id);
+        } catch (\Throwable $e) {
+            return back()->withErrors(['dehu' => 'No se pudo abrir en la DEHú: '.NotificacionesDehu::mensaje($e)]);
+        }
+        $docs = count(json_decode((string) $n->dehu, true)['documentos'] ?? []);
+
+        return redirect()->route('notificaciones.index', ['sel' => $n->id, 'chip' => 2])
+            ->with('ok', 'Abierta en la DEHú el '.Formato::fecha($n->acceso).'. '.($docs ? $docs.' '.($docs === 1 ? 'documento guardado' : 'documentos guardados').' en Documentos › Fiscal › Requerimientos y notificaciones.' : 'La DEHú no devolvió documentos: descárgalos en su sede.').' Revisa el plazo que indique la notificación.');
+    }
+
     public function abrir(Request $request, Notificacion $notificacion)
     {
         return $this->resolver($request, $notificacion, 'Aceptada');
@@ -202,6 +269,14 @@ class NotificacionController extends Controller
         ]);
         $notificacion->responsable_id = $data['responsable_id'] ?? null;
         $notificacion->nota = $data['nota'] ?? null;
+        // Plazo y actuación (en las de la DEHú se completan al leer el documento)
+        if ($request->has('plazo_n')) {
+            $p = $request->validate(['plazo_n' => ['required', 'integer', 'min:0', 'max:365'], 'plazo_tipo' => ['required', Rule::in(['h', 'n', 'm'])], 'accion' => ['nullable', 'string', 'max:120']]);
+            $notificacion->plazo_n = (int) $p['plazo_n'];
+            $notificacion->plazo_tipo = $p['plazo_tipo'];
+            $notificacion->accion = $p['accion'] ?? null;
+            $notificacion->recalcular();
+        }
         $notificacion->save();
 
         return back()->with('ok', 'Cambios guardados.');

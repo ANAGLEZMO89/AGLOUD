@@ -100,7 +100,7 @@ class NotificacionesExpedientesTest extends TestCase
         $this->assertSame('2026-11-27', $n2->vence->toDateString()); // 10 hábiles desde el 15/11
     }
 
-    public function test_el_portal_no_ve_notificaciones_y_solo_ve_expedientes_visibles_de_su_empresa(): void
+    public function test_el_portal_solo_ve_sus_notificaciones_y_solo_ve_expedientes_visibles_de_su_empresa(): void
     {
         $this->registrar();
         $n = Notificacion::first();
@@ -111,7 +111,13 @@ class NotificacionesExpedientesTest extends TestCase
         $this->actingAs($uA)->get(route('notificaciones.index'))->assertForbidden();
         $this->assertContains($this->actingAs($uA)->get(route('notificaciones.ics', $n))->status(), [403, 404]);
         $this->actingAs($uA);
+        $propias = Notificacion::withoutGlobalScopes()->where('cliente_id', $this->a->id)->count();
+        $this->assertSame($propias, Notificacion::count());
+        $this->assertSame(0, Notificacion::where('cliente_id', '!=', $this->a->id)->count());
+        $this->actingAs($uA)->get(route('portal.notificaciones'))->assertOk()->assertSee($n->tipo)->assertDontSee('Nota interna');
+        $this->actingAs($this->usuario(User::CLIENTE_EMPLEADO, $this->a));
         $this->assertSame(0, Notificacion::count());
+        $this->actingAs($uA);
 
         $this->assertSame([$visible->id], Expediente::pluck('id')->all());
         $this->actingAs($uA)->get(route('portal.inicio'))->assertOk()->assertSee('Tus trámites')->assertSee('Alta en RETA')->assertSee('Nos falta: DNI')->assertDontSee('Transferencia DGT')->assertDontSee('Licencia de apertura');

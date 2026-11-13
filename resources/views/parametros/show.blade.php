@@ -200,8 +200,8 @@
   @if($modulo === 'clientes')
     @php $cert = app(\App\Services\VerificacionNif::class)->certificado(); @endphp
     <div class="card" style="padding:18px 20px;gap:12px" id="aeat">
-      <span style="font-size:16px;font-weight:700">Verificación del NIF en la AEAT</span>
-      <span class="hint muted">Al guardar un cliente se consulta el censo de la AEAT (servicio «Verificación de NIF»): si no identifica el NIF con su nombre o razón social, o figura de baja o revocado, no deja guardar. Para consultar hace falta un certificado electrónico; se guarda cifrado y solo lo usa este servicio de consulta (no presenta nada).</span>
+      <span style="font-size:16px;font-weight:700">Certificado digital del despacho (global)</span>
+      <span class="hint muted">Un único certificado de la asesoría para todos los clientes. Solo se usa desde el portal del despacho, nunca desde el portal del cliente. Hoy sirve para la verificación del NIF en la AEAT: al guardar un cliente se consulta el censo y, si no identifica el NIF con su nombre o razón social, o figura de baja o revocado, no deja guardar. Será el certificado de las presentaciones en la AEAT, el Sistema RED y el SEPE cuando se activen (de momento no se envía nada a ningún organismo). Las notificaciones de cada cliente se leen con el certificado de su ficha, no con este. Se guarda cifrado.</span>
       @if($errors->has('aeat'))<div class="ferr">{{ $errors->first('aeat') }}</div>@endif
       @if($cert)
         <div class="boxsoft" style="display:flex;flex-direction:column;gap:4px">

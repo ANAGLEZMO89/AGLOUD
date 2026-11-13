@@ -265,12 +265,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/documentos/vaciar-papelera', [DocumentoController::class, 'vaciarPapelera'])->name('documentos.vaciar');
         Route::get('/documentos/indice', [DocumentoController::class, 'indice'])->name('documentos.indice');
 
-        // Notificaciones (registro manual · sin conexión con DEHú/AEAT/TGSS)
+        // Notificaciones (DEHú con el certificado de cada cliente + registro manual)
         Route::get('/notificaciones', [NotificacionController::class, 'index'])->name('notificaciones.index');
         Route::post('/notificaciones', [NotificacionController::class, 'store'])->name('notificaciones.store');
         Route::post('/notificaciones/avisos', [NotificacionController::class, 'guardarAvisos'])->name('notificaciones.avisos');
+        Route::post('/notificaciones/dehu', [NotificacionController::class, 'consultarDehu'])->name('notificaciones.dehu');
         Route::prefix('notificaciones/{notificacion}')->name('notificaciones.')->whereNumber('notificacion')->group(function () {
             Route::post('/abrir', [NotificacionController::class, 'abrir'])->name('abrir');
+            Route::post('/comparecer', [NotificacionController::class, 'comparecer'])->name('comparecer');
             Route::post('/rechazar', [NotificacionController::class, 'rechazar'])->name('rechazar');
             Route::post('/archivar', [NotificacionController::class, 'archivar'])->name('archivar');
             Route::post('/actualizar', [NotificacionController::class, 'actualizar'])->name('actualizar');
@@ -359,6 +361,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/documentos/subir', [DocumentoController::class, 'subir'])->name('documentos.subir');
         Route::post('/documentos/confirmar', [DocumentoController::class, 'confirmar'])->name('documentos.confirmar');
         Route::post('/documentos/cancelar', [DocumentoController::class, 'cancelar'])->name('documentos.cancelar');
+        Route::get('/notificaciones', [PortalController::class, 'notificaciones'])->name('notificaciones');
         Route::get('/modulo/{modulo}', [PortalController::class, 'preparacion'])->name('preparacion');
     });
 });

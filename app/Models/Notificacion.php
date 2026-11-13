@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Notificación administrativa recibida por un cliente (registro manual:
- * no hay conexión automática con DEHú, AEAT ni TGSS).
+ * Notificación administrativa recibida por un cliente: traída de la DEHú con el
+ * certificado de su ficha (dehu_id) o registrada a mano por el despacho.
  */
 class Notificacion extends Model
 {
@@ -45,10 +45,11 @@ class Notificacion extends Model
 
     protected static function booted(): void
     {
-        // El portal del cliente no ve las notificaciones (las gestiona el despacho)
+        // Portal: el administrador de la empresa solo VE las suyas (el filtro por cliente lo pone PerteneceACliente);
+        // los empleados no ven ninguna. Solo el despacho las registra, abre o modifica.
         static::addGlobalScope('portal', function (Builder $q) {
             $u = auth()->user();
-            if ($u && $u->esPortal()) {
+            if ($u && $u->esPortal() && $u->esEmpleado()) {
                 $q->whereRaw('1 = 0');
             }
         });

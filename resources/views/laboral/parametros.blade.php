@@ -37,18 +37,17 @@
           <div class="lb-fields">
             <label class="lb-f"><span class="lb-l">Correo electrónico del autorizado</span><input class="inp lb-in" type="email" name="red_email" value="{{ $o('red_email', $P['red']['email']) }}"></label>
             <label class="lb-f"><span class="lb-l">Número de autorizado RED</span><input class="inp lb-in" name="red_aut" value="{{ $o('red_aut', $P['red']['aut']) }}"></label>
-            <label class="lb-f"><span class="lb-l">Caducidad del certificado</span><input class="inp lb-in" type="date" name="red_certCad" value="{{ $o('red_certCad', $P['red']['certCad']) }}"></label>
           </div>
-          <label class="lb-file"><input type="file" name="red_cert" accept=".pfx,.p12,.cer,.crt" hidden data-lb-fname><span class="lb-ic">🔐</span><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:700">Certificado digital del autorizado</span><span style="font-size:12px;color:#6A6A65" data-lb-fname-t>{{ $P['red']['cert'] ?: 'Elige el fichero del certificado' }}</span></span></label>
+          @php $gc = app(\App\Services\VerificacionNif::class)->certificado(); @endphp
+          <div class="lb-file" style="cursor:default"><span class="lb-ic">🔐</span><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:700">Certificado del despacho (global)</span><span style="font-size:12px;color:#6A6A65">{{ $gc ? $gc['titular'].($gc['caduca'] ? ' · caduca el '.\App\Support\Formato::fecha($gc['caduca']) : '') : 'Aún no se ha subido' }}. Es el mismo para todos los clientes y se gestiona en <a href="{{ route('parametros', 'clientes') }}#aeat">Parámetros de Clientes</a>.</span></span></div>
           <span style="font-size:12.5px;color:#6A6A65">Los códigos de cuenta de cotización están en <a href="{{ route('laboral.ccc') }}">Gestión › CCC</a> y el convenio en <a href="{{ route('laboral.convenios') }}">Gestión › Convenios</a>.</span>
         </div>
 
         <div class="card">
           <span style="font-size:15px;font-weight:700">Conexión con el SEPE</span>
           <label class="lb-f"><span class="lb-l">Usuario autorizado de Contrat@ y Certific@2</span><input class="inp lb-in" name="sepe_aut" value="{{ $o('sepe_aut', $P['sepe']['aut']) }}"></label>
-          <label class="lb-chk"><input type="checkbox" name="sepe_mismoCert" value="1" @checked($chk('sepe_mismoCert', $P['sepe']['mismoCert'])) data-lb-mismo>Usar el mismo certificado digital que el Sistema RED</label>
-          <label class="lb-file" data-lb-sepecert @if($chk('sepe_mismoCert', $P['sepe']['mismoCert'])) hidden @endif><input type="file" name="sepe_cert" accept=".pfx,.p12,.cer,.crt" hidden data-lb-fname><span class="lb-ic">🔐</span><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:700">Certificado para el SEPE</span><span style="font-size:12px;color:#6A6A65" data-lb-fname-t>{{ $P['sepe']['cert'] ?: 'Elige el fichero del certificado' }}</span></span></label>
-          <span style="font-size:12px;color:#6A6A65;line-height:1.45">Del certificado solo se guarda el nombre del fichero para saber con cuál se trabaja: los trámites se firman en la sede oficial.</span>
+          <span style="font-size:12.5px;color:#6A6A65">Se usa el certificado global del despacho, el mismo que para el Sistema RED.</span>
+          <span style="font-size:12px;color:#6A6A65;line-height:1.45">De momento los trámites se firman en la sede oficial: AG Cloud no envía nada al SEPE.</span>
         </div>
       </div>
     </div>
