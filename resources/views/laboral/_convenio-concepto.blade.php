@@ -14,8 +14,10 @@
     <label class="cv-l">Cotiza<select class="sel lb-in" name="{{ $p }}[cotiza]">{{ $opt(['si' => 'Sí', 'no' => 'No', 'limite' => 'Con límite'], $r['cotiza'] ?? 'si') }}</select></label>
     <label class="cv-l">Tributa (IRPF)<select class="sel lb-in" name="{{ $p }}[tributa]">{{ $opt(['si' => 'Sí', 'no' => 'No', 'limite' => 'Con límite'], $r['tributa'] ?? 'si') }}</select></label>
     <label class="cv-l">Redondeo<select class="sel lb-in" name="{{ $p }}[redondeo]">{{ $opt(['2d' => 'Al céntimo', '0d' => 'Al euro'], $r['redondeo'] ?? '2d') }}</select></label>
-    <label class="cv-l" style="grid-column:span 2">Límite de cotización o IRPF<input class="inp lb-in" name="{{ $p }}[limite]" value="{{ $r['limite'] ?? '' }}" maxlength="250" placeholder="Ej.: exento hasta 26,67 €/día en España" {{ $inv("$e.limite") }}>{{ $E("$e.limite") }}</label>
-    <label class="cv-l" style="grid-column:span 2">Fórmula<input class="inp lb-in mono" name="{{ $p }}[formula]" value="{{ $r['formula'] ?? '' }}" maxlength="500" placeholder="salario_base * 0,25 / horas_mes" {{ $inv("$e.formula") }}>{{ $E("$e.formula") }}</label>
+    <label class="cv-l">Límite (€)<input class="inp lb-in mono" name="{{ $p }}[limite_importe]" value="{{ $r['limite_importe'] ?? '' }}" inputmode="decimal" {{ $inv("$e.limite_importe") }}>{{ $E("$e.limite_importe") }}</label>
+    <label class="cv-l">Límite por<select class="sel lb-in" name="{{ $p }}[limite_unidad]"><option value="">—</option>{{ $opt(['dia' => 'Día', 'mes' => 'Mes'], $r['limite_unidad'] ?? '') }}</select></label>
+    <label class="cv-l" style="grid-column:span 2">Norma del límite<input class="inp lb-in" name="{{ $p }}[limite]" value="{{ $r['limite'] ?? '' }}" maxlength="250" placeholder="Ej.: art. 9 RIRPF, gastos de manutención sin pernocta">{{ $E("$e.limite") }}</label>
+    <label class="cv-l" style="grid-column:span 2">Fórmula<input class="inp lb-in mono" name="{{ $p }}[formula]" value="{{ $r['formula'] ?? '' }}" maxlength="500" placeholder="salario_base / horas_mes * 0,25" title="Variables: {{ implode(', ', array_keys(\App\Services\Formula::VARIABLES)) }}; otros conceptos: c_CÓDIGO; funciones: min(a; b), max(a; b), redondear(x; 2)" {{ $inv("$e.formula") }}>{{ $E("$e.formula") }}</label>
     <label class="cv-l">Artículo / página<input class="inp lb-in" name="{{ $p }}[referencia]" value="{{ $r['referencia'] ?? '' }}" maxlength="120"></label>
     <label class="cv-l" style="grid-column:span 3">Descripción<input class="inp lb-in" name="{{ $p }}[descripcion]" value="{{ $r['descripcion'] ?? '' }}" maxlength="500"></label>
   </div>
@@ -24,7 +26,7 @@
     <label class="lb-chk"><input type="checkbox" name="{{ $p }}[prop_jornada]" value="1" @checked(! empty($r['prop_jornada']))>Proporcional a la jornada</label>
     <label class="lb-chk"><input type="checkbox" name="{{ $p }}[prop_periodo]" value="1" @checked(! empty($r['prop_periodo']))>Proporcional a los días en alta</label>
     <label class="lb-chk"><input type="checkbox" name="{{ $p }}[en_pagas]" value="1" @checked(! empty($r['en_pagas']))>Se incluye en las pagas extra</label>
-    @if(! $sop)<span class="cv-warn">El motor todavía no calcula este concepto (fórmula, unidad o límite): no sale en las nóminas.</span>@endif
+    @if(! $sop)<span class="cv-warn">No sale en las nóminas: {{ $r['motivo'] ?? 'el motor todavía no lo calcula' }}.</span>@endif
     <button type="button" class="lb-del" data-lb-del aria-label="Quitar concepto" style="margin-left:auto">Quitar</button>
   </div>
   @if(count($catsV))

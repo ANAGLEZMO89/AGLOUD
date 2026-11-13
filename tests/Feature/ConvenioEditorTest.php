@@ -106,7 +106,7 @@ class ConvenioEditorTest extends TestCase
             array_merge($base, ['nombre' => 'Plus de peligrosidad', 'calculo' => 'porcentaje', 'valor' => '10']),
             array_merge($base, ['nombre' => 'Dietas', 'naturaleza' => 'extrasalarial', 'valor' => '30', 'cotiza' => 'limite']),
             $base + ['nombre' => Convenios::PLUS_CONVENIO, 'valor' => '1'],
-        ]])->assertSessionHasErrors(['conceptos.0.valor', 'conceptos.1.base', 'conceptos.2.limite', 'conceptos.3.nombre']);
+        ]])->assertSessionHasErrors(['conceptos.0.valor', 'conceptos.1.base', 'conceptos.2.limite_importe', 'conceptos.3.nombre']);
         $this->assertSame(0, ConvenioConcepto::where('nombre', '!=', Convenios::PLUS_CONVENIO)->count());
 
         $this->sec('conceptos', ['conceptos' => [
@@ -114,25 +114,29 @@ class ConvenioEditorTest extends TestCase
                 'importes' => [$ids['Peón'] => '5,00']]),
             array_merge($base, ['nombre' => 'Plus de nocturnidad', 'unidad' => 'hora', 'valor' => '1,50']),
             array_merge($base, ['nombre' => 'Plus de festivos', 'calculo' => 'formula', 'formula' => 'salario_base / 30 * 1,75', 'automatico' => '1']),
-            array_merge($base, ['nombre' => 'Dietas', 'naturaleza' => 'extrasalarial', 'valor' => '30', 'cotiza' => 'limite', 'tributa' => 'limite', 'limite' => '26,67 €/día en España']),
+            array_merge($base, ['nombre' => 'Dietas', 'naturaleza' => 'extrasalarial', 'valor' => '30', 'cotiza' => 'limite', 'tributa' => 'limite', 'limite' => 'art. 9 RIRPF', 'limite_importe' => '26,67', 'limite_unidad' => 'dia']),
         ]])->assertSessionHasNoErrors();
         $t = ConvenioConcepto::where('nombre', 'Plus de transporte')->first();
         $this->assertSame(['0010', 'dia_trabajado', true, '5.0000'], [$t->cra, $t->unidad, $t->automatico, $t->importes->first()->importe]);
-        $this->assertFalse(Convenios::soportado(ConvenioConcepto::where('nombre', 'Plus de festivos')->first()));
-        $this->assertFalse(Convenios::soportado(ConvenioConcepto::where('nombre', 'Dietas')->first()));
+        // Desde la fase 4 se calculan la fórmula y las dietas con su límite
+        $this->assertTrue(Convenios::soportado(ConvenioConcepto::where('nombre', 'Plus de festivos')->first()));
+        $d = ConvenioConcepto::where('nombre', 'Dietas')->first();
+        $this->assertTrue(Convenios::soportado($d));
+        $this->assertSame([26.67, 'dia'], [(float) $d->limite_importe, $d->limite_unidad]);
 
-        // En la nómina: transporte con el importe del Peón (5 € × días laborables); la fórmula no se aproxima
+        // En la nómina: transporte con el importe del Peón (5 € × días laborables)
         $this->v->update(['estado' => 'aprobado', 'efectos_desde' => '2026-01-01']);
         $w = Nomina::rellenar(['id' => 1, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => 10, 'salTipo' => 'Diario', 'salDia' => 45.5, 'pagas' => 14, 'jor' => 100, 'alta' => '2026-01-01', 'convCat' => 'Peón'], $this->a);
         $L = collect(Nomina::conceptos($w, 11, [], null, 2026)['lineas'])->keyBy('concepto');
         $this->assertEqualsWithDelta(Nomina::diasLaborables(2026, 11) * 5.0, $L['Plus de transporte']['importe'], 0.001);
-        $this->assertFalse($L->has('Plus de festivos'));
+        // Fórmula: 1.365 / 30 × 1,75 = 79,625 → 79,63 (la mitad hacia arriba)
+        $this->assertSame(79.63, $L['Plus de festivos']['importe']);
         $this->assertFalse($L->has('Dietas'));
         // A media jornada, proporcional
         $L2 = collect(Nomina::conceptos(array_merge($w, ['jor' => 50]), 11, [], null, 2026)['lineas'])->keyBy('concepto');
         $this->assertEqualsWithDelta(Nomina::diasLaborables(2026, 11) * 2.5, $L2['Plus de transporte']['importe'], 0.001);
         $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('laboral.convenios'))
-            ->assertSee('El motor todavía no calcula este concepto')->assertSee('value="26,67 €/día en España"', false);
+            ->assertSee('Cómo escribir fórmulas')->assertSee('value="art. 9 RIRPF"', false)->assertSee('value="26,67"', false);
     }
 
     public function test_pagas_antiguedad_jornada_it_y_contratacion(): void

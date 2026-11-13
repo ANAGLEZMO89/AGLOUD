@@ -7,6 +7,7 @@ use App\Models\ConvenioCategoria;
 use App\Models\ConvenioConcepto;
 use App\Services\Auditoria;
 use App\Services\Convenios;
+use App\Services\Formula;
 use App\Support\Formato;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -121,7 +122,7 @@ class ConvenioEditorController extends LaboralController
                         'naturaleza' => (string) ($f['naturaleza'] ?? ''), 'calculo' => (string) ($f['calculo'] ?? ''), 'unidad' => (string) ($f['unidad'] ?? ''), 'valor' => self::num($f['valor'] ?? ''),
                         'base' => self::txt($f['base'] ?? '', 30), 'formula' => self::txt($f['formula'] ?? ''), 'automatico' => ! empty($f['automatico']), 'prop_jornada' => ! empty($f['prop_jornada']),
                         'prop_periodo' => ! empty($f['prop_periodo']), 'en_pagas' => ! empty($f['en_pagas']), 'cotiza' => (string) ($f['cotiza'] ?? ''), 'tributa' => (string) ($f['tributa'] ?? ''),
-                        'limite' => self::txt($f['limite'] ?? '', 250), 'redondeo' => (string) ($f['redondeo'] ?? '2d'), 'referencia' => self::txt($f['referencia'] ?? '', 120), 'importes' => $imp];
+                        'limite' => self::txt($f['limite'] ?? '', 250), 'limite_importe' => self::num($f['limite_importe'] ?? ''), 'limite_unidad' => self::txt($f['limite_unidad'] ?? '', 4), 'redondeo' => (string) ($f['redondeo'] ?? '2d'), 'referencia' => self::txt($f['referencia'] ?? '', 120), 'importes' => $imp];
                 }
                 $val = Validator::make(['conceptos' => $limpio], [
                     'conceptos.*.nombre' => ['required', 'max:120', 'distinct', Rule::notIn([Convenios::PLUS_CONVENIO])],
@@ -133,15 +134,35 @@ class ConvenioEditorController extends LaboralController
                     'conceptos.*.formula' => ['nullable', 'required_if:conceptos.*.calculo,formula'],
                     'conceptos.*.cotiza' => ['required', Rule::in(['si', 'no', 'limite'])], 'conceptos.*.tributa' => ['required', Rule::in(['si', 'no', 'limite'])],
                     'conceptos.*.redondeo' => ['required', Rule::in(['2d', '0d'])],
+                    'conceptos.*.codigo' => ['nullable', 'distinct:ignore_case', 'regex:/^[A-Za-z0-9_]+$/'],
+                    'conceptos.*.limite_importe' => ['nullable', 'numeric', 'min:0'], 'conceptos.*.limite_unidad' => ['nullable', Rule::in(['dia', 'mes'])],
                 ], ['conceptos.*.nombre.required' => 'Falta el nombre.', 'conceptos.*.nombre.distinct' => 'Concepto repetido.', 'conceptos.*.nombre.not_in' => 'El plus de convenio se edita en las categorías.',
-                    'conceptos.*.base.required_if' => 'Un porcentaje necesita su base.', 'conceptos.*.formula.required_if' => 'Escribe la fórmula.']);
+                    'conceptos.*.base.required_if' => 'Un porcentaje necesita su base.', 'conceptos.*.formula.required_if' => 'Escribe la fórmula.',
+                    'conceptos.*.codigo.distinct' => 'Código repetido.', 'conceptos.*.codigo.regex' => 'Solo letras, números y _ (se usa en las fórmulas como c_CÓDIGO).']);
                 $val->after(function ($vv) use ($limpio) {
                     foreach ($limpio as $i => $f) {
                         if ($f['calculo'] !== 'formula' && $f['valor'] === null && ! $f['importes']) {
                             $vv->errors()->add("conceptos.$i.valor", 'Indica el importe general o el de cada categoría (vacío = no localizado).');
                         }
-                        if (($f['cotiza'] === 'limite' || $f['tributa'] === 'limite') && ! $f['limite']) {
-                            $vv->errors()->add("conceptos.$i.limite", 'Describe el límite que aplica.');
+                        if (($f['cotiza'] === 'limite' || $f['tributa'] === 'limite') && ($f['limite_importe'] === null || ! $f['limite_unidad'])) {
+                            $vv->errors()->add("conceptos.$i.limite_importe", 'Indica el importe del límite y si es por día o por mes.');
+                        }
+                        if ($f['calculo'] === 'formula' && $f['formula'] && ($e = Formula::validar($f['formula'], array_values(array_filter(array_column($limpio, 'codigo')))))) {
+                            $vv->errors()->add("conceptos.$i.formula", $e);
+                        }
+                    }
+                    // Las fórmulas no pueden llamarse en círculo
+                    $form = [];
+                    foreach ($limpio as $f) {
+                        if ($f['calculo'] === 'formula' && $f['codigo'] && $f['formula']) {
+                            $form[$f['codigo']] = $f['formula'];
+                        }
+                    }
+                    if ($ciclo = Formula::orden($form)[1]) {
+                        foreach ($limpio as $i => $f) {
+                            if ($f['calculo'] === 'formula' && $f['codigo'] && str_contains($ciclo, strtoupper($f['codigo']))) {
+                                $vv->errors()->add("conceptos.$i.formula", $ciclo);
+                            }
                         }
                     }
                 });

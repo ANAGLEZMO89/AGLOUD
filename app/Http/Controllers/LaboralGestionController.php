@@ -305,8 +305,17 @@ class LaboralGestionController extends LaboralController
 
         $cv = Convenios::asignacion($c)?->convenio;
         $ver = $cv ? Convenios::editable($cv, (int) $request->query('version')) : null;
+        // Simulador: calcula sin guardar nada
+        $sim = null;
+        $simIn = (array) $request->query('sim', []);
+        if ($cv && $ver && $simIn) {
+            $vv = validator($simIn, ['cat' => ['required', 'string', 'max:150'], 'mes' => ['required', 'date_format:Y-m'], 'jor' => ['required', 'numeric', 'min:1', 'max:100'],
+                'alta' => ['nullable', 'date_format:Y-m-d'], 'baja' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:alta'], 'antig' => ['nullable', 'date_format:Y-m-d']],
+                ['cat.required' => 'Elige una categoría.', 'mes.*' => 'Indica el mes.', 'jor.*' => 'La jornada va del 1 al 100 %.', 'baja.after_or_equal' => 'La baja no puede ser anterior al alta.'], []);
+            $sim = $vv->fails() ? ['error' => implode(' ', $vv->errors()->all())] : Convenios::simular($cv, $ver, $vv->validated() + ['prorr' => ! empty($simIn['prorr'])]);
+        }
 
-        return view('laboral.convenios', $this->base($request, $c, 'g-conv') + [
+        return view('laboral.convenios', $this->base($request, $c, 'g-conv') + ['sim' => $sim, 'simIn' => $simIn,
             'cv' => $cv, 'ver' => $ver, 'convEd' => $cv ? Convenios::forma($cv, $ver) : null,
             'versiones' => $cv ? ConvenioVersion::withoutGlobalScopes()->withCount(['categorias' => fn ($q) => $q->withoutGlobalScopes()])->where('convenio_id', $cv->id)->orderByRaw('efectos_desde is null')->orderBy('efectos_desde')->orderBy('id')->get() : collect(),
             'validacion' => $cv ? Convenios::validar($cv) : [],

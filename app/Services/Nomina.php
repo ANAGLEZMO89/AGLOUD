@@ -9,6 +9,7 @@ use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
 use App\Models\NominaMes;
 use App\Models\Trabajador;
+use App\Support\Dec;
 use App\Support\Formato;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -202,7 +203,7 @@ class Nomina
         $k = $c->id.'|'.($fecha ?? 'hoy');
         if (! isset($cache[$k]) || app()->runningUnitTests()) {
             $conv = self::config($c, $fecha)['conv'];
-            $cache[$k] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null, 'cats' => $conv['cats'] ?? [], 'version_id' => $conv['version_id'] ?? null, 'version' => $conv['version'] ?? null];
+            $cache[$k] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null, 'cats' => $conv['cats'] ?? [], 'version_id' => $conv['version_id'] ?? null, 'version' => $conv['version'] ?? null, 'jornada' => $conv['jornada'] ?? ''];
         }
 
         return $cache[$k];
@@ -300,37 +301,111 @@ class Nomina
         return $out;
     }
 
-    /** Pluses del convenio que se cobran solos todos los meses */
+    /** Variables de las fórmulas para un trabajador y un mes (ver Formula::VARIABLES) */
+    public static function contextoFormula(array $w, ?int $anio, int $m): array
+    {
+        [$pd, $ph, $pdias, $pmes] = self::periodo($w, $anio, $m);
+        $ha = self::n($w['_conv']['jornada'] ?? 0);
+        $sm = self::salMes($w);
+
+        return ['salario_base' => Dec::de($sm), 'salario_dia' => Dec::de(self::diario($w) ? self::n($w['salDia'] ?? 0) : $sm)->entre(self::diario($w) ? 1 : 30),
+            'plus_convenio' => Dec::de(self::n($w['plus'] ?? 0)), 'antiguedad' => Dec::de(self::antiguedad($w, $anio, $m)[0]),
+            'jornada' => Dec::de((self::n($w['jor'] ?? 100) ?: 100) / 100), 'horas_semana' => Dec::de(self::n($w['horas'] ?? 0)),
+            'horas_anuales' => $ha > 0 ? Dec::de($ha) : null, 'horas_mes' => $ha > 0 ? Dec::de($ha)->entre(12) : null,
+            'dias_mes' => Dec::de($pmes), 'dias_alta' => Dec::de($pdias), 'dias_laborables' => Dec::de(self::diasLaborables($anio, $m, $pd, $ph)), 'cantidad' => null];
+    }
+
+    /**
+     * Conceptos del convenio que salen solos cada mes, calculados con decimales exactos y explicados línea a línea.
+     * Primero los de importe y porcentaje; después las fórmulas en el orden de sus dependencias (c_CODIGO).
+     * Lo que el motor no sabe calcular (unidad sin calendario, fórmula inválida, límite incompleto) no se aproxima: se omite y se avisa en el convenio.
+     */
     private static function plusesAuto(array $w, ?int $anio, int $m): array
     {
         $L = [];
         $coef = (self::n($w['jor'] ?? 100) ?: 100) / 100;
         [$pd, $ph, $pdias, $pmes] = self::periodo($w, $anio, $m);
         $fr = self::fraccion($pdias, $pmes);
-        foreach ($w['_conv']['pluses'] ?? [] as $i => $p) {
-            // Solo lo que el motor sabe calcular: fórmulas y unidades sin soporte se avisan en el convenio, nunca se aproximan
-            if (empty($p['auto']) || ($p['soportado'] ?? true) === false || ! in_array($p['unidad'], ['mes', 'dia_natural', 'dia_trabajado'], true)) {
-                continue;
+        $ctx = self::contextoFormula($w, $anio, $m);
+        $cat = $w['convCat'] ?? '';
+        $ver = $w['_conv']['version'] ?? null;
+        $auto = array_values(array_filter($w['_conv']['pluses'] ?? [], fn ($p) => ! empty($p['auto']) && ($p['soportado'] ?? true) !== false && in_array($p['unidad'], ['mes', 'dia_natural', 'dia_trabajado'], true)));
+        $form = [];
+        foreach ($auto as $p) {
+            if (($p['calculo'] ?? '') === 'formula' && ($p['codigo'] ?? '') !== '') {
+                $form[strtoupper($p['codigo'])] = $p['formula'];
             }
-            $valor = isset($p['importes'][$w['convCat'] ?? '']) ? (float) $p['importes'][$w['convCat']] : (float) $p['valor'];
-            $v = $p['tipo'] === 'porcentaje_base' ? self::salMes($w) * $valor / 100 : $valor;
-            [$cant, $precio] = match ($p['unidad']) {
-                'dia_natural' => [$pdias, $v],
-                'dia_trabajado' => [self::diasLaborables($anio, $m, $pd, $ph), $v],
-                'hora' => [null, null],
-                default => [null, null],
+        }
+        [$orden, $ciclo] = Formula::orden($form);
+        if ($ciclo) {
+            $auto = array_values(array_filter($auto, fn ($p) => ($p['calculo'] ?? '') !== 'formula'));
+        }
+        $rank = array_flip($orden);
+        usort($auto, fn ($a, $b) => ((($a['calculo'] ?? '') === 'formula') <=> (($b['calculo'] ?? '') === 'formula')) ?: (($rank[strtoupper($a['codigo'] ?? '')] ?? 0) <=> ($rank[strtoupper($b['codigo'] ?? '')] ?? 0)));
+        foreach ($auto as $i => $p) {
+            $unidad = $p['unidad'];
+            $cant = match ($unidad) {
+                'dia_natural' => $pdias, 'dia_trabajado' => self::diasLaborables($anio, $m, $pd, $ph), default => null
             };
-            $fj = ($p['prop_jornada'] ?? true) && $p['tipo'] !== 'porcentaje_base' ? $coef : 1;
-            $fp = ($p['prop_periodo'] ?? true) ? $fr : 1;
-            $imp = $cant !== null ? round($cant * $precio * $fj, 2) : round($v * $fj * $fp, 2);
-            if ($imp == 0) {
+            $fj = ($p['prop_jornada'] ?? true) && ($p['tipo'] ?? '') !== 'porcentaje_base' ? $coef : 1;
+            $fp = ($p['prop_periodo'] ?? true) && $cant === null ? $fr : 1;
+            try {
+                if (($p['calculo'] ?? '') === 'formula') {
+                    [$unit, $txtF] = Formula::evaluar($p['formula'], $ctx);
+                    $orig = 'fórmula «'.$p['formula'].'» ('.$txtF.')';
+                } else {
+                    $porCat = isset($p['importes'][$cat]);
+                    $valor = Dec::de($porCat ? $p['importes'][$cat] : $p['valor']);
+                    $unit = ($p['tipo'] ?? '') === 'porcentaje_base' ? Dec::de(self::salMes($w))->por($valor)->entre(100) : $valor;
+                    $orig = ($p['tipo'] ?? '') === 'porcentaje_base' ? $valor->txt().' % del salario base' : ($porCat ? 'importe de la categoría «'.$cat.'»' : 'importe general');
+                }
+            } catch (\Throwable $e) {
+                continue; // dato ausente o división por cero: no se inventa un importe
+            }
+            $imp = ($cant !== null ? $unit->por($cant) : $unit)->por($fj)->por($fp)->redondear(($p['redondeo'] ?? '2d') === '0d' ? 0 : 2);
+            if ($imp->esCero()) {
                 continue;
             }
-            $L[] = ['id' => 'cp'.$i, 'cod' => '06', 'concepto' => $p['nombre'], 'cant' => $cant, 'precio' => $cant !== null ? round($precio, 4) : null, 'importe' => $imp,
-                'clase' => $p['cotiza'] ? 'salarial' : ($p['tributa'] ? 'tributa' : 'no_salarial'), 'origen' => 'convenio', 'conv' => null];
+            $expl = ($cant !== null ? $cant.' '.($unidad === 'dia_trabajado' ? 'días laborables' : 'días en alta').' × '.$unit->txt(4).' €' : $unit->txt().' €/mes')
+                .($fj != 1 ? ' × '.Formato::num($fj * 100, 0).' % de jornada' : '').($fp != 1 ? ' × '.$pdias.'/30 días en alta' : '').' = '.$imp->txt().' € · '.$orig;
+            if (! empty($p['codigo'])) {
+                $ctx['c_'.strtoupper($p['codigo'])] = $imp;
+            }
+            $regla = 'Convenio'.($ver ? ' · '.$ver : '').' · '.$p['nombre'].($p['art'] ?? '' ? ' · '.$p['art'] : '');
+            $base = ['cod' => '06', 'cant' => $cant, 'precio' => $cant !== null ? $unit->redondear(4)->float() : null, 'origen' => 'convenio', 'conv' => null, 'regla' => $regla];
+            $lims = self::partirLimite($p, $imp, $cant ?? $pdias);
+            foreach ($lims as $k => [$parte, $clase, $suf]) {
+                $L[] = $base + ['id' => 'cp'.$i.($k ? 'x' : ''), 'concepto' => $p['nombre'].$suf, 'importe' => $parte->float(), 'clase' => $clase, 'expl' => $expl.($suf ? ' · '.trim($suf, ' ()') : '')];
+            }
         }
 
         return $L;
+    }
+
+    /**
+     * Reparte un importe con límite de cotización o IRPF: [[importe, clase, sufijo]].
+     * Dentro del límite: sin cotizar y/o sin tributar según el concepto; el exceso, como salario (cotiza y tributa) o solo tributa.
+     */
+    private static function partirLimite(array $p, Dec $imp, int $dias): array
+    {
+        $cot = $p['cotizaModo'] ?? ($p['cotiza'] ? 'si' : 'no');
+        $tri = $p['tributaModo'] ?? ($p['tributa'] ? 'si' : 'no');
+        $claseSin = fn ($c, $t) => $c === 'si' ? 'salarial' : ($t === 'si' ? 'tributa' : 'no_salarial');
+        if ($cot !== 'limite' && $tri !== 'limite') {
+            return [[$imp, $claseSin($cot, $tri), '']];
+        }
+        $lim = Dec::de($p['limite_importe'] ?? 0)->por(($p['limite_unidad'] ?? 'mes') === 'dia' ? $dias : 1);
+        $dentro = $imp->min($lim);
+        $exceso = $imp->menos($dentro);
+        // Dentro del límite: lo que es «límite» no cotiza / no tributa; fuera: cotiza o tributa como diga el concepto
+        $claseDentro = $claseSin($cot === 'si' ? 'si' : 'no', $tri === 'si' ? 'si' : 'no');
+        $claseFuera = $claseSin($cot === 'no' ? 'no' : 'si', $tri === 'no' ? 'no' : 'si');
+        $out = [[$dentro, $claseDentro, ' (hasta el límite)']];
+        if (! $exceso->esCero()) {
+            $out[] = [$exceso, $claseFuera, ' (exceso sobre el límite)'];
+        }
+
+        return $out;
     }
 
     /**
@@ -513,25 +588,32 @@ class Nomina
         $fr = self::fraccion($dias, $diasMes);
         // Origen real del importe: la tabla del convenio solo cuenta si el trabajador tiene una categoría que existe en ella
         $orig = $cat ? 'convenio' : 'ficha';
+        $N = fn ($v, $d = 2) => Formato::num((float) $v, $d);
+        $fuente = $cat ? 'Ficha del trabajador; referencia: tabla del convenio, categoría '.$w['convCat'] : 'Ficha del trabajador (sin categoría del convenio)';
+        $jorTxt = $coef < 1 ? ' · jornada al '.$N($coef * 100, 0).' %' : '';
         $sb = self::n($w['salBase'] ?? 0) ?: round(self::n($w['sal'] ?? 0) / $pagas, 2);
         $pl = self::n($w['plus'] ?? 0);
         if (self::diario($w)) {
             $sd = self::n($w['salDia'] ?? 0);
-            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base ('.$dias.' días)', 'cant' => $dias, 'precio' => $sd, 'importe' => round($sd * $dias, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => null]];
+            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base ('.$dias.' días)', 'cant' => $dias, 'precio' => $sd, 'importe' => round($sd * $dias, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => null,
+                'expl' => $dias.' días × '.$N($sd, 4).' €/día', 'regla' => $fuente]];
             $sb = self::pagaExtra($w);
             $convBase = null;
         } elseif ($fr < 1) {
             $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base ('.$dias.' días)', 'cant' => $dias, 'precio' => round($sb / 30, 4), 'importe' => round($sb * $fr, 2), 'clase' => 'salarial', 'origen' => $orig,
-                'conv' => $convBase !== null ? round($convBase * $fr, 2) : null]];
+                'conv' => $convBase !== null ? round($convBase * $fr, 2) : null, 'expl' => $N($sb).' €/mes × '.$dias.' / 30 días (mes incompleto: alta o baja dentro del mes)'.$jorTxt, 'regla' => $fuente]];
         } else {
-            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base mensual', 'importe' => round($sb, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => $convBase]];
+            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base mensual', 'importe' => round($sb, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => $convBase,
+                'expl' => $N($sb).' €/mes (mes completo)'.$jorTxt, 'regla' => $fuente]];
         }
         if ($pl || $convPlus) {
-            $L[] = ['id' => 'pl', 'cod' => '02', 'concepto' => 'Plus de convenio y complementos', 'importe' => round($pl * $fr, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => $convPlus !== null ? round($convPlus * $fr, 2) : null];
+            $L[] = ['id' => 'pl', 'cod' => '02', 'concepto' => 'Plus de convenio y complementos', 'importe' => round($pl * $fr, 2), 'clase' => 'salarial', 'origen' => $orig, 'conv' => $convPlus !== null ? round($convPlus * $fr, 2) : null,
+                'expl' => $N($pl).' €/mes'.($fr < 1 ? ' × '.$dias.' / 30 días' : ''), 'regla' => $fuente];
         }
         [$ant, , $antTxt] = self::antiguedad($w, $anio, $m);
         if ($ant) {
-            $L[] = ['id' => 'ant', 'cod' => '03', 'concepto' => 'Antigüedad ('.$antTxt.')', 'importe' => round($ant * $fr, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => null];
+            $L[] = ['id' => 'ant', 'cod' => '03', 'concepto' => 'Antigüedad ('.$antTxt.')', 'importe' => round($ant * $fr, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => null,
+                'expl' => $antTxt.': '.$N($ant).' €/mes'.($fr < 1 ? ' × '.$dias.' / 30 días' : ''), 'regla' => 'Convenio: regla de antigüedad'];
         }
         foreach (self::plusesAuto($w, $anio, $m) as $x) {
             $L[] = $x;
@@ -539,16 +621,18 @@ class Nomina
         $pro = ! empty($w['prorr']) && $pagas !== 12;
         foreach (self::extras($w, $anio, $m) as [$id, $cod, $nom, $mesCobro, $imp]) {
             if ($pro) {
-                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp / 12 * $fr, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => null];
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp / 12 * $fr, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => null,
+                    'expl' => $N($imp).' € / 12 meses'.($fr < 1 ? ' × '.$dias.' / 30 días' : '').' (prorrateada)', 'regla' => 'Convenio: pagas extraordinarias'];
             } elseif ($m === $mesCobro && ! $sinPagas) {
-                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => null];
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => null,
+                    'expl' => 'Paga completa de su mes de cobro', 'regla' => 'Convenio: pagas extraordinarias'];
             }
         }
         $g = fn ($k) => round(self::n($inc[$k] ?? 0), 2);
         foreach ([['hx', '10', 'Horas extraordinarias', 'hx'], ['otr', '20', 'Otros devengos salariales', 'salarial'], ['die', '30', 'Dietas', 'no_salarial'], ['km', '31', 'Plus de distancia y kilometraje', 'no_salarial']] as [$id, $cod, $nom, $cl]) {
             $v = $g(['hx' => 'hx', 'otr' => 'otros', 'die' => 'dietas', 'km' => 'km'][$id]);
             if ($v) {
-                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $v, 'clase' => $cl, 'origen' => 'variable', 'conv' => null];
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $v, 'clase' => $cl, 'origen' => 'variable', 'conv' => null, 'expl' => 'Importe introducido en las variables del mes', 'regla' => 'Variables del mes'];
             }
         }
         // Variables del mes escritas a mano (pantalla Variables)

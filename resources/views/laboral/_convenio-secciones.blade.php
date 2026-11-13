@@ -113,10 +113,16 @@
 {{-- 4 · Conceptos retributivos --}}
 @php $kRows = $secAct === 'conceptos' && old('conceptos') ? array_values(old('conceptos')) : $concV->map(fn ($x) => array_merge($x->only(['nombre', 'codigo', 'descripcion', 'cra', 'naturaleza', 'calculo', 'unidad', 'base', 'formula', 'cotiza', 'tributa', 'limite', 'redondeo', 'referencia']),
     ['valor' => $n($x->valor, 4), 'automatico' => $x->automatico, 'prop_jornada' => $x->prop_jornada, 'prop_periodo' => $x->prop_periodo, 'en_pagas' => $x->en_pagas, 'soportado' => Convenios::soportado($x),
+     'motivo' => Convenios::motivoNoSoportado($x), 'limite_importe' => $n($x->limite_importe), 'limite_unidad' => $x->limite_unidad,
      'importes' => $x->importes->mapWithKeys(fn ($im) => [$im->categoria_id => $n($im->importe, 4)])->all()]))->all(); @endphp
 <form method="POST" action="{{ route('laboral.convenios.seccion', 'conceptos') }}" class="card cv-sec" id="sec-conceptos" data-cv-sec>
   @csrf<input type="hidden" name="version_id" value="{{ $ver->id }}">
   <div class="cv-h"><span>Conceptos retributivos</span><span class="cv-dirty" data-cv-dirty hidden>Cambios sin guardar</span><button type="button" class="btn soft sm" data-lb-add="cvconc">+ Concepto</button></div>
+  <details style="font-size:12.5px"><summary style="cursor:pointer;font-weight:600">Cómo escribir fórmulas</summary>
+    <p style="margin:6px 0">Operaciones + − * / y paréntesis; decimales con coma o punto; <span class="mono">min(a; b)</span>, <span class="mono">max(a; b)</span>, <span class="mono">redondear(x; 2)</span>. Para usar otro concepto, ponle código y escribe <span class="mono">c_CÓDIGO</span>. Variables permitidas:</p>
+    <ul style="margin:0;padding-left:18px;columns:2;line-height:1.5">@foreach(\App\Services\Formula::VARIABLES as $k => [$d, $u])<li><span class="mono">{{ $k }}</span>: {{ $d }} ({{ $u }})</li>@endforeach</ul>
+    <p style="margin:6px 0 0">El resultado es el importe por la unidad del concepto (por mes o por día). Se calcula con decimales exactos y se redondea al final de la línea, la mitad hacia arriba.</p>
+  </details>
   <span class="hint muted">Pluses, complementos y percepciones del convenio. El plus de convenio por categoría se edita en la tabla de categorías. La cotización y el IRPF se definen en cada concepto: nada se considera exento por llamarse «dieta» o «indemnización».</span>
   <div data-lb-list="cvconc" data-n="{{ count($kRows) }}" style="display:flex;flex-direction:column;gap:10px">
     @foreach($kRows as $i => $r)

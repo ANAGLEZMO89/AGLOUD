@@ -105,6 +105,7 @@
         <input type="hidden" name="l[{{ $i }}][id]" value="{{ $l['id'] }}"><input type="hidden" name="l[{{ $i }}][cod]" value="{{ $l['cod'] }}">
         <input class="inp lb-in" name="l[{{ $i }}][concepto]" value="{{ $l['concepto'] }}" @disabled($bloq)>
         @if($aviso)<small class="ne-av">⚠ {{ $aviso }}</small>@endif
+        @if(! empty($l['expl']) || ! empty($l['regla']))<details class="ne-expl"><summary>Cómo se calcula</summary>@if(! empty($l['expl']))<span class="mono12">{{ $l['expl'] }}</span>@endif @if(! empty($l['regla']))<span>Origen: {{ $l['regla'] }}</span>@endif</details>@endif
       </span>
       <input class="inp lb-in mono" name="l[{{ $i }}][cant]" value="{{ isset($l['cant']) && $l['cant'] !== null ? $E($l['cant']) : '' }}" style="text-align:right" inputmode="decimal" data-ne-cant @disabled($bloq)>
       <input class="inp lb-in mono" name="l[{{ $i }}][precio]" value="{{ isset($l['precio']) && $l['precio'] !== null ? Formato::num($l['precio'], 4) : '' }}" style="text-align:right" inputmode="decimal" data-ne-precio @disabled($bloq)>

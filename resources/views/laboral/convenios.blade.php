@@ -146,6 +146,44 @@
     @endif
   </div>
   @include('laboral._convenio-secciones')
+  @if($cv && $ver)
+  @php $si = fn ($k, $d = '') => $simIn[$k] ?? $d; @endphp
+  <div class="card" style="gap:12px" id="simulador">
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Simular una nómina con este convenio</span>
+      <span style="font-size:12.5px;color:#6A6A65;line-height:1.45">Calcula la nómina de un trabajador tipo con la versión «{{ $ver->nombre }}» ({{ \App\Models\Convenio::ESTADOS[$ver->estado] ?? $ver->estado }}) para comprobar el convenio antes de aplicarlo. No guarda nada ni toca a la plantilla. El salario sale de la tabla de la categoría; el IRPF no se calcula porque depende de cada trabajador.</span></div>
+    <form method="GET" action="{{ route('laboral.convenios') }}#simulador" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px;align-items:end">
+      @if(request('version'))<input type="hidden" name="version" value="{{ request('version') }}">@endif
+      <label class="lbl-s">Categoría<select class="sel" name="sim[cat]" required><option value="">—</option>@foreach($conv['cats'] as $k)<option value="{{ $k['cat'] }}" @selected($si('cat') === $k['cat'])>{{ $k['cat'] }}</option>@endforeach</select></label>
+      <label class="lbl-s">Mes<input class="inp" type="month" name="sim[mes]" value="{{ $si('mes', now()->format('Y-m')) }}" required></label>
+      <label class="lbl-s">Jornada (%)<input class="inp mono" name="sim[jor]" value="{{ $si('jor', '100') }}" inputmode="decimal" required></label>
+      <label class="lbl-s">Alta (opcional)<input class="inp" type="date" name="sim[alta]" value="{{ $si('alta') }}"></label>
+      <label class="lbl-s">Baja (opcional)<input class="inp" type="date" name="sim[baja]" value="{{ $si('baja') }}"></label>
+      <label class="lbl-s">Antigüedad desde<input class="inp" type="date" name="sim[antig]" value="{{ $si('antig') }}"></label>
+      <label class="lbl-s" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" name="sim[prorr]" value="1" @checked($si('prorr'))> Pagas prorrateadas</label>
+      <button class="btn lime" type="submit">Simular</button>
+    </form>
+    @if($sim)
+      @if($sim['error'] ?? null)
+        <span class="note-amber" role="alert">{{ $sim['error'] }}</span>
+      @else
+        @php $sn = $sim['n']; $sd = $sim['doc']; @endphp
+        <span style="font-size:12.5px;color:#3C3C3C">Periodo: {{ Formato::fecha($sd['desde']) }} a {{ Formato::fecha($sd['hasta']) }} · {{ $sd['dias'] }} de {{ $sd['diasMes'] }} días · grupo de cotización {{ $sim['w']['grupo'] }}</span>
+        <div class="tbl">
+          <div class="th" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1.3fr) 110px;min-width:640px"><span>Concepto</span><span>Cómo se calcula</span><span>Origen</span><span class="r">Importe</span></div>
+          @foreach($sim['lineas'] as $l)
+            <div class="tr" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1.3fr) 110px;min-width:640px;border-radius:0"><span>{{ $l['concepto'] }}</span><span class="mono12">{{ $l['expl'] ?? '' }}</span><span class="c3" style="font-size:12px">{{ $l['regla'] ?? '' }}</span><span class="mono" style="text-align:right">{{ Formato::eur($l['importe']) }}</span></div>
+          @endforeach
+          @foreach([['Total devengado', $sn['dev'], true], ['Base de contingencias comunes', $sn['base'], false], ['Seguridad Social a cargo del trabajador', $sn['ssT'], false], ['Seguridad Social a cargo de la empresa (sin AT y EP)', $sn['ssE'], false]] as [$t, $v, $b])
+            <div class="tr" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1.3fr) 110px;min-width:640px;border-radius:0;{{ $b ? 'font-weight:700' : '' }}"><span style="grid-column:span 3">{{ $t }}</span><span class="mono" style="text-align:right">{{ Formato::eur($v) }}</span></div>
+          @endforeach
+        </div>
+        @if(! empty($sn['baseExpl']))<ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;color:#3C3C3C">@foreach($sn['baseExpl'] as $t)<li>{{ $t }}</li>@endforeach</ul>@endif
+        @php $fuera = collect($conv['pluses'])->filter(fn ($p) => $p['auto'] && ! $p['soportado']); @endphp
+        @if($fuera->isNotEmpty())<span class="note-amber">No entran en la simulación (el motor no los puede calcular): {{ $fuera->pluck('nombre')->implode(', ') }}.</span>@endif
+      @endif
+    @endif
+  </div>
+  @endif
 </div>
 @endsection
 @section('overlay')

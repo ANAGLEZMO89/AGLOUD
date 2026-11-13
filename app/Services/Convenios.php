@@ -77,7 +77,8 @@ class Convenios
                 'unidad' => $p->unidad, 'tipo' => $p->calculo === 'porcentaje' ? 'porcentaje_base' : 'importe', 'calculo' => $p->calculo,
                 'valor' => $p->valor !== null ? (float) $p->valor : 0.0, 'auto' => (bool) $p->automatico, 'cotiza' => $p->cotiza !== 'no', 'tributa' => $p->tributa !== 'no', 'art' => (string) $p->referencia,
                 'naturaleza' => $p->naturaleza, 'prop_jornada' => (bool) $p->prop_jornada, 'prop_periodo' => (bool) $p->prop_periodo, 'en_pagas' => (bool) $p->en_pagas, 'limite' => (string) $p->limite,
-                'cotizaModo' => $p->cotiza, 'tributaModo' => $p->tributa,
+                'cotizaModo' => $p->cotiza, 'tributaModo' => $p->tributa, 'formula' => (string) $p->formula, 'redondeo' => $p->redondeo,
+                'limite_importe' => $p->limite_importe !== null ? (string) $p->limite_importe : null, 'limite_unidad' => $p->limite_unidad,
                 'importes' => $p->importes->mapWithKeys(fn ($im) => [(string) ($catNom[$im->categoria_id] ?? '') => (float) $im->importe])->filter(fn ($v, $k) => $k !== '')->all(),
                 'soportado' => self::soportado($p)])->values()->all(),
             'extras' => $r['extras'] ?? [], 'antig' => $r['antig'] ?? null, 'it' => $r['it'] ?? null, 'hx' => $r['hx'] ?? null, 'ia' => $r['ia'] ?? null,
@@ -87,7 +88,62 @@ class Convenios
     /** ¿El motor de nóminas sabe calcular este concepto por sí solo? (fórmulas y algunas unidades llegan en la fase 4) */
     public static function soportado(ConvenioConcepto $p): bool
     {
-        return $p->calculo !== 'formula' && in_array($p->unidad, ['mes', 'dia_natural', 'dia_trabajado', 'hora'], true) && $p->cotiza !== 'limite' && $p->tributa !== 'limite';
+        return self::motivoNoSoportado($p) === null;
+    }
+
+    /** Por qué el motor no puede calcular este concepto (null si puede) */
+    public static function motivoNoSoportado(ConvenioConcepto $p): ?string
+    {
+        if (! in_array($p->unidad, ['mes', 'dia_natural', 'dia_trabajado', 'hora'], true)) {
+            return 'la unidad «'.(ConvenioConcepto::UNIDADES[$p->unidad] ?? $p->unidad).'» necesita el calendario (fase 5)';
+        }
+        if ($p->calculo === 'formula') {
+            $codigos = ConvenioConcepto::withoutGlobalScopes()->where('version_id', $p->version_id)->whereNotNull('codigo')->pluck('codigo')->all();
+            if ($e = Formula::validar((string) $p->formula, $codigos)) {
+                return 'la fórmula no es válida: '.$e;
+            }
+        }
+        if ($p->cotiza === 'limite' || $p->tributa === 'limite') {
+            if ($p->limite_importe === null || ! in_array($p->limite_unidad, ['dia', 'mes'], true)) {
+                return 'falta el importe y la unidad del límite';
+            }
+            if (($p->cotiza === 'si' && $p->tributa === 'limite') || ($p->cotiza === 'limite' && $p->tributa === 'no')) {
+                return 'esa combinación de cotización e IRPF no tiene un tratamiento automático';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Simulación de una nómina con una versión del convenio, sin guardar nada: categoría, jornada, mes y fechas de alta y baja.
+     * El salario sale de la tabla de la categoría (× jornada); no se calcula IRPF (depende del trabajador). Devuelve [lineas, n, w, error].
+     */
+    public static function simular(Convenio $cv, ConvenioVersion $v, array $in): array
+    {
+        $conv = self::forma($cv, $v);
+        $cat = collect($conv['cats'])->firstWhere('cat', (string) ($in['cat'] ?? ''));
+        if (! $cat) {
+            return ['error' => 'Elige una categoría de la tabla salarial.'];
+        }
+        if ($cat['base'] === null) {
+            return ['error' => 'La categoría «'.$cat['cat'].'» no tiene salario base en la tabla: no se puede simular sin inventarlo.'];
+        }
+        [$anio, $m] = array_map('intval', explode('-', (string) $in['mes']));
+        $jor = max(1, min(100, (float) ($in['jor'] ?? 100)));
+        $coef = $jor / 100;
+        $dia = $cat['unidad'] === 'dia';
+        $w = ['id' => 0, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => (int) ($cat['grupo'] ?: 7), 'jor' => $jor, 'horas' => (string) round(40 * $coef, 2),
+            'alta' => (string) ($in['alta'] ?? '') ?: sprintf('%04d-01-01', $anio), 'baja' => (string) ($in['baja'] ?? ''), 'fAntig' => (string) ($in['antig'] ?? ''),
+            'convCat' => $cat['cat'], 'pagas' => (int) ($conv['pagas'] ?: 14) ?: 14, 'prorr' => ! empty($in['prorr']),
+            'salTipo' => $dia ? 'Diario' : 'Mensual', 'salDia' => $dia ? round($cat['base'] * $coef, 4) : 0, 'salBase' => $dia ? 0 : round($cat['base'] * $coef, 2),
+            'plus' => round(($cat['plus'] ?? 0) * $coef, 2), 'diasExtra' => 30, 'regimen' => 'General',
+            '_conv' => ['extras' => $conv['extras'], 'antig' => $conv['antig'], 'pluses' => $conv['pluses'], 'hx' => $conv['hx'], 'it' => $conv['it'], 'cats' => $conv['cats'],
+                'version_id' => $conv['version_id'], 'version' => $conv['version'], 'jornada' => $conv['jornada']]];
+        $doc = Nomina::conceptos($w, $m, [], null, $anio);
+        $n = Nomina::computar($w, $doc + ['recibo' => 'Nómina'], 0);
+
+        return ['lineas' => $doc['lineas'], 'n' => $n, 'doc' => $doc, 'w' => $w, 'cat' => $cat, 'error' => null];
     }
 
     /** Convenio de la empresa para editar: el asignado o uno nuevo (borrador) asignado desde siempre */
@@ -190,7 +246,7 @@ class Convenios
             foreach (array_values($filas) as $i => $f) {
                 $c = ConvenioConcepto::withoutGlobalScopes()->firstOrNew(['version_id' => $v->id, 'nombre' => $f['nombre']]);
                 $c->fill(array_intersect_key($f, array_flip(['codigo', 'descripcion', 'cra', 'naturaleza', 'calculo', 'unidad', 'valor', 'base', 'formula', 'automatico', 'prop_jornada',
-                    'prop_periodo', 'en_pagas', 'cotiza', 'tributa', 'limite', 'redondeo', 'referencia'])) + ['orden' => $i + 1]);
+                    'prop_periodo', 'en_pagas', 'cotiza', 'tributa', 'limite', 'limite_importe', 'limite_unidad', 'redondeo', 'referencia'])) + ['orden' => $i + 1]);
                 $c->save();
                 $vivos[] = $c->id;
                 ConvenioConceptoImporte::withoutGlobalScopes()->where('concepto_id', $c->id)->delete();
