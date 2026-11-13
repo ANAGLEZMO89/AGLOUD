@@ -101,7 +101,7 @@
         {{-- Contrato --}}
         <div class="lb-panel" data-lb-panel="contrato" @if($sec !== 'contrato') hidden @endif style="display:flex;flex-direction:column;gap:16px">
           <div class="card"><div class="lb-fields">
-            {{ $fb('contrato', 'Tipo de contrato', $hab, true, '', ['data-lb-contrato' => '1']) }}{{ $fb('alta', 'Fecha de inicio', 'date') }}
+            {{ $fb('contrato', 'Tipo de contrato', $hab, true, '', ['data-lb-contrato' => '1']) }}{{ $fb('alta', 'Fecha de inicio', 'date') }}{{ $fb('fAntig', 'Fecha de antigüedad', 'date', false, 'Solo si es anterior al inicio (subrogación, contratos previos)') }}
             {{ $fb('fin', 'Fecha de fin', 'date', false, '', ['data-lb-temp' => '1']) }}
             {{ $fb('causa', preg_match('/^(410|510)/', $cod) ? 'Causa de la sustitución' : (preg_match('/^(42|52)/', $cod) ? 'Titulación y puesto formativo' : 'Causa concreta de la temporalidad'), 'text', true, 'Obligatorio: describe la causa y su conexión con la duración (art. 15 ET)', ['data-lb-temp' => '1', 'data-lb-causa' => '1']) }}
             {{ $fb('sustituido', 'Persona sustituida · NIF y nombre', 'text', true, '', ['data-lb-sust' => '1']) }}

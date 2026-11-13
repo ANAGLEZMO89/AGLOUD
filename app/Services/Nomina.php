@@ -181,10 +181,18 @@ class Nomina
         return Carbon::create($anio ?: (int) now()->year, max(1, min(12, $m)), 1)->daysInMonth;
     }
 
+    private static array $reglasCache = [];
+
+    /** Tras cambiar el convenio, las reglas se vuelven a leer */
+    public static function olvidarReglas(): void
+    {
+        self::$reglasCache = [];
+    }
+
     /** Reglas del convenio de la empresa que se aplican solas en la nómina (leídas del PDF o escritas a mano) */
     public static function reglas(Cliente $c): array
     {
-        static $cache = [];
+        $cache = &self::$reglasCache;
         if (! isset($cache[$c->id]) || app()->runningUnitTests()) {
             $conv = self::config($c)['conv'];
             $cache[$c->id] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null];

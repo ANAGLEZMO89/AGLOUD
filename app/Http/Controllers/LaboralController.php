@@ -113,7 +113,7 @@ class LaboralController extends Controller
     private function leerFicha(array $in, array $d, array $P): array
     {
         $txt = ['nom1', 'ape1', 'ape2', 'tipoDoc', 'nif', 'fnac', 'sexo', 'nac', 'ecivil', 'dom', 'cp', 'mun', 'prov', 'tel', 'email', 'nivForm', 'iban', 'disc',
-            'naf', 'ccc', 'altaSS', 'cno', 'epig', 'relEsp', 'contrato', 'alta', 'fin', 'causa', 'sustituido', 'horas', 'horario', 'centro', 'convCat', 'prueba', 'vac', 'irpfModo',
+            'naf', 'ccc', 'altaSS', 'cno', 'epig', 'relEsp', 'contrato', 'alta', 'fAntig', 'fin', 'causa', 'sustituido', 'horas', 'horario', 'centro', 'convCat', 'prueba', 'vac', 'irpfModo',
             'autMutua', 'autTarifaFin', 'iae'];
         $o = [];
         foreach ($txt as $k) {
@@ -787,6 +787,7 @@ class LaboralController extends Controller
         $cfg = LaboralConfig::firstOrNew(['cliente_id' => $c->id]);
         $cfg->datos = array_replace($cfg->datos ?? [], $patch);
         $cfg->save();
+        Nomina::olvidarReglas();
     }
 
     public function guardarParametros(Request $request)

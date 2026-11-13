@@ -68,13 +68,82 @@
           <label class="lb-f"><span class="lb-l">Pagas</span><select class="sel lb-in" name="conv_pagas">@foreach(['14', '12', '15', '16'] as $x)<option @selected((string) $o('conv_pagas', $conv['pagas']) === $x)>{{ $x }}</option>@endforeach</select></label>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:6px;border-top:1px solid #F1F1EC"><span style="font-size:15px;font-weight:700">Tablas salariales</span><button type="button" class="btn soft" data-lb-add="cats">+ Categoría</button></div>
-        <div class="lb-cat lb-head" style="padding:0"><span>Categoría</span><span>Grupo</span><span>Base €/mes{{ collect($cats)->contains(fn ($x) => ($x['unidad'] ?? 'mes') === 'dia') ? ' (o €/día)' : '' }}</span><span>Plus €/mes</span><span></span></div>
+        <div class="lb-cat lb-head" style="padding:0"><span>Categoría</span><span>Grupo</span><span>Salario</span><span>Base €</span><span>Plus €/mes</span><span></span></div>
         <div data-lb-list="cats" data-n="{{ count($cats) }}" style="display:flex;flex-direction:column;gap:8px">
           @foreach($cats as $i => $ct)
-            <div class="lb-cat"><input class="inp lb-in" name="cats[{{ $i }}][cat]" value="{{ $ct['cat'] ?? '' }}" title="{{ ($ct['unidad'] ?? 'mes') === 'dia' ? 'Salario DIARIO (€/día)' : '' }}{{ ! empty($ct['art']) ? ' · '.$ct['art'] : '' }}"><input type="hidden" name="cats[{{ $i }}][unidad]" value="{{ $ct['unidad'] ?? 'mes' }}"><input type="hidden" name="cats[{{ $i }}][art]" value="{{ $ct['art'] ?? '' }}"><select class="sel lb-in" name="cats[{{ $i }}][grupo]">@foreach(range(1, 11) as $g)<option @selected((string) ($ct['grupo'] ?? '7') === (string) $g)>{{ $g }}</option>@endforeach</select><input class="inp lb-in mono" name="cats[{{ $i }}][base]" value="{{ is_numeric($ct['base'] ?? null) ? Formato::num($ct['base']) : ($ct['base'] ?? '') }}" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[{{ $i }}][plus]" value="{{ is_numeric($ct['plus'] ?? null) ? Formato::num($ct['plus']) : ($ct['plus'] ?? '') }}" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
+            <div class="lb-cat"><input class="inp lb-in" name="cats[{{ $i }}][cat]" value="{{ $ct['cat'] ?? '' }}" title="{{ $ct['art'] ?? '' }}"><input type="hidden" name="cats[{{ $i }}][art]" value="{{ $ct['art'] ?? '' }}"><select class="sel lb-in" name="cats[{{ $i }}][grupo]">@foreach(range(1, 11) as $g)<option @selected((string) ($ct['grupo'] ?? '7') === (string) $g)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[{{ $i }}][unidad]"><option value="mes" @selected(($ct['unidad'] ?? 'mes') === 'mes')>Mensual</option><option value="dia" @selected(($ct['unidad'] ?? 'mes') === 'dia')>Diario</option></select><input class="inp lb-in mono" name="cats[{{ $i }}][base]" value="{{ is_numeric($ct['base'] ?? null) ? Formato::num($ct['base']) : ($ct['base'] ?? '') }}" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[{{ $i }}][plus]" value="{{ is_numeric($ct['plus'] ?? null) ? Formato::num($ct['plus']) : ($ct['plus'] ?? '') }}" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
           @endforeach
         </div>
-        <template data-lb-tpl="cats"><div class="lb-cat"><input class="inp lb-in" name="cats[__][cat]" value="Nueva categoría"><select class="sel lb-in" name="cats[__][grupo]">@foreach(range(1, 11) as $g)<option @selected($g === 7)>{{ $g }}</option>@endforeach</select><input class="inp lb-in mono" name="cats[__][base]" value="1.221,00" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[__][plus]" value="0,00" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
+        <template data-lb-tpl="cats"><div class="lb-cat"><input class="inp lb-in" name="cats[__][cat]" value="Nueva categoría"><select class="sel lb-in" name="cats[__][grupo]">@foreach(range(1, 11) as $g)<option @selected($g === 7)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[__][unidad]"><option value="mes">Mensual</option><option value="dia">Diario</option></select><input class="inp lb-in mono" name="cats[__][base]" value="1.221,00" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[__][plus]" value="0,00" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
+        <span class="hint muted">«Diario»: la base es € por día natural y en cada nómina se multiplica por los días del mes.</span>
+      </div>
+
+      @php
+        $old = old('_enviado');
+        $extras = $old ? array_values((array) old('extras', [])) : ($conv['extras'] ?? []);
+        $pluses = $old ? array_values((array) old('pluses', [])) : ($conv['pluses'] ?? []);
+        $itCc = $old ? array_values((array) old('it_cc', [])) : ($conv['it']['cc'] ?? []);
+        $itAt = $old ? array_values((array) old('it_at', [])) : ($conv['it']['at'] ?? []);
+        $ant = $conv['antig'] ?? null; $hx = $conv['hx'] ?? null;
+        $MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        $nf = fn ($v, $d = 2) => is_numeric($v) ? Formato::num($v, $d) : (string) ($v ?? '');
+        $mesSel = fn ($name, $v) => '<select class="sel lb-in" name="'.$name.'" style="width:130px">'.collect($MES)->map(fn ($l, $k) => '<option value="'.($k + 1).'"'.((int) $v === $k + 1 ? ' selected' : '').'>'.$l.'</option>')->implode('').'</select>';
+      @endphp
+
+      <div class="card" style="gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-size:15px;font-weight:700">Pagas extraordinarias</span><button type="button" class="btn soft" data-lb-add="extras">+ Paga</button></div>
+        <span class="hint muted">Sin pagas aquí se aplican verano (junio) y Navidad (diciembre) de una mensualidad. Con pagas aquí, mandan estas.</span>
+        <div data-lb-list="extras" data-n="{{ count($extras) }}" style="display:flex;flex-direction:column;gap:8px">
+          @foreach($extras as $i => $x)
+            <div class="lb-fila"><input class="inp lb-in" name="extras[{{ $i }}][nombre]" value="{{ $x['nombre'] ?? '' }}" style="flex:1 1 180px" placeholder="Nombre">{!! $mesSel('extras['.$i.'][mes]', $x['mes'] ?? 12) !!}<select class="sel lb-in" name="extras[{{ $i }}][calculo]" style="width:150px">@foreach(['mensualidad' => 'Una mensualidad', 'dias' => 'Días de salario', 'importe' => 'Importe fijo'] as $k => $l)<option value="{{ $k }}" @selected(($x['calculo'] ?? 'mensualidad') === $k)>{{ $l }}</option>@endforeach</select><input class="inp lb-in mono" name="extras[{{ $i }}][dias]" value="{{ $nf($x['dias'] ?? '', 0) }}" placeholder="Días" style="width:70px" inputmode="decimal"><input class="inp lb-in mono" name="extras[{{ $i }}][importe]" value="{{ $nf($x['importe'] ?? '') }}" placeholder="Importe €" style="width:100px" inputmode="decimal"><label class="lb-chk"><input type="checkbox" name="extras[{{ $i }}][plus]" value="1" @checked(! empty($x['plus']))>+ plus</label><label class="lb-chk"><input type="checkbox" name="extras[{{ $i }}][antig]" value="1" @checked(! empty($x['antig']))>+ antigüedad</label><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
+          @endforeach
+        </div>
+        <template data-lb-tpl="extras"><div class="lb-fila"><input class="inp lb-in" name="extras[__][nombre]" value="Paga extraordinaria" style="flex:1 1 180px">{!! $mesSel('extras[__][mes]', 12) !!}<select class="sel lb-in" name="extras[__][calculo]" style="width:150px"><option value="mensualidad">Una mensualidad</option><option value="dias">Días de salario</option><option value="importe">Importe fijo</option></select><input class="inp lb-in mono" name="extras[__][dias]" placeholder="Días" style="width:70px" inputmode="decimal"><input class="inp lb-in mono" name="extras[__][importe]" placeholder="Importe €" style="width:100px" inputmode="decimal"><label class="lb-chk"><input type="checkbox" name="extras[__][plus]" value="1">+ plus</label><label class="lb-chk"><input type="checkbox" name="extras[__][antig]" value="1">+ antigüedad</label><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
+      </div>
+
+      <div class="card" style="gap:10px">
+        <span style="font-size:15px;font-weight:700">Antigüedad</span>
+        <div class="lb-fila" style="border:0;padding:0">
+          <label class="lb-chk"><input type="checkbox" name="ant_si" value="1" @checked(old('_enviado') ? old('ant_si') : (bool) $ant)>El convenio paga antigüedad</label>
+          <label class="lb-f" style="width:130px"><span class="lb-l">Cada (años)</span><select class="sel lb-in" name="ant_periodo">@foreach([2 => 'Bienios (2)', 3 => 'Trienios (3)', 4 => 'Cuatrienios (4)', 5 => 'Quinquenios (5)'] as $k => $l)<option value="{{ $k }}" @selected((int) old('ant_periodo', $ant['periodo'] ?? 3) === $k)>{{ $l }}</option>@endforeach</select></label>
+          <label class="lb-f" style="width:190px"><span class="lb-l">Importe por periodo</span><select class="sel lb-in" name="ant_tipo"><option value="importe" @selected(old('ant_tipo', $ant['tipo'] ?? 'importe') === 'importe')>€ al mes</option><option value="porcentaje" @selected(old('ant_tipo', $ant['tipo'] ?? '') === 'porcentaje')>% del salario base</option></select></label>
+          <label class="lb-f" style="width:110px"><span class="lb-l">Valor</span><input class="inp lb-in mono" name="ant_valor" value="{{ old('ant_valor', $nf($ant['valor'] ?? '')) }}" inputmode="decimal"></label>
+          <label class="lb-f" style="width:130px"><span class="lb-l">Tope (nº periodos)</span><input class="inp lb-in mono" name="ant_tope" value="{{ old('ant_tope', $ant['tope'] ?? '') }}" inputmode="numeric" placeholder="Sin tope"></label>
+        </div>
+        <span class="hint muted">Se cuenta desde la fecha de antigüedad de la ficha o, si no la tiene, desde la fecha de alta.</span>
+      </div>
+
+      <div class="card" style="gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-size:15px;font-weight:700">Pluses</span><button type="button" class="btn soft" data-lb-add="pluses">+ Plus</button></div>
+        <span class="hint muted">«Automático»: sale solo todos los meses (por mes, por día natural o por día laborable de lunes a viernes). Los que no son automáticos o van por horas aparecen en el Integral con su precio para añadirlos cuando toque.</span>
+        <div data-lb-list="pluses" data-n="{{ count($pluses) }}" style="display:flex;flex-direction:column;gap:8px">
+          @foreach($pluses as $i => $p)
+            <div class="lb-fila"><input class="inp lb-in" name="pluses[{{ $i }}][nombre]" value="{{ $p['nombre'] ?? '' }}" style="flex:1 1 170px" placeholder="Nombre"><input class="inp lb-in mono" name="pluses[{{ $i }}][valor]" value="{{ $nf($p['valor'] ?? '') }}" style="width:90px" inputmode="decimal"><select class="sel lb-in" name="pluses[{{ $i }}][tipo]" style="width:120px"><option value="importe" @selected(($p['tipo'] ?? 'importe') === 'importe')>€</option><option value="porcentaje_base" @selected(($p['tipo'] ?? '') === 'porcentaje_base')>% salario base</option></select><select class="sel lb-in" name="pluses[{{ $i }}][unidad]" style="width:150px">@foreach(['mes' => 'por mes', 'dia_trabajado' => 'por día trabajado', 'dia_natural' => 'por día natural', 'hora' => 'por hora'] as $k => $l)<option value="{{ $k }}" @selected(($p['unidad'] ?? 'mes') === $k)>{{ $l }}</option>@endforeach</select><label class="lb-chk"><input type="checkbox" name="pluses[{{ $i }}][auto]" value="1" @checked(! empty($p['auto']))>Automático</label><label class="lb-chk"><input type="checkbox" name="pluses[{{ $i }}][cotiza]" value="1" @checked($p['cotiza'] ?? true)>Cotiza</label><label class="lb-chk"><input type="checkbox" name="pluses[{{ $i }}][tributa]" value="1" @checked($p['tributa'] ?? true)>Tributa</label><input type="hidden" name="pluses[{{ $i }}][art]" value="{{ $p['art'] ?? '' }}"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
+          @endforeach
+        </div>
+        <template data-lb-tpl="pluses"><div class="lb-fila"><input class="inp lb-in" name="pluses[__][nombre]" value="Plus" style="flex:1 1 170px"><input class="inp lb-in mono" name="pluses[__][valor]" value="0,00" style="width:90px" inputmode="decimal"><select class="sel lb-in" name="pluses[__][tipo]" style="width:120px"><option value="importe">€</option><option value="porcentaje_base">% salario base</option></select><select class="sel lb-in" name="pluses[__][unidad]" style="width:150px"><option value="mes">por mes</option><option value="dia_trabajado">por día trabajado</option><option value="dia_natural">por día natural</option><option value="hora">por hora</option></select><label class="lb-chk"><input type="checkbox" name="pluses[__][auto]" value="1" checked>Automático</label><label class="lb-chk"><input type="checkbox" name="pluses[__][cotiza]" value="1" checked>Cotiza</label><label class="lb-chk"><input type="checkbox" name="pluses[__][tributa]" value="1" checked>Tributa</label><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
+      </div>
+
+      <div class="card" style="gap:10px">
+        <span style="font-size:15px;font-weight:700">Complemento de incapacidad temporal</span>
+        <span class="hint muted">Porcentaje del salario que garantiza el convenio en cada tramo de días de baja (incluida la prestación). Vacío: sin mejora.</span>
+        @foreach(['it_cc' => ['Enfermedad común o accidente no laboral', $itCc], 'it_at' => ['Accidente de trabajo o enfermedad profesional', $itAt]] as $k => [$l, $rows])
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-size:13px;font-weight:600">{{ $l }}</span><button type="button" class="btn soft sm" data-lb-add="{{ $k }}">+ Tramo</button></div>
+          <div data-lb-list="{{ $k }}" data-n="{{ count($rows) }}" style="display:flex;flex-direction:column;gap:6px">
+            @foreach($rows as $i => $t)
+              <div class="lb-fila"><span style="font-size:12.5px">Del día</span><input class="inp lb-in mono" name="{{ $k }}[{{ $i }}][desde]" value="{{ $t['desde'] ?? 1 }}" style="width:70px" inputmode="numeric"><span style="font-size:12.5px">al</span><input class="inp lb-in mono" name="{{ $k }}[{{ $i }}][hasta]" value="{{ $t['hasta'] ?? '' }}" style="width:70px" inputmode="numeric" placeholder="fin"><input class="inp lb-in mono" name="{{ $k }}[{{ $i }}][pct]" value="{{ $nf($t['pct'] ?? 100, 0) }}" style="width:70px" inputmode="decimal"><span style="font-size:12.5px">%</span><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
+            @endforeach
+          </div>
+          <template data-lb-tpl="{{ $k }}"><div class="lb-fila"><span style="font-size:12.5px">Del día</span><input class="inp lb-in mono" name="{{ $k }}[__][desde]" value="1" style="width:70px" inputmode="numeric"><span style="font-size:12.5px">al</span><input class="inp lb-in mono" name="{{ $k }}[__][hasta]" style="width:70px" inputmode="numeric" placeholder="fin"><input class="inp lb-in mono" name="{{ $k }}[__][pct]" value="100" style="width:70px" inputmode="decimal"><span style="font-size:12.5px">%</span><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
+        @endforeach
+      </div>
+
+      <div class="card" style="gap:10px">
+        <span style="font-size:15px;font-weight:700">Horas extraordinarias</span>
+        <div class="lb-fila" style="border:0;padding:0">
+          <label class="lb-f" style="width:230px"><span class="lb-l">Precio</span><select class="sel lb-in" name="hx_tipo">@foreach(['no_consta' => 'No lo fija el convenio', 'importe' => '€ por hora', 'recargo' => '% de recargo sobre la hora ordinaria'] as $k => $l)<option value="{{ $k }}" @selected(old('hx_tipo', $hx['tipo'] ?? 'no_consta') === $k)>{{ $l }}</option>@endforeach</select></label>
+          <label class="lb-f" style="width:110px"><span class="lb-l">Valor</span><input class="inp lb-in mono" name="hx_valor" value="{{ old('hx_valor', $nf($hx['valor'] ?? '')) }}" inputmode="decimal"></label>
+        </div>
       </div>
 
     <div style="display:flex;justify-content:flex-end;gap:10px">

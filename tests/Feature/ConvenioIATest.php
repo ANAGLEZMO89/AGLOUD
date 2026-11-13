@@ -97,6 +97,39 @@ class ConvenioIATest extends TestCase
             ->assertSee('días 21 en adelante al 100 %')->assertSee('El grupo de cotización del peón');
     }
 
+    public function test_convenio_a_mano_conectado_con_la_nomina(): void
+    {
+        $t = Trabajador::create(['cliente_id' => $this->a->id, 'estado' => 'Alta', 'alta' => '2020-01-01', 'contrato' => '100', 'datos' => Nomina::rellenar(['nombre' => 'Peón Prueba', 'nif' => 'X1234567L',
+            'naf' => '211234567890', 'contrato' => Nomina::CONTRATOS[0], 'alta' => '2020-01-01', 'convCat' => 'Peón', 'grupo' => 7, 'salBase' => 900, 'pagas' => 14, 'jor' => 100], $this->a)]);
+        $en = fn () => $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id]);
+        $en()->get(route('laboral.convenios'))->assertOk()->assertSee('Pagas extraordinarias')->assertSee('Antigüedad')->assertSee('Complemento de incapacidad temporal')->assertSee('Horas extraordinarias');
+        // Una paga por días sin indicar los días: no se guarda
+        $en()->post(route('laboral.convenios.guardar'), ['_enviado' => 1, 'conv_nombre' => 'Convenio a mano', 'cats' => [['cat' => 'Peón', 'grupo' => '10', 'unidad' => 'dia', 'base' => '45,50', 'plus' => '0']],
+            'extras' => [['nombre' => 'Verano', 'mes' => '7', 'calculo' => 'dias', 'dias' => '']]])->assertSessionHasErrors('conv');
+        $en()->post(route('laboral.convenios.guardar'), ['_enviado' => 1, 'conv_nombre' => 'Convenio a mano',
+            'cats' => [['cat' => 'Peón', 'grupo' => '10', 'unidad' => 'dia', 'base' => '45,50', 'plus' => '0']],
+            'extras' => [['nombre' => 'Verano', 'mes' => '7', 'calculo' => 'dias', 'dias' => '30'], ['nombre' => 'Navidad', 'mes' => '12', 'calculo' => 'dias', 'dias' => '30', 'antig' => '1']],
+            'ant_si' => '1', 'ant_periodo' => '5', 'ant_tipo' => 'porcentaje', 'ant_valor' => '5', 'ant_tope' => '',
+            'pluses' => [['nombre' => 'Plus de asistencia', 'valor' => '60,00', 'tipo' => 'importe', 'unidad' => 'mes', 'auto' => '1', 'cotiza' => '1', 'tributa' => '1'],
+                ['nombre' => 'Plus de nocturnidad', 'valor' => '2,00', 'tipo' => 'importe', 'unidad' => 'hora', 'cotiza' => '1', 'tributa' => '1']],
+            'it_cc' => [['desde' => '4', 'hasta' => '', 'pct' => '100']], 'hx_tipo' => 'importe', 'hx_valor' => '14,00'])
+            ->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+        $P = Nomina::config($this->a);
+        $this->assertSame(['14', 'dia'], [$P['conv']['pagas'], $P['conv']['cats'][0]['unidad']]);
+        $this->assertSame(['porcentaje', 5.0, 5], [$P['conv']['antig']['tipo'], (float) $P['conv']['antig']['valor'], $P['conv']['antig']['periodo']]);
+        $d = $t->fresh()->datos;
+        $this->assertSame(['Diario', 45.5, 10], [$d['salTipo'], (float) $d['salDia'], (int) $d['grupo']]);
+        $w = Nomina::rellenar($t->fresh()->ficha(), $this->a);
+        // Noviembre 2026: 30 días × 45,50 + plus 60 + antigüedad (1 quinquenio: 5 % de 1.365) = 68,25
+        $this->assertEqualsWithDelta(30 * 45.5 + 60 + 68.25, Nomina::calcular($w, 11, [], 0)['dev'], 0.01);
+        // Julio: + paga de verano de 30 días (sin antigüedad)
+        $this->assertEqualsWithDelta(31 * 45.5 + 60 + 68.25 + 1365, Nomina::calcular($w, 7, [], 0)['dev'], 0.01);
+        // El formulario conserva lo guardado
+        $en()->get(route('laboral.convenios'))->assertSee('value="Plus de nocturnidad"', false)->assertSee('value="14,00"', false);
+        // La nocturnidad y las horas extra se ofrecen en el Integral con su precio
+        $en()->get(route('laboral.integral', ['t' => $t->id, 'anio' => 2026, 'mes' => 11]))->assertOk()->assertSee('Convenio: 2,00 € por hora')->assertSee('Convenio: 14,00 € la hora');
+    }
+
     public function test_lectura_gratuita_pegando_la_respuesta_de_claude(): void
     {
         $this->assertStringContainsString('"pagas_extra"', ConvenioIA::instrucciones());

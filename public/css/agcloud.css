@@ -670,7 +670,8 @@ a.pr-row:hover{background:#FAFAF7;color:inherit}
 .lb-file{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1.5px dashed #DADAD4;cursor:pointer}
 .lb-file:hover{border-color:var(--ink)}.lb-file[hidden]{display:none}
 .lb-file .lb-ic{background:#F4F4F0;color:#0B0B0B}
-.lb-cat{display:grid;grid-template-columns:minmax(0,1.6fr) 64px 110px 100px 28px;gap:8px;align-items:center}
+.lb-cat{display:grid;grid-template-columns:minmax(0,1.6fr) 64px 100px 110px 100px 28px;gap:8px;align-items:center}
+.lb-fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:1px solid #EFEFEA;border-radius:12px}.lb-fila .lb-chk{font-size:12.5px;white-space:nowrap}
 .lb-mod{padding:12px;border-radius:14px;background:#F4F4F0;display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:0 0 0 0 #0B0B0B}
 .lb-mod:has(input:checked){box-shadow:0 0 0 2px #0B0B0B;background:#fff}
 .lb-mod-p{height:56px;border-radius:8px;background:#fff;display:flex;flex-direction:column;gap:5px;padding:8px}

@@ -313,11 +313,45 @@ class LaboralGestionController extends LaboralController
                 'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2),
                 'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes', 'art' => mb_substr((string) ($x['art'] ?? ''), 0, 80)];
         }
-        $this->guardarConfig($c, ['conv' => array_replace(Nomina::config($c)['conv'], ['nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
-            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14', 'cats' => $cats])]);
+        $num = fn ($v) => trim((string) $v) === '' ? null : round(Formato::parseNum((string) $v), 2);
+        $extras = [];
+        foreach (array_values((array) $request->input('extras', [])) as $i => $x) {
+            if (! is_array($x)) {
+                continue;
+            }
+            $calc = in_array($x['calculo'] ?? '', ['mensualidad', 'dias', 'importe'], true) ? $x['calculo'] : 'mensualidad';
+            if (($calc === 'dias' && ! $num($x['dias'] ?? '')) || ($calc === 'importe' && ! $num($x['importe'] ?? ''))) {
+                return back()->withInput()->withErrors(['conv' => 'En la paga «'.trim((string) ($x['nombre'] ?? '')).'» falta '.($calc === 'dias' ? 'el número de días.' : 'el importe.')]);
+            }
+            $extras[] = ['nombre' => mb_substr(trim((string) ($x['nombre'] ?? '')) ?: 'Paga extraordinaria '.($i + 1), 0, 80), 'mes' => max(1, min(12, (int) ($x['mes'] ?? 12))), 'calculo' => $calc,
+                'dias' => $num($x['dias'] ?? ''), 'importe' => $num($x['importe'] ?? ''), 'plus' => ! empty($x['plus']), 'antig' => ! empty($x['antig']), 'art' => ''];
+        }
+        $antig = $request->boolean('ant_si') && $num($request->input('ant_valor'))
+            ? ['periodo' => max(1, min(10, (int) $request->input('ant_periodo', 3))), 'tipo' => $request->input('ant_tipo') === 'porcentaje' ? 'porcentaje' : 'importe',
+                'valor' => $num($request->input('ant_valor')), 'tope' => (int) $request->input('ant_tope') ?: null, 'art' => '']
+            : null;
+        $pluses = [];
+        foreach ((array) $request->input('pluses', []) as $p) {
+            if (! is_array($p) || trim((string) ($p['nombre'] ?? '')) === '' || ! $num($p['valor'] ?? '')) {
+                continue;
+            }
+            $pluses[] = ['nombre' => mb_substr(trim($p['nombre']), 0, 80), 'unidad' => in_array($p['unidad'] ?? '', ['mes', 'dia_trabajado', 'dia_natural', 'hora'], true) ? $p['unidad'] : 'mes',
+                'tipo' => ($p['tipo'] ?? '') === 'porcentaje_base' ? 'porcentaje_base' : 'importe', 'valor' => $num($p['valor']), 'auto' => ! empty($p['auto']),
+                'cotiza' => ! empty($p['cotiza']), 'tributa' => ! empty($p['tributa']), 'art' => mb_substr((string) ($p['art'] ?? ''), 0, 80)];
+        }
+        $tramos = fn ($l) => array_values(array_map(fn ($t) => ['desde' => max(1, (int) ($t['desde'] ?? 1)), 'hasta' => trim((string) ($t['hasta'] ?? '')) === '' ? null : (int) $t['hasta'],
+            'pct' => max(0, min(100, (float) Formato::parseNum((string) ($t['pct'] ?? 0))))], array_filter((array) $l, fn ($t) => is_array($t) && trim((string) ($t['pct'] ?? '')) !== '')));
+        $hx = in_array($request->input('hx_tipo'), ['importe', 'recargo'], true) && $num($request->input('hx_valor'))
+            ? ['tipo' => $request->input('hx_tipo'), 'valor' => $num($request->input('hx_valor')), 'art' => ''] : null;
+        $prevConv = Nomina::config($c)['conv'];
+        $this->guardarConfig($c, ['conv' => array_replace($prevConv, ['extras' => $extras, 'antig' => $antig, 'pluses' => $pluses,
+            'it' => ['cc' => $tramos($request->input('it_cc', [])), 'at' => $tramos($request->input('it_at', [])), 'art' => $prevConv['it']['art'] ?? ''], 'hx' => $hx,
+            'nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
+            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => $extras ? (string) (12 + count($extras)) : (in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14'), 'cats' => $cats])]);
+        $cambios = $this->actualizarPlantilla($c, $cats, (bool) $extras);
         Auditoria::registrar('laboral.convenio', 'Convenio de '.$c->nombre.' guardado', null, $c->id);
 
-        return redirect()->route('laboral.convenios')->with('ok', 'Convenio y tablas salariales guardados.');
+        return redirect()->route('laboral.convenios')->with('ok', 'Convenio guardado y aplicado a las nóminas de '.$c->nombre.'.'.($cambios ? ' Salarios actualizados al convenio: '.implode(' · ', $cambios).'.' : ''));
     }
 
     /** Lee el PDF del convenio con IA y aplica sus tablas y reglas a la empresa y a su plantilla */
@@ -368,33 +402,7 @@ class LaboralGestionController extends LaboralController
             ]);
         $this->guardarConfig($c, ['conv' => $conv]);
 
-        // Plantilla: nadie cobra por debajo de su categoría del convenio (nunca se baja un salario)
-        $cambios = [];
-        $porCat = collect($r['cats'])->keyBy('cat');
-        foreach (Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get() as $t) {
-            $d = $t->datos ?? [];
-            $ct = $porCat[$d['convCat'] ?? ''] ?? null;
-            if (! $ct || Nomina::esAutonomo($d)) {
-                continue;
-            }
-            $antes = Nomina::anual(Nomina::rellenar($t->ficha(), $c));
-            $d['grupo'] = (int) $ct['grupo'];
-            if ($ct['unidad'] === 'dia') {
-                $d['salTipo'] = 'Diario';
-                $d['salDia'] = max(Nomina::n($d['salDia'] ?? 0), (float) $ct['base']);
-            } else {
-                $d['salTipo'] = 'Mensual';
-                $d['salBase'] = max(Nomina::n($d['salBase'] ?? 0), (float) $ct['base']);
-            }
-            $d['plus'] = max(Nomina::n($d['plus'] ?? 0), (float) $ct['plus']);
-            $d['pagas'] = $r['extras'] ? 14 : 12;
-            $t->update(['datos' => $d]);
-            $d['sal'] = Nomina::anual(Nomina::rellenar($t->fresh()->ficha(), $c));
-            $t->update(['datos' => $d]);
-            if (abs($d['sal'] - $antes) > 0.005) {
-                $cambios[] = ($d['nombre'] ?? 'Trabajador').': '.Formato::eur($antes).' → '.Formato::eur($d['sal']);
-            }
-        }
+        $cambios = $this->actualizarPlantilla($c, $r['cats'], (bool) $r['extras']);
         Auditoria::registrar('laboral.convenio.ia', 'Convenio leído con IA para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
 
         return redirect()->route('laboral.convenios')->with('ok', 'Convenio leído y aplicado: '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra'
@@ -418,6 +426,39 @@ class LaboralGestionController extends LaboralController
         Auditoria::registrar('laboral.ia.clave', 'Clave de la API de Anthropic configurada');
 
         return back()->with('ok', 'Clave guardada (cifrada). Ya puedes leer convenios con IA.');
+    }
+
+    /** Plantilla: nadie cobra por debajo de su categoría del convenio (nunca se baja un salario). Devuelve los cambios. */
+    private function actualizarPlantilla(Cliente $c, array $cats, bool $hayExtras): array
+    {
+        $cambios = [];
+        $porCat = collect($cats)->keyBy('cat');
+        foreach (Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get() as $t) {
+            $d = $t->datos ?? [];
+            $ct = $porCat[$d['convCat'] ?? ''] ?? null;
+            if (! $ct || Nomina::esAutonomo($d)) {
+                continue;
+            }
+            $antes = Nomina::anual(Nomina::rellenar($t->ficha(), $c));
+            $d['grupo'] = (int) $ct['grupo'];
+            if (($ct['unidad'] ?? 'mes') === 'dia') {
+                $d['salTipo'] = 'Diario';
+                $d['salDia'] = max(Nomina::n($d['salDia'] ?? 0), (float) $ct['base']);
+            } else {
+                $d['salTipo'] = 'Mensual';
+                $d['salBase'] = max(Nomina::n($d['salBase'] ?? 0), (float) $ct['base']);
+            }
+            $d['plus'] = max(Nomina::n($d['plus'] ?? 0), (float) $ct['plus']);
+            $d['pagas'] = $hayExtras ? 14 : (int) ($d['pagas'] ?? 14);
+            $t->update(['datos' => $d]);
+            $d['sal'] = Nomina::anual(Nomina::rellenar($t->fresh()->ficha(), $c));
+            $t->update(['datos' => $d]);
+            if (abs($d['sal'] - $antes) > 0.005) {
+                $cambios[] = ($d['nombre'] ?? 'Trabajador').': '.Formato::eur($antes).' → '.Formato::eur($d['sal']);
+            }
+        }
+
+        return $cambios;
     }
 
     // ---------------------------------------------------- cálculo de nóminas
