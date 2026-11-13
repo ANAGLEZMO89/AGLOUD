@@ -93,7 +93,7 @@ class LaboralPeriodoTest extends TestCase
         $en()->post('/laboral/gestion/convenios', ['_enviado' => 1, 'conv_nombre' => 'Convenio de la construcción', 'conv_jornada' => '1736', 'conv_vacaciones' => '30', 'conv_pagas' => '14'])->assertSessionHasNoErrors();
         // Trabajador guardado con el texto de relleno antiguo como «categoría»
         $t = Trabajador::create(['cliente_id' => $this->a->id, 'estado' => 'Alta', 'alta' => '2026-11-10', 'contrato' => '100', 'datos' => array_merge($this->w(), [
-            'nombre' => 'Beka Prueba', 'nom1' => 'Beka', 'ape1' => 'Prueba', 'nif' => 'X1234567L', 'tipoDoc' => 'NIE', 'naf' => '211234567890', 'ccc' => '03149921012', 'convCat' => 'Sin categorías en el convenio'])]);
+            'nombre' => 'Beka Prueba', 'nom1' => 'Beka', 'ape1' => 'Prueba', 'nif' => 'X1234567L', 'tipoDoc' => 'NIE', 'naf' => '211234567890', 'ccc' => '03149921012', 'convCat' => 'Sin categorías en el convenio', 'cat' => 'Sin categorías en el convenio'])]);
         $w = Nomina::rellenar($t->ficha(), $this->a);
         $this->assertSame('', $w['convCat']);
         $leg = collect(Nomina::comprobar($w, Nomina::config($this->a), 1, '2026-11-13'));
@@ -103,7 +103,7 @@ class LaboralPeriodoTest extends TestCase
             ->assertSee('— El convenio no tiene categorías —');
         // El origen del cálculo dice qué se ha usado de verdad
         $en()->get('/laboral/nominas?anio=2026&mes=11&t='.$t->id)->assertOk()->assertDontSee('Calculada desde el convenio')
-            ->assertSee('Calculada con la ficha (el convenio no tiene tablas salariales)')->assertSee('10/11/2026 - 30/11/2026')->assertSee('21 de 30')
+            ->assertSee('Calculada con la ficha (el convenio no tiene tablas salariales)')->assertDontSee('Sin categorías en el convenio')->assertSee('10/11/2026 - 30/11/2026')->assertSee('21 de 30')
             ->assertSee('Cómo se ha calculado la base de cotización');
         // El recibo muestra el periodo real
         $en()->get('/laboral/nominas/'.$t->id.'/recibo?anio=2026&mes=11')->assertOk()->assertSee('10/11/2026 a 30/11/2026')->assertSee('851,55');

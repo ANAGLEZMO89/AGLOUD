@@ -31,6 +31,9 @@ class Nomina
     /** Año al que corresponden las bases y tipos fijos de este archivo (pendientes de pasar a parámetros con fecha de efecto) */
     public const PARAM_ANIO = 2026;
 
+    /** Texto de relleno que versiones anteriores guardaban como si fuera una categoría */
+    public const SIN_CAT = 'Sin categorías en el convenio';
+
     /** SMI anual de 2026 (14 pagas) usado en la comprobación legal del contrato */
     public const SMI_ANUAL = 17094.0;
 
@@ -163,7 +166,7 @@ class Nomina
             'claus' => ['conf', 'datos', 'desc', 'reg'], 'docs' => [], 'nombre' => '', 'cat' => '',
             'regimen' => 'General', 'autTipo' => self::TIPOS_AUTONOMO[0], 'autBase' => 0, 'autCuota' => 0, 'autRend' => 0, 'autMutua' => '', 'autCese' => true,
             'autTarifa' => false, 'autTarifaFin' => '', 'iae' => '', 'fAntig' => '',
-        ], $w, ['_conv' => self::reglas($c)], ($w['convCat'] ?? '') === 'Sin categorías en el convenio' ? ['convCat' => ''] : []);
+        ], $w, ['_conv' => self::reglas($c)], ($w['convCat'] ?? '') === self::SIN_CAT ? ['convCat' => ''] : [], ($w['cat'] ?? '') === self::SIN_CAT ? ['cat' => ''] : []);
     }
 
     /** Retribución por día trabajado (salario diario) en vez de mensual */
