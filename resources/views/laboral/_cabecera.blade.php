@@ -52,3 +52,6 @@
   @endforeach
 </div>
 @if($errors->any())<div class="ferr">{{ $errors->first() }}</div>@endif
+@if(isset($P) && empty($P['conv']['cats']) && ($tab ?? '') !== 'g-conv')
+  <div class="msg warn" style="font-weight:500">El convenio de esta empresa no tiene tablas salariales: las nóminas se calculan solo con los datos de la ficha y no se puede comprobar el salario mínimo. <a href="{{ route('laboral.convenios') }}">Completar el convenio</a></div>
+@endif

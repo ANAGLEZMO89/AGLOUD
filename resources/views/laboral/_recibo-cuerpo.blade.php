@@ -15,6 +15,13 @@
   $iban = strtoupper(preg_replace('/\s/', '', (string) ($w['iban'] ?? '')));
   $ibanM = $iban ? substr($iban, 0, 4).' **** **** **** '.substr($iban, -4) : '';
   $cat = ($w['convCat'] ?? '') ?: ($w['cat'] ?? '');
+  // Periodo real del trabajador (alta o baja dentro del mes)
+  if (preg_match('~(\d{2})/(\d{2})/(\d{4})\s*$~', (string) $per, $pm)) {
+      [$rD, $rH, $rDias] = Nomina::periodo($w, (int) $pm[3], (int) $pm[2]);
+      $per = Formato::fecha($rD).' a '.Formato::fecha($rH);
+      $diasRec = $rDias;
+  }
+  $diasRec ??= 30;
   $contrato = $aut ? 'RETA' : Nomina::codigo((string) $w['contrato']);
   // Devengos de la nómina (las líneas, calculadas o editadas en el Integral)
   $lin = $n['lineas'] ?? [];
@@ -111,7 +118,7 @@
   <table class="of">
     <tr><td style="width:50%"><span class="lbl">Empresa</span><b>{{ $c->nombre }}</b><br>{{ $domEmp }}<br>CIF {{ $c->nif }} · CCC {{ $ccc ?: '—' }}</td>
       <td><span class="lbl">Trabajador</span><b>{{ $w['nombre'] }}</b><br>NIF {{ $w['nif'] }} · Nº afiliación {{ $w['naf'] }}<br>Categoría {{ $cat ?: '—' }} · Grupo de cotización {{ $w['grupo'] }}<br>Antigüedad {{ Formato::fecha($w['alta']) }} · Contrato {{ $contrato }}</td></tr>
-    <tr><td colspan="2">Periodo de liquidación: <b>{{ $per }}</b> &nbsp; · &nbsp; Total días: <b>30</b> &nbsp; · &nbsp; Recibo: <b>{{ $titRec }}</b>@if($fecha) &nbsp; · &nbsp; Fecha de pago: <b>{{ $fecha }}</b>@endif</td></tr>
+    <tr><td colspan="2">Periodo de liquidación: <b>{{ $per }}</b> &nbsp; · &nbsp; Total días: <b>{{ $diasRec }}</b> &nbsp; · &nbsp; Recibo: <b>{{ $titRec }}</b>@if($fecha) &nbsp; · &nbsp; Fecha de pago: <b>{{ $fecha }}</b>@endif</td></tr>
   </table>
   <div class="grow" style="margin-top:6px"><table class="of">
     <tr class="sec"><td>I. DEVENGOS</td><td class="r" style="width:110px">TOTALES</td></tr>
@@ -167,7 +174,7 @@
       '3. Pagas extraordinarias' => array_values(array_filter($lin, fn ($l) => ($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') !== 'prorrateada')),
       '4. Prorrateo de las pagas extraordinarias' => array_values(array_filter($lin, fn ($l) => ($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') === 'prorrateada')),
     ]);
-    $diasMes = (int) (preg_match('~(\d{2})/(\d{2})/(\d{4})\s*$~', $per, $mm) ? $mm[1] : 30);
+    $diasMes = $diasRec;
     $perTxt = preg_match('~^(\d{2})/(\d{2})/(\d{4}) a (\d{2})/(\d{2})/(\d{4})$~', $per, $pp)
       ? 'del '.$pp[1].' de '.mb_strtolower(Nomina::MESES[(int) $pp[2] - 1]).' de '.$pp[3].' a '.$pp[4].' de '.mb_strtolower(Nomina::MESES[(int) $pp[5] - 1]).' de '.$pp[6] : $per;
   @endphp
@@ -243,7 +250,7 @@
   <table class="grid" style="margin-top:-1px">
     <tr><td style="width:40%"><span class="lbl">Trabajador</span><b style="font-size:12px">{{ $w['nombre'] }}</b></td><td><span class="lbl">N.I.F.</span><b class="m">{{ $w['nif'] }}</b></td><td><span class="lbl">Nº afiliación S.S.</span><b class="m">{{ $w['naf'] }}</b></td><td><span class="lbl">Grupo cot.</span><b class="m">{{ $w['grupo'] }}</b></td></tr>
     <tr><td><span class="lbl">Categoría profesional</span><b>{{ $cat ?: '—' }}</b></td><td><span class="lbl">Contrato</span><b class="m">{{ $contrato }}</b></td><td><span class="lbl">Antigüedad</span><b class="m">{{ Formato::fecha($w['alta']) }}</b></td><td><span class="lbl">Coef. parcialidad</span><b class="m">{{ Formato::num(Nomina::n($w['jor'] ?? 100) / 100) }}</b></td></tr>
-    <tr><td><span class="lbl">Periodo de liquidación</span><b class="m">{{ $per }}</b></td><td><span class="lbl">Total días</span><b class="m">30</b></td><td><span class="lbl">Recibo</span><b>{{ $titRec }}</b></td><td><span class="lbl">Fecha de pago</span><b class="m">{{ $fecha ?: '—' }}</b></td></tr>
+    <tr><td><span class="lbl">Periodo de liquidación</span><b class="m">{{ $per }}</b></td><td><span class="lbl">Total días</span><b class="m">{{ $diasRec }}</b></td><td><span class="lbl">Recibo</span><b>{{ $titRec }}</b></td><td><span class="lbl">Fecha de pago</span><b class="m">{{ $fecha ?: '—' }}</b></td></tr>
   </table>
   <div class="grow" style="margin-top:6px"><table class="bx cl">
     <tr><th class="r" style="width:58px">Cuantía</th><th class="r" style="width:66px">Precio</th><th style="width:34px">Cód.</th><th style="text-align:left">Concepto</th><th class="r" style="width:90px">Devengos</th><th class="r" style="width:90px">Deducciones</th></tr>

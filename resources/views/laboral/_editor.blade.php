@@ -16,7 +16,11 @@
   $desLegal = ($n['tmp'] ? Nomina::TIPOS['des_tmp'][0] : Nomina::TIPOS['des_ind'][0]) * 100;
   $irTxt = $ir['fijo'] ? 'Tipo fijo del '.Formato::num($ir['tipo']).' % indicado en la ficha del trabajador.'
     : 'Calculado con el algoritmo de la AEAT: '.Formato::num($ir['tipoAnual']).' % anual'.(abs($ir['tipo'] - $ir['tipoAnual']) > 0.001 ? ', regularizado al '.Formato::num($ir['tipo']).' % este mes' : '').'.';
-  $estado = $emitida ? ['Emitida '.Formato::fechaHora($g->emitida_at), '#E6F6A8', '#2E3A00'] : ($g ? ['Borrador guardado', '#FCEBCB', '#6E4300'] : [$rq === 'Nómina' ? 'Calculada desde el convenio' : 'Sin guardar', '#ECECE7', '#3C3C3C']);
+  // Estado y origen reales: la tabla del convenio solo se usa si el trabajador tiene una categoría que existe en ella
+  $catConv = ($w['convCat'] ?? '') !== '' ? collect($P['conv']['cats'] ?? [])->firstWhere('cat', $w['convCat']) : null;
+  $origen = $catConv ? 'Calculada con la ficha y la tabla del convenio' : (($P['conv']['cats'] ?? []) ? 'Calculada con la ficha (sin categoría del convenio asignada)' : 'Calculada con la ficha (el convenio no tiene tablas salariales)');
+  $estado = $emitida ? ['Emitida '.Formato::fechaHora($g->emitida_at), '#E6F6A8', '#2E3A00'] : ($g ? ['Borrador guardado', '#FCEBCB', '#6E4300'] : [$rq === 'Nómina' ? $origen : 'Sin guardar', $catConv || $rq !== 'Nómina' ? '#ECECE7' : '#FCEBCB', $catConv || $rq !== 'Nómina' ? '#3C3C3C' : '#6E4300']);
+  [$pDesde, $pHasta, $pDias, $pMes] = Nomina::periodo($w, $anio, $mes);
   $aut = Nomina::esAutonomo($w);
   // Fecha de pago: del día 25 del mes al día 10 del siguiente
   $fpSel = old('fecha_pago', $g?->fecha_pago?->toDateString() ?? $ult->toDateString());
@@ -85,8 +89,8 @@
       </select></label>
     <label class="ne-f"><span>Fecha de pago</span>
       <select class="sel lb-in" name="fecha_pago" @disabled($bloq)>@foreach($fechas as $k => $t)<option value="{{ $k }}" @selected($k === $fpSel)>{{ $t }}</option>@endforeach</select></label>
-    <div><span>Periodo de liquidación</span><b class="mono12">{{ $ini->format('d/m/Y') }} - {{ $ult->format('d/m/Y') }}</b></div>
-    <div><span>Días</span><b class="mono12">30</b></div>
+    <div><span>Periodo de liquidación</span><b class="mono12">{{ Formato::fecha($pDesde) }} - {{ Formato::fecha($pHasta) }}</b></div>
+    <div><span>Días en alta</span><b class="mono12">{{ $pDias }}{{ $pDias < $pMes ? ' de '.$pMes : '' }}</b></div>
     <div><span>Antigüedad</span><b class="mono12">{{ Formato::fecha($w['alta']) }}</b></div>
     <div><span>Coeficiente de parcialidad</span><b class="mono12">{{ Formato::num(Nomina::n($w['jor']) / 100) }}</b></div>
   </div>
@@ -205,6 +209,11 @@
       <div><span>{{ $l }}</span><b class="mono12">{{ $E($v) }}</b></div>
     @endforeach
   </div>
+  @if(! empty($n['baseExpl']))
+    <details class="ne-expl" style="font-size:12.5px;color:#3C3C3C;padding:6px 2px"><summary style="cursor:pointer;font-weight:600">Cómo se ha calculado la base de cotización</summary>
+      <ul style="margin:6px 0 0;padding-left:18px;line-height:1.5">@foreach($n['baseExpl'] as $t)<li>{{ $t }}</li>@endforeach</ul>
+    </details>
+  @endif
   <div class="ne-tot ne-tot2">
     <div><span>A. Total devengado</span><b>{{ $E($n['dev']) }}</b></div>
     <div><span>B. Total a deducir</span><b>{{ $E($n['ssT'] + $n['irpf'] + $n['ded'] + $n['esp']) }}</b></div>

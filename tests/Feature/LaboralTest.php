@@ -317,7 +317,7 @@ class LaboralTest extends TestCase
         $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['convCat' => 'Camarero']));
         $t = Trabajador::firstOrFail();
         $url = '/laboral/nominas?anio=2026&mes=11&t='.$t->id;
-        $html = $this->en()->get($url)->assertOk()->assertSee('Calculada desde el convenio')->getContent();
+        $html = $this->en()->get($url)->assertOk()->assertSee('Calculada con la ficha y la tabla del convenio')->getContent();
         preg_match_all('/name="l\[(\d+)\]\[(id|cod|concepto|importe|clase|cobro)\]"(?: value="([^"]*)")?/', $html, $m, PREG_SET_ORDER);
         $l = [];
         foreach ($m as $x) {
@@ -350,7 +350,7 @@ class LaboralTest extends TestCase
         $this->assertSame('Borrador', $g->fresh()->estado);
         $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'recalcular'])->assertRedirect();
         $this->assertSame(0, NominaMes::count());
-        $this->en()->get($url)->assertOk()->assertSee('Calculada desde el convenio');
+        $this->en()->get($url)->assertOk()->assertSee('Calculada con la ficha y la tabla del convenio');
     }
 
     public function test_integral_recibos_fijos_embargos_y_variables_a_mano(): void

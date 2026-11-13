@@ -138,6 +138,10 @@ class LaboralController extends Controller
             $o['autTarifa'] = ! empty($in['autTarifa']);
         }
         $o['grupo'] = max(1, min(11, (int) ($in['grupo'] ?? $d['grupo'])));
+        // Solo categorías que existen en el convenio (o la que ya tenía guardada, que la comprobación marcará como error)
+        if (array_key_exists('convCat', $o) && $o['convCat'] !== '' && $o['convCat'] !== ($d['convCat'] ?? '') && ! in_array($o['convCat'], array_column($P['conv']['cats'] ?? [], 'cat'), true)) {
+            $o['convCat'] = '';
+        }
         if (array_key_exists('salTipo', $in)) {
             $o['salTipo'] = $in['salTipo'] === 'Diario' ? 'Diario' : 'Mensual';
             $o['diasExtra'] = max(0, min(60, (int) ($in['diasExtra'] ?? 30)));
@@ -569,7 +573,8 @@ class LaboralController extends Controller
         }
         $inc = Nomina::incidenciasAnio($c, $anio);
         $ipAuto = (float) $this->nomina->tipoIrpf($w, $anio, $mes, $inc)['tipo'];
-        $doc = ['lineas' => $L, 'deducciones' => $D, 'tipos' => $tipos, 'recibo' => $recibo, 'dias' => Nomina::diasMes($anio, $mes)];
+        [$pd, $ph, $pdias, $pmes] = Nomina::periodo($w, $anio, $mes);
+        $doc = ['lineas' => $L, 'deducciones' => $D, 'tipos' => $tipos, 'recibo' => $recibo, 'dias' => $pdias, 'diasMes' => $pmes, 'desde' => $pd, 'hasta' => $ph];
         $calc = Nomina::computar($w, $doc, isset($tipos['irpf']) ? (float) $tipos['irpf'] : $ipAuto, (float) $P['at']);
         $doc['retenido'] = collect($calc['deducciones'])->filter(fn ($d) => ! empty($d['ref']))->mapWithKeys(fn ($d) => [$d['ref'] => $d['importe']])->all();
         $fp = (string) $request->input('fecha_pago');

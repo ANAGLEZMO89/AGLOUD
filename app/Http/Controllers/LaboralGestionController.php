@@ -348,10 +348,10 @@ class LaboralGestionController extends LaboralController
             'it' => ['cc' => $tramos($request->input('it_cc', [])), 'at' => $tramos($request->input('it_at', [])), 'art' => $prevConv['it']['art'] ?? ''], 'hx' => $hx,
             'nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
             'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => $extras ? (string) (12 + count($extras)) : (in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14'), 'cats' => $cats])]);
-        $cambios = $this->actualizarPlantilla($c, $cats, (bool) $extras);
+        $bajo = self::bajoConvenio($c, $cats);
         Auditoria::registrar('laboral.convenio', 'Convenio de '.$c->nombre.' guardado', null, $c->id);
 
-        return redirect()->route('laboral.convenios')->with('ok', 'Convenio guardado y aplicado a las nóminas de '.$c->nombre.'.'.($cambios ? ' Salarios actualizados al convenio: '.implode(' · ', $cambios).'.' : ''));
+        return redirect()->route('laboral.convenios')->with('ok', 'Convenio guardado y aplicado a las nóminas de '.$c->nombre.'.'.($bajo ? ' Hay '.count($bajo).' trabajadores por debajo del convenio: revísalos (no se ha cambiado ningún salario).' : ''));
     }
 
     /** Lee el PDF del convenio con IA y aplica sus tablas y reglas a la empresa y a su plantilla */
@@ -388,25 +388,71 @@ class LaboralGestionController extends LaboralController
         return $this->aplicarConvenio($c, $r, 'Leído con Claude (claude.ai)');
     }
 
+    /** La lectura del PDF (con IA o pegada desde claude.ai) queda como PROPUESTA: no toca el convenio ni la plantilla hasta que se aprueba */
     private function aplicarConvenio(Cliente $c, array $r, string $archivo)
     {
         if (! $r['cats']) {
-            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se han encontrado tablas salariales. Comprueba que el PDF es el convenio completo (con sus anexos) y no solo la resolución de publicación.']);
+            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se han encontrado tablas salariales. Comprueba que el PDF es el convenio completo (con sus anexos) y no solo la resolución de publicación. No se ha guardado nada.']);
+        }
+        $this->guardarConfig($c, ['convPropuesta' => $r + ['_meta' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'usuario' => auth()->id()]]]);
+        Auditoria::registrar('laboral.convenio.propuesta', 'Propuesta de convenio leída ('.$archivo.') para '.$c->nombre.': '.count($r['cats']).' categorías', null, $c->id);
+
+        return redirect()->route('laboral.convenios', ['revisar' => 1])->with('ok', 'Propuesta lista para revisar: todavía no se ha aplicado nada al convenio ni a las nóminas.');
+    }
+
+    /** Aprobar o descartar la propuesta leída del PDF */
+    public function propuestaConvenio(Request $request)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
         }
         $P = Nomina::config($c);
+        $r = $P['convPropuesta'] ?? null;
+        if (! $r) {
+            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No hay ninguna propuesta pendiente.']);
+        }
+        if ($request->input('accion') !== 'aplicar') {
+            $this->guardarConfig($c, ['convPropuesta' => null]);
+            Auditoria::registrar('laboral.convenio.propuesta', 'Propuesta de convenio descartada para '.$c->nombre, null, $c->id);
+
+            return redirect()->route('laboral.convenios')->with('ok', 'Propuesta descartada. El convenio no ha cambiado.');
+        }
+        $m = $r['_meta'] ?? [];
         $conv = array_replace($P['conv'], array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
             'jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== ''), [
                 'cats' => $r['cats'], 'extras' => $r['extras'], 'antig' => $r['antig'], 'pluses' => $r['pluses'], 'it' => $r['it'], 'hx' => $r['hx'],
-                'pagas' => (string) (12 + count($r['extras'])),
-                'ia' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos']],
+                'pagas' => $r['extras'] ? (string) (12 + count($r['extras'])) : ($P['conv']['pagas'] ?? '14'),
+                'ia' => ['fecha' => $m['fecha'] ?? now()->toDateTimeString(), 'archivo' => $m['archivo'] ?? '', 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos'],
+                    'aprobado' => now()->toDateTimeString(), 'aprobadoPor' => $request->user()->id],
             ]);
-        $this->guardarConfig($c, ['conv' => $conv]);
+        $this->guardarConfig($c, ['conv' => $conv, 'convPropuesta' => null]);
+        Auditoria::registrar('laboral.convenio.ia', 'Propuesta de convenio aprobada por '.$request->user()->name.' para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
+        $bajo = self::bajoConvenio($c, $conv['cats']);
 
-        $cambios = $this->actualizarPlantilla($c, $r['cats'], (bool) $r['extras']);
-        Auditoria::registrar('laboral.convenio.ia', 'Convenio leído con IA para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
+        return redirect()->route('laboral.convenios')->with('ok', 'Convenio aplicado. Los salarios de la plantilla no se han modificado'.($bajo ? ': revisa los '.count($bajo).' trabajadores por debajo del convenio.' : '.'));
+    }
 
-        return redirect()->route('laboral.convenios')->with('ok', 'Convenio leído y aplicado: '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra'
-            .($r['antig'] ? ', antigüedad' : '').', '.count($r['pluses']).' pluses.'.($cambios ? ' Salarios actualizados al convenio: '.implode(' · ', $cambios).'.' : ''));
+    /** Trabajadores en alta cuyo salario queda por debajo de su categoría (solo informa; nunca modifica fichas) */
+    public static function bajoConvenio(Cliente $c, array $cats): array
+    {
+        $porCat = collect($cats)->keyBy('cat');
+        $out = [];
+        foreach (Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get() as $t) {
+            $d = $t->datos ?? [];
+            $ct = $porCat[$d['convCat'] ?? ''] ?? null;
+            if (! $ct || Nomina::esAutonomo($d)) {
+                continue;
+            }
+            $dia = ($ct['unidad'] ?? 'mes') === 'dia';
+            $mio = $dia ? (Nomina::diario($d) ? Nomina::n($d['salDia'] ?? 0) : Nomina::n($d['salBase'] ?? 0) / 30) : (Nomina::diario($d) ? Nomina::n($d['salDia'] ?? 0) * 30 : Nomina::n($d['salBase'] ?? 0));
+            $min = (float) $ct['base'] * ($dia ? 1 : (Nomina::n($d['jor'] ?? 100) ?: 100) / 100);
+            if ($mio + 0.001 < $min) {
+                $out[] = ['id' => $t->id, 'nombre' => $d['nombre'] ?? 'Trabajador', 'cat' => $ct['cat'], 'tiene' => round($mio, 2), 'min' => round($min, 2), 'unidad' => $dia ? 'día' : 'mes'];
+            }
+        }
+
+        return $out;
     }
 
     /** Clave de la API de Anthropic para leer convenios (solo la administración del despacho) */
@@ -426,39 +472,6 @@ class LaboralGestionController extends LaboralController
         Auditoria::registrar('laboral.ia.clave', 'Clave de la API de Anthropic configurada');
 
         return back()->with('ok', 'Clave guardada (cifrada). Ya puedes leer convenios con IA.');
-    }
-
-    /** Plantilla: nadie cobra por debajo de su categoría del convenio (nunca se baja un salario). Devuelve los cambios. */
-    private function actualizarPlantilla(Cliente $c, array $cats, bool $hayExtras): array
-    {
-        $cambios = [];
-        $porCat = collect($cats)->keyBy('cat');
-        foreach (Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get() as $t) {
-            $d = $t->datos ?? [];
-            $ct = $porCat[$d['convCat'] ?? ''] ?? null;
-            if (! $ct || Nomina::esAutonomo($d)) {
-                continue;
-            }
-            $antes = Nomina::anual(Nomina::rellenar($t->ficha(), $c));
-            $d['grupo'] = (int) $ct['grupo'];
-            if (($ct['unidad'] ?? 'mes') === 'dia') {
-                $d['salTipo'] = 'Diario';
-                $d['salDia'] = max(Nomina::n($d['salDia'] ?? 0), (float) $ct['base']);
-            } else {
-                $d['salTipo'] = 'Mensual';
-                $d['salBase'] = max(Nomina::n($d['salBase'] ?? 0), (float) $ct['base']);
-            }
-            $d['plus'] = max(Nomina::n($d['plus'] ?? 0), (float) $ct['plus']);
-            $d['pagas'] = $hayExtras ? 14 : (int) ($d['pagas'] ?? 14);
-            $t->update(['datos' => $d]);
-            $d['sal'] = Nomina::anual(Nomina::rellenar($t->fresh()->ficha(), $c));
-            $t->update(['datos' => $d]);
-            if (abs($d['sal'] - $antes) > 0.005) {
-                $cambios[] = ($d['nombre'] ?? 'Trabajador').': '.Formato::eur($antes).' → '.Formato::eur($d['sal']);
-            }
-        }
-
-        return $cambios;
     }
 
     // ---------------------------------------------------- cálculo de nóminas

@@ -8,7 +8,9 @@
   $PROVS = config('agcloud.provincias') ?? [];
   $hab = array_values(array_filter(Nomina::CONTRATOS, fn ($x) => in_array(Nomina::codigo($x), $P['hab'], true) || $x === $d['contrato']));
   $cents = $centros; if ($d['centro'] && ! in_array($d['centro'], $cents, true)) array_unshift($cents, $d['centro']); if (! $cents) $cents = ['Centro principal'];
-  $cats = array_column($P['conv']['cats'], 'cat'); if ($d['convCat'] && ! in_array($d['convCat'], $cats, true)) array_unshift($cats, $d['convCat']);
+  $catsConv = array_column($P['conv']['cats'], 'cat');
+  $cats = array_merge([['', $catsConv ? '— Elige la categoría —' : '— El convenio no tiene categorías —']], array_map(fn ($x) => [$x, $x], $catsConv));
+  if ($d['convCat'] && ! in_array($d['convCat'], $catsConv, true)) $cats[] = [$d['convCat'], $d['convCat'].' (no está en el convenio)'];
   $catsData = collect($P['conv']['cats'])->mapWithKeys(fn ($x) => [$x['cat'] => [Formato::num($x['base']), Formato::num($x['plus'] ?? 0), (string) $x['grupo']]])->all();
   $val = fn ($k) => is_float($d[$k] ?? null) || is_int($d[$k] ?? null) ? (in_array($k, ['salBase', 'salDia', 'plus', 'irpf', 'jor'], true) ? Formato::num($d[$k], in_array($k, ['jor'], true) ? 0 : 2) : (string) $d[$k]) : (string) ($d[$k] ?? '');
   // Campo de la ficha (fb del prototipo)
@@ -39,6 +41,7 @@
   $M = $d['m145'];
   $DISC = ['No', '33 % a 64 %', '65 % o más'];
   $legalOk = collect($legal)->every(fn ($x) => $x['ok']);
+  $legalErr = collect($legal)->where('nivel', 'error')->count();
   $ss = [['TGSS · Sistema RED', $redOk, [['idc', 'Descargar el IDC', 'Informe de datos para la cotización'], ['ta', 'Descargar la resolución de alta (TA)', 'Alta del NAF en el CCC de la empresa'], ['alta', 'Comunicar el alta', 'Antes del inicio de la actividad'], ['var', 'Cambiar datos de afiliación', 'Contrato, jornada, grupo u ocupación']]],
     ['SEPE · Contrat@ y Certific@2', $sepeOk, [['contrata', 'Comunicar el contrato', 'Plazo de 10 días desde la firma'], ['comunicacion', 'Descargar la comunicación del contrato', 'Resumen de los datos enviados'], ['copia', 'Copia básica del contrato', 'Para la representación legal y el SEPE'], ['cert', 'Certificado de empresa', 'Tras la baja · prestación por desempleo']]],
     ['Documentos', true, [['texto', 'Editar el texto del contrato', ! empty($d['contratoTexto']) ? 'Texto propio de este trabajador' : 'Parte de la plantilla de su modalidad'], ['contrato', 'Contrato de trabajo en PDF', 'Con las cláusulas y la firma de la empresa'], ['m145', 'Modelo 145 en PDF', 'Comunicación de datos al pagador']]]];
@@ -106,15 +109,15 @@
             {{ $fb('causa', preg_match('/^(410|510)/', $cod) ? 'Causa de la sustitución' : (preg_match('/^(42|52)/', $cod) ? 'Titulación y puesto formativo' : 'Causa concreta de la temporalidad'), 'text', true, 'Obligatorio: describe la causa y su conexión con la duración (art. 15 ET)', ['data-lb-temp' => '1', 'data-lb-causa' => '1']) }}
             {{ $fb('sustituido', 'Persona sustituida · NIF y nombre', 'text', true, '', ['data-lb-sust' => '1']) }}
             {{ $fb('jor', 'Jornada %', 'num', false, Nomina::parcial($d) ? 'Tiempo parcial: menos del 100 %' : 'Tiempo completo') }}{{ $fb('horas', 'Horas semanales') }}{{ $fb('horario', 'Distribución del horario', 'text', true) }}
-            {{ $fb('centro', 'Centro de trabajo', $cents) }}{{ $fb('convCat', 'Categoría según el convenio', $cats ?: ['Sin categorías en el convenio'], false, 'Rellena el salario y el grupo') }}
+            {{ $fb('centro', 'Centro de trabajo', $cents) }}{{ $fb('convCat', 'Categoría según el convenio', $cats, false, $catsConv ? 'Rellena el salario y el grupo' : 'Añade las categorías en Gestión › Convenios') }}
             {{ $fb('prueba', 'Periodo de prueba', ['Sin periodo de prueba', '15 días', '1 mes', '2 meses', '3 meses', '6 meses']) }}{{ $fb('vac', 'Vacaciones (días naturales)') }}
           </div></div>
           <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700">Comprobación legal del contrato</span>@if($legalOk)<span class="lb-pill" style="background:#E6F6A8;color:#2E3A00;font-size:12px;padding:4px 10px">Todo correcto</span>@endif</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700">Comprobaciones del contrato</span>@if($legalOk)<span class="lb-pill" style="background:#E6F6A8;color:#2E3A00;font-size:12px;padding:4px 10px">Sin incidencias</span>@elseif($legalErr)<span class="lb-pill" style="background:#FBE3E3;color:#8A1C1C;font-size:12px;padding:4px 10px">{{ $legalErr }} {{ $legalErr === 1 ? 'error' : 'errores' }}</span>@else<span class="lb-pill" style="background:#FCEBCB;color:#6E4300;font-size:12px;padding:4px 10px">Revisar</span>@endif</div>
             <div style="display:flex;flex-direction:column">
-              @foreach($legal as $lg)<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #F1F1EC;font-size:13.5px">@if($lg['ok'])<span class="lb-ok">✓</span>@else<span class="lb-ko">!</span>@endif<span>{{ $lg['l'] }}</span></div>@endforeach
+              @foreach($legal as $lg)<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #F1F1EC;font-size:13.5px">@if($lg['ok'])<span class="lb-ok" aria-label="Correcto">✓</span>@elseif(($lg['nivel'] ?? 'error') === 'aviso')<span class="lb-ko" style="background:#FCEBCB;color:#6E4300" aria-label="Advertencia">?</span>@else<span class="lb-ko" aria-label="Error">!</span>@endif<span>{{ $lg['l'] }}</span></div>@endforeach
             </div>
-            <span style="font-size:12px;color:#6A6A65">La comprobación se actualiza al guardar la ficha.</span>
+            <span style="font-size:12px;color:#6A6A65">Comprueba formato y coherencia de los datos con el convenio guardado. No sustituye la revisión profesional del contrato. Se actualiza al guardar la ficha.</span>
           </div>
           <div class="card">
             <span style="font-size:15px;font-weight:700">Cláusulas del contrato</span>

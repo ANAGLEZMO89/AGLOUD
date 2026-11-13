@@ -72,15 +72,24 @@ class ConvenioIATest extends TestCase
         $this->assertArrayNotHasKey('_conv', $t->fresh()->datos);
 
         $pdf = UploadedFile::fake()->createWithContent('convenio.pdf', "%PDF-1.4\nconvenio");
-        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->post(route('laboral.convenios.ia'), ['pdf' => $pdf])
-            ->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+        $en = fn () => $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id]);
+        $en()->post(route('laboral.convenios.ia'), ['pdf' => $pdf])->assertRedirect(route('laboral.convenios', ['revisar' => 1]))->assertSessionHas('ok');
+        // Solo es una propuesta: ni el convenio ni la plantilla cambian todavía
+        $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
+        $en()->get(route('laboral.convenios'))->assertSee('Propuesta pendiente de revisar')->assertSee('Nuevas: Peón ordinario, Administrativo')->assertSee('Paga de beneficios (marzo)');
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar'])->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+        $this->assertNull(Nomina::config($this->a)['convPropuesta']);
 
         $P = Nomina::config($this->a);
         $this->assertSame('Convenio colectivo de la construcción de Huelva', $P['conv']['nombre']);
         $this->assertSame('15', $P['conv']['pagas']);
         $this->assertCount(3, $P['conv']['extras']);
+        // Nunca se cambian salarios como efecto de una importación: se avisa de quién queda por debajo
         $d = $t->fresh()->datos;
-        $this->assertSame(['Diario', 50.0, 10], [$d['salTipo'], (float) $d['salDia'], (int) $d['grupo']]);
+        $this->assertSame(['Mensual', 900.0, 7], [$d['salTipo'], (float) $d['salBase'], (int) $d['grupo']]);
+        $en()->get(route('laboral.convenios'))->assertSee('Trabajadores por debajo del convenio')->assertSee('Beka Prueba');
+        // La asesora corrige la ficha a mano
+        $t->update(['datos' => array_merge($d, ['salTipo' => 'Diario', 'salDia' => 50, 'grupo' => 10])]);
 
         $w = Nomina::rellenar($t->fresh()->ficha(), $this->a);
         // 7 años: 2 trienios × 20 € = 40 €
@@ -118,7 +127,8 @@ class ConvenioIATest extends TestCase
         $this->assertSame(['14', 'dia'], [$P['conv']['pagas'], $P['conv']['cats'][0]['unidad']]);
         $this->assertSame(['porcentaje', 5.0, 5], [$P['conv']['antig']['tipo'], (float) $P['conv']['antig']['valor'], $P['conv']['antig']['periodo']]);
         $d = $t->fresh()->datos;
-        $this->assertSame(['Diario', 45.5, 10], [$d['salTipo'], (float) $d['salDia'], (int) $d['grupo']]);
+        $this->assertSame([900.0, 7], [(float) $d['salBase'], (int) $d['grupo']]);
+        $t->update(['datos' => array_merge($d, ['salTipo' => 'Diario', 'salDia' => 45.5, 'grupo' => 10])]);
         $w = Nomina::rellenar($t->fresh()->ficha(), $this->a);
         // Noviembre 2026: 30 días × 45,50 + plus 60 + antigüedad (1 quinquenio: 5 % de 1.365) = 68,25
         $this->assertEqualsWithDelta(30 * 45.5 + 60 + 68.25, Nomina::calcular($w, 11, [], 0)['dev'], 0.01);
@@ -138,8 +148,16 @@ class ConvenioIATest extends TestCase
         $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
         // Respuesta de claude.ai con texto y bloque de código alrededor del JSON
         $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => "Aquí está:\n```json\n".json_encode($this->respuesta(), JSON_UNESCAPED_UNICODE)."\n```"])
-            ->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+            ->assertRedirect(route('laboral.convenios', ['revisar' => 1]))->assertSessionHas('ok');
+        $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
+        // Descartar no cambia nada; volver a pegar y aprobar sí
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'descartar'])->assertSessionHas('ok');
+        $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
+        $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => json_encode($this->respuesta())]);
+        $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => json_encode($this->respuesta())]);
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar']);
         $P = Nomina::config($this->a);
+        // Reintentar no duplica categorías
         $this->assertCount(2, $P['conv']['cats']);
         $this->assertSame(3, $P['conv']['antig']['periodo']);
         $en()->get(route('laboral.convenios'))->assertSee('Leído con Claude (claude.ai)');
