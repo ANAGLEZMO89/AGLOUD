@@ -95,8 +95,8 @@ class Convenios
     /** Por qué el motor no puede calcular este concepto (null si puede) */
     public static function motivoNoSoportado(ConvenioConcepto $p): ?string
     {
-        if (! in_array($p->unidad, ['mes', 'dia_natural', 'dia_trabajado', 'hora'], true)) {
-            return 'la unidad «'.(ConvenioConcepto::UNIDADES[$p->unidad] ?? $p->unidad).'» necesita el calendario (fase 5)';
+        if (! in_array($p->unidad, ['mes', 'dia_natural', 'dia_trabajado', 'dia_efectivo', 'hora'], true)) {
+            return 'la unidad «'.(ConvenioConcepto::UNIDADES[$p->unidad] ?? $p->unidad).'» no tiene un cálculo automático (se añade a mano en la nómina)';
         }
         if ($p->calculo === 'formula') {
             $codigos = ConvenioConcepto::withoutGlobalScopes()->where('version_id', $p->version_id)->whereNotNull('codigo')->pluck('codigo')->all();

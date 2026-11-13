@@ -116,7 +116,7 @@
       <div class="card" style="gap:0;padding:6px 18px">
         @forelse($aus as $a)
           <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:{{ $loop->first ? '0' : '1px solid #F1F1EC' }}">
-            <div style="display:flex;flex-direction:column;min-width:0;flex:1"><span class="ell" style="font-weight:600;font-size:13.5px">{{ $a->trabajador->datos['nombre'] ?? '' }} · {{ $a->tipo }}</span><span style="font:500 12px var(--mono);color:#6A6A65">{{ Formato::fecha($a->desde) }} – {{ Formato::fecha($a->hasta) }}</span></div>
+            <div style="display:flex;flex-direction:column;min-width:0;flex:1"><span class="ell" style="font-weight:600;font-size:13.5px">{{ $a->trabajador->datos['nombre'] ?? '' }} · {{ $a->tipo }}</span><span style="font:500 12px var(--mono);color:#6A6A65">{{ Formato::fecha($a->desde) }} – {{ Formato::fecha($a->hasta) }}</span><span style="font-size:11.5px;color:{{ ['confirmada' => '#2E3A00', 'descartada' => '#6A6A65'][$a->estado] ?? '#6E4300' }}">{{ ['confirmada' => 'En la nómina', 'descartada' => 'No va a la nómina'][$a->estado] ?? 'Pendiente de revisar en la nómina' }}</span></div>
             @php $nd = (int) $a->desde->diffInDays($a->hasta) + 1; @endphp<span class="mono12">{{ $nd }} {{ $nd === 1 ? 'día' : 'días' }}</span>
             <form method="POST" action="{{ route('horario.ausencia.borrar', $a->id) }}" data-confirm="¿Eliminar esta ausencia?">@csrf @method('DELETE')<button class="lb-del" type="submit" aria-label="Eliminar">×</button></form>
           </div>

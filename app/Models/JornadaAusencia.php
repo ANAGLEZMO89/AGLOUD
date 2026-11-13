@@ -18,7 +18,7 @@ class JornadaAusencia extends Model
 
     protected function casts(): array
     {
-        return ['desde' => 'date', 'hasta' => 'date'];
+        return ['desde' => 'date', 'hasta' => 'date', 'hospitalizacion' => 'boolean', 'base_reguladora' => 'decimal:4', 'revisada_at' => 'datetime'];
     }
 
     public function trabajador(): BelongsTo

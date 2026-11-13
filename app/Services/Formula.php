@@ -28,7 +28,9 @@ class Formula
         'horas_mes' => ['Horas mensuales a tiempo completo (jornada anual / 12)', 'h/mes'],
         'dias_mes' => ['Días naturales del mes', 'días'],
         'dias_alta' => ['Días naturales en alta en el mes', 'días'],
-        'dias_laborables' => ['Días de lunes a viernes en alta en el mes', 'días'],
+        'dias_laborables' => ['Días de trabajo del calendario del trabajador en alta en el mes (sin festivos)', 'días'],
+        'dias_trabajados' => ['Días laborables menos IT y ausencias no retribuidas', 'días'],
+        'dias_efectivos' => ['Días laborables sin ninguna ausencia (presencia real)', 'días'],
         'cantidad' => ['Cantidad introducida en la nómina (horas, días…) para conceptos variables', 'unidades'],
     ];
 

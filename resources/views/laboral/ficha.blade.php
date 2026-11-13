@@ -112,6 +112,40 @@
             {{ $fb('centro', 'Centro de trabajo', $cents) }}{{ $fb('convCat', 'Categoría según el convenio', $cats, false, $catsConv ? 'Rellena el salario y el grupo' : 'Añade las categorías en Gestión › Convenios') }}
             {{ $fb('prueba', 'Periodo de prueba', ['Sin periodo de prueba', '15 días', '1 mes', '2 meses', '3 meses', '6 meses']) }}{{ $fb('vac', 'Vacaciones (días naturales)') }}
           </div></div>
+          <div class="card" style="gap:8px">
+            <span style="font-size:15px;font-weight:700">Días de trabajo</span>
+            <input type="hidden" name="_dias" value="1">
+            <div role="group" aria-label="Días de la semana en que trabaja" style="display:flex;gap:8px;flex-wrap:wrap">
+              @foreach(\App\Services\Calendario::DIAS_TXT as $k => $l)
+                <label class="chk" style="padding:6px 10px;border:1px solid #E4E4DE;border-radius:9px"><input type="checkbox" name="diasSemana[]" value="{{ $k }}" @checked(in_array($k, \App\Services\Calendario::diasSemana($d), true))> <span title="{{ ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][$k] }}">{{ $l }}</span></label>
+              @endforeach
+            </div>
+            <span style="font-size:12.5px;color:#6A6A65">Con los festivos de la empresa (Parámetros › Notificaciones: comunidad y festivos locales) forman su calendario: días laborables, trabajados y efectivos de cada nómina.</span>
+          </div>
+          @unless($nuevo)
+          <div class="card" style="gap:8px">
+            <span style="font-size:15px;font-weight:700">Fecha de efecto de los cambios</span>
+            <span style="font-size:12.5px;color:#6A6A65;line-height:1.45">Si cambias el salario, la jornada, la categoría, el grupo, el contrato, las pagas o los días de trabajo, indica desde cuándo: los meses anteriores se siguen calculando con las condiciones de entonces. Si solo corriges un dato mal grabado, marca «Es una corrección».</span>
+            <div class="lb-fields">
+              <label class="lbl-s">Con efectos desde<input class="inp" type="date" name="efectos[]" value="{{ old('efectos.0') }}"></label>
+              <label class="lbl-s" style="grid-column:span 2">Motivo (opcional)<input class="inp" name="motivo[]" maxlength="255" value="{{ old('motivo.0') }}" placeholder="Ej.: revisión salarial, ampliación de jornada pactada…"></label>
+              <label class="chk"><input type="checkbox" name="correccion[]" value="1"> Es una corrección (no un cambio)</label>
+            </div>
+          </div>
+          @endunless
+          @if(isset($historico) && $historico->isNotEmpty())
+          <div class="card" style="gap:6px">
+            <span style="font-size:15px;font-weight:700">Histórico de condiciones</span>
+            @foreach($historico->reverse() as $hc)
+              @php $hd = $hc->datos ?? []; @endphp
+              <div style="display:flex;gap:12px;flex-wrap:wrap;padding:7px 0;border-top:1px solid #F1F1EC;font-size:13px">
+                <b class="mono12" style="min-width:90px">{{ Formato::fecha($hc->efectos_desde) }}</b>
+                <span style="flex:1 1 300px">{{ ($hd['salTipo'] ?? '') === 'Diario' ? Formato::eur((float) ($hd['salDia'] ?? 0)).'/día' : Formato::eur((float) ($hd['salBase'] ?? 0)).'/mes' }} · jornada {{ Formato::num((float) ($hd['jor'] ?? 100), 0) }} % · {{ ($hd['convCat'] ?? '') ?: 'sin categoría' }} · grupo {{ $hd['grupo'] ?? '—' }} · {{ implode('', array_map(fn ($x) => \App\Services\Calendario::DIAS_TXT[$x], \App\Services\Calendario::diasSemana($hd))) }}</span>
+                <span style="color:#6A6A65">{{ $hc->motivo }}{{ $hc->user ? ' · '.$hc->user->name : '' }}</span>
+              </div>
+            @endforeach
+          </div>
+          @endif
           <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700">Comprobaciones del contrato</span>@if($legalOk)<span class="lb-pill" style="background:#E6F6A8;color:#2E3A00;font-size:12px;padding:4px 10px">Sin incidencias</span>@elseif($legalErr)<span class="lb-pill" style="background:#FBE3E3;color:#8A1C1C;font-size:12px;padding:4px 10px">{{ $legalErr }} {{ $legalErr === 1 ? 'error' : 'errores' }}</span>@else<span class="lb-pill" style="background:#FCEBCB;color:#6E4300;font-size:12px;padding:4px 10px">Revisar</span>@endif</div>
             <div style="display:flex;flex-direction:column">
@@ -140,6 +174,17 @@
             <div style="background:#0B0B0B;color:#F4F4F0;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#BDBDB7">Bruto anual</span><span style="font:700 26px/1.1 var(--mono);color:#C8F031" data-lb-anual>{{ Formato::eur($anual) }}</span><span style="font-size:12.5px">{{ $d['pagas'] }} pagas{{ $d['prorr'] ? ' · extras prorrateadas' : '' }}{{ $catC ? ' · convenio: '.Formato::eur((float) $catC['base']).' de salario base' : '' }}</span></div>
             <div class="card" style="gap:6px;padding:16px 18px"><span style="font-size:13px;color:#6A6A65">Devengo mensual ordinario</span><span style="font:600 24px/1.1 var(--mono)" data-lb-mensual>{{ Formato::eur((Nomina::diario($d) ? Nomina::n($d['salDia']) * 30 : Nomina::n($d['salBase'])) + Nomina::n($d['plus']) + ($d['prorr'] && (int) $d['pagas'] === 14 ? Nomina::pagaExtra($d) * 2 / 12 : 0)) }}</span><span style="font-size:12.5px;color:#3C3C3C">Salario base y complementos{{ Nomina::diario($d) ? ' (mes de 30 días)' : '' }}</span></div>
           </div>
+          @unless($nuevo)
+          <div class="card" style="gap:8px">
+            <span style="font-size:15px;font-weight:700">Fecha de efecto de los cambios</span>
+            <span style="font-size:12.5px;color:#6A6A65;line-height:1.45">Si cambias el salario, la jornada, la categoría, el grupo, el contrato, las pagas o los días de trabajo, indica desde cuándo: los meses anteriores se siguen calculando con las condiciones de entonces. Si solo corriges un dato mal grabado, marca «Es una corrección».</span>
+            <div class="lb-fields">
+              <label class="lbl-s">Con efectos desde<input class="inp" type="date" name="efectos[]" value="{{ old('efectos.1') }}"></label>
+              <label class="lbl-s" style="grid-column:span 2">Motivo (opcional)<input class="inp" name="motivo[]" maxlength="255" value="{{ old('motivo.1') }}" placeholder="Ej.: revisión salarial, ampliación de jornada pactada…"></label>
+              <label class="chk"><input type="checkbox" name="correccion[]" value="1"> Es una corrección (no un cambio)</label>
+            </div>
+          </div>
+          @endunless
         </div>
 
         {{-- IRPF · modelo 145 --}}

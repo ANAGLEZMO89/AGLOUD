@@ -9,6 +9,7 @@ use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
 use App\Models\NominaMes;
 use App\Models\Trabajador;
+use App\Models\TrabajadorCondicion;
 use App\Models\User;
 use App\Services\Nomina;
 use Carbon\CarbonImmutable;
@@ -192,8 +193,11 @@ class LaboralTest extends TestCase
         // Variación solo si cambian datos de afiliación
         $this->en()->post('/laboral/trabajador/'.$t->id, $this->ficha(['tel' => '600000000']));
         $this->assertSame(1, LaboralMovimiento::count());
-        $this->en()->post('/laboral/trabajador/'.$t->id, $this->ficha(['grupo' => '3']));
+        // Cambiar el grupo exige la fecha de efecto (histórico de condiciones)
+        $this->en()->post('/laboral/trabajador/'.$t->id, $this->ficha(['grupo' => '3']))->assertSessionHasErrors('ficha');
+        $this->en()->post('/laboral/trabajador/'.$t->id, $this->ficha(['grupo' => '3', 'efectos' => ['2026-12-01'], 'motivo' => ['Ascenso']]))->assertSessionHasNoErrors();
         $this->assertSame('Variación', LaboralMovimiento::latest('id')->first()->tipo);
+        $this->assertSame([$t->fresh()->alta->toDateString(), '2026-12-01'], TrabajadorCondicion::orderBy('efectos_desde')->get()->map(fn ($x) => $x->efectos_desde->toDateString())->all());
         // Baja y certificado de empresa
         $this->en()->post('/laboral/altas-y-bajas/baja', ['trabajador' => $t->id, 'fecha' => '2025-01-01', 'causa' => 'Baja voluntaria'])->assertSessionHasErrors('ficha');
         $this->en()->post('/laboral/altas-y-bajas/baja', ['trabajador' => $t->id, 'fecha' => '2026-11-10', 'causa' => 'Baja voluntaria'])->assertSessionHasNoErrors();

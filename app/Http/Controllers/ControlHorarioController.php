@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  */
 class ControlHorarioController extends Controller
 {
-    public const TIPOS = ['Vacaciones', 'Incapacidad temporal', 'Permiso retribuido', 'Asuntos propios', 'Ausencia injustificada'];
+    public const TIPOS = ['Vacaciones', 'Incapacidad temporal', 'Permiso retribuido', 'Asuntos propios', 'Permiso no retribuido', 'Ausencia injustificada'];
 
     public const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -320,22 +320,25 @@ class ControlHorarioController extends Controller
         $hasta = (string) $request->input('hasta');
         $tipo = in_array($request->input('tipo'), self::TIPOS, true) ? $request->input('tipo') : null;
         $err = ! $t ? 'Elige el trabajador.' : (! $tipo ? 'Elige el tipo de ausencia.' : (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta) ? 'Indica las fechas.' : ($hasta < $desde ? 'La fecha final no puede ser anterior a la inicial.' : '')));
-        if (! $err && JornadaAusencia::where('trabajador_id', $t->id)->whereDate('desde', '<=', $hasta)->whereDate('hasta', '>=', $desde)->exists()) {
+        if (! $err && JornadaAusencia::where('trabajador_id', $t->id)->where('estado', '!=', 'descartada')->whereDate('desde', '<=', $hasta)->whereDate('hasta', '>=', $desde)->exists()) {
             $err = 'Ya hay una ausencia de '.($t->datos['nombre'] ?? '').' que coincide con esas fechas.';
         }
         if ($err) {
             return redirect()->route('horario.index', ['tab' => 'aus'])->withInput()->withErrors(['horario' => $err]);
         }
-        JornadaAusencia::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'tipo' => $tipo, 'desde' => $desde, 'hasta' => $hasta, 'created_by' => $request->user()->id]);
+        JornadaAusencia::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'tipo' => $tipo, 'desde' => $desde, 'hasta' => $hasta, 'estado' => 'propuesta', 'origen' => 'control_horario', 'created_by' => $request->user()->id]);
         Auditoria::registrar('horario.ausencia', $tipo.' de '.($t->datos['nombre'] ?? '').' del '.Formato::fecha($desde).' al '.Formato::fecha($hasta), $t, $c->id);
 
-        return redirect()->route('horario.index', ['tab' => 'aus'])->with('ok', 'Ausencia registrada.');
+        return redirect()->route('horario.index', ['tab' => 'aus'])->with('ok', 'Ausencia registrada. Queda pendiente de revisar en la nómina (Integral de nóminas › Calendario).');
     }
 
     public function borrarAusencia(Request $request, JornadaAusencia $ausencia)
     {
         $c = $this->ctx($request);
         abort_unless($c && $ausencia->cliente_id === $c->id, 404);
+        if ($ausencia->estado === 'confirmada') {
+            return redirect()->route('horario.index', ['tab' => 'aus'])->withErrors(['horario' => 'Esta ausencia ya está en la nómina: para quitarla, ábrela en Laboral › Integral de nóminas › Calendario.']);
+        }
         Auditoria::registrar('horario.ausencia.borrar', $ausencia->tipo.' del '.Formato::fecha($ausencia->desde).' al '.Formato::fecha($ausencia->hasta).' eliminada', $ausencia->trabajador, $c->id);
         $ausencia->delete();
 

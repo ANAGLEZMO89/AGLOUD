@@ -4,12 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Asiento;
 use App\Models\Cliente;
+use App\Models\JornadaAusencia;
 use App\Models\LaboralConfig;
+use App\Models\LaboralHora;
 use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
 use App\Models\NominaMes;
 use App\Models\Trabajador;
+use App\Models\TrabajadorCondicion;
 use App\Services\Auditoria;
+use App\Services\Calendario;
 use App\Services\Contabilidad;
 use App\Services\Nomina;
 use App\Support\Formato;
@@ -106,8 +110,13 @@ class LaboralController extends Controller
         return view('laboral.ficha', $b + ['t' => $t, 'd' => $d, 'nuevo' => ! $t, 'sec' => (string) $request->query('sec', 'personal'),
             'legal' => Nomina::comprobar($d, $P, $n, $hoy), 'ir' => ($d['irpfModo'] ?? 'auto') === 'fijo' ? null : Nomina::previsionIrpf($d, (int) substr($hoy, 0, 4), $incAnio),
             'centros' => collect($c->seccion('centros'))->map(fn ($x) => trim(($x['denom'] ?? '').' · '.($x['mun'] ?? ''), ' ·'))->filter()->values()->all(),
-            'docs' => collect($d['docs'] ?? [])->reverse()->values()->all()]);
+            'docs' => collect($d['docs'] ?? [])->reverse()->values()->all(), 'historico' => $t ? Calendario::historico($t->id) : collect()]);
     }
+
+    /** Nombre de los campos con fecha de efecto */
+    public const CAMPOS_TXT = ['salTipo' => 'la forma de retribución', 'salBase' => 'el salario base', 'salDia' => 'el salario diario', 'plus' => 'los complementos', 'jor' => 'la jornada',
+        'horas' => 'las horas semanales', 'convCat' => 'la categoría', 'cat' => 'la categoría', 'grupo' => 'el grupo de cotización', 'contrato' => 'el contrato', 'pagas' => 'las pagas',
+        'prorr' => 'el prorrateo de pagas', 'diasSemana' => 'los días de trabajo', 'diasExtra' => 'los días por paga extra'];
 
     /** Campos de la ficha enviados en el formulario */
     private function leerFicha(array $in, array $d, array $P): array
@@ -145,6 +154,9 @@ class LaboralController extends Controller
         if (array_key_exists('salTipo', $in)) {
             $o['salTipo'] = $in['salTipo'] === 'Diario' ? 'Diario' : 'Mensual';
             $o['diasExtra'] = max(0, min(60, (int) ($in['diasExtra'] ?? 30)));
+        }
+        if (array_key_exists('_dias', $in)) {
+            $o['diasSemana'] = Calendario::diasSemana(['diasSemana' => (array) ($in['diasSemana'] ?? [])]);
         }
         $o['pagas'] = (int) ($in['pagas'] ?? 14) === 12 ? 12 : 14;
         $o['prorr'] = ! empty($in['prorr']);
@@ -238,6 +250,38 @@ class LaboralController extends Controller
                 $d[$k] = $t->datos[$k];
             }
         }
+        // Cambios de condiciones (salario, jornada, categoría, contrato…): histórico con fecha de efecto, sin reescribir los meses anteriores
+        $norm = fn ($v) => is_array($v) ? json_encode(array_values($v)) : (is_bool($v) ? ($v ? '1' : '') : (is_numeric($v) ? (string) (float) $v : (string) $v));
+        $prev['diasSemana'] = Calendario::diasSemana($prev);
+        $d['diasSemana'] = Calendario::diasSemana($d);
+        $camb = array_values(array_filter(Calendario::CAMPOS_CONDICION, fn ($k) => $norm($prev[$k] ?? '') !== $norm($d[$k] ?? '')));
+        $condTxt = '';
+        if ($camb && ! $aut) {
+            $primero = fn ($k) => collect((array) $request->input($k, []))->map(fn ($x) => trim((string) $x))->first(fn ($x) => $x !== '') ?? '';
+            $efectos = $primero('efectos');
+            $correccion = collect((array) $request->input('correccion', []))->filter()->isNotEmpty();
+            $motivo = mb_substr($primero('motivo'), 0, 255);
+            $snap = fn ($x) => array_intersect_key($x, array_flip(Calendario::CAMPOS_CONDICION));
+            $hist = Calendario::historico($t->id);
+            if (! $correccion && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $efectos)) {
+                return redirect()->route('laboral.ficha', [$t->id, 'sec' => $request->input('_sec', 'retrib')])->withInput()
+                    ->withErrors(['ficha' => 'Has cambiado '.implode(', ', array_map(fn ($k) => self::CAMPOS_TXT[$k] ?? $k, $camb)).': indica la fecha de efecto del cambio (o marca que es una corrección de un dato mal grabado). No se ha guardado la ficha.']);
+            }
+            if (! $correccion && $efectos > (string) $prev['alta']) {
+                if ($hist->isEmpty()) {
+                    TrabajadorCondicion::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'efectos_desde' => $prev['alta'], 'datos' => $snap($prev), 'motivo' => 'Condiciones iniciales', 'user_id' => $request->user()->id]);
+                }
+                TrabajadorCondicion::updateOrCreate(['trabajador_id' => $t->id, 'efectos_desde' => $efectos], ['cliente_id' => $c->id, 'datos' => $snap($d), 'motivo' => $motivo ?: null, 'user_id' => $request->user()->id]);
+                $emit = NominaMes::where('trabajador_id', $t->id)->where('estado', 'Emitida')->get()->filter(fn ($g) => sprintf('%04d-%02d-31', $g->anio, $g->mes) >= $efectos)->count();
+                $condTxt = ' Cambio de condiciones con efectos desde el '.Formato::fecha($efectos).'.'.($emit ? ' Hay '.$emit.' '.($emit === 1 ? 'nómina emitida' : 'nóminas emitidas').' desde esa fecha que no cambian: reábrelas o haz un recibo de atrasos si procede.' : '');
+            } elseif ($vig = $hist->filter(fn ($x) => $x->efectos_desde->toDateString() <= Plazos::hoy()->toDateString())->last()) {
+                // Corrección: se corrige el tramo vigente, no se crea un cambio
+                $vig->update(['datos' => array_replace($vig->datos ?? [], $snap($d)), 'user_id' => $request->user()->id, 'motivo' => trim(($vig->motivo ?? '').' · corregido'.($motivo ? ': '.$motivo : ''), ' ·')]);
+                $condTxt = ' Dato corregido en las condiciones vigentes.';
+            }
+            Calendario::olvidar();
+            Auditoria::registrar('laboral.condiciones', 'Condiciones de '.$nombre.($correccion ? ' corregidas' : ' cambiadas desde '.$efectos).': '.implode(', ', $camb).($motivo ? ' · '.$motivo : ''), $t, $c->id);
+        }
         $t->update(['datos' => $d] + $cols);
         if ($cambia) {
             LaboralMovimiento::create(['cliente_id' => $c->id, 'trabajador_id' => $t->id, 'fecha' => Plazos::hoy()->toDateString(), 'tipo' => 'Variación', 'detalle' => 'Variación de datos', 'created_by' => $request->user()->id]);
@@ -245,7 +289,7 @@ class LaboralController extends Controller
         Auditoria::registrar('laboral.ficha', 'Ficha de '.$nombre.' guardada', $t, $c->id);
 
         return redirect()->route('laboral.ficha', [$t->id, 'sec' => $request->input('_sec', 'personal')])
-            ->with('ok', 'Ficha de '.$nombre.' guardada.'.($cambia ? ' La variación queda pendiente de comunicar a la TGSS.' : ''));
+            ->with('ok', 'Ficha de '.$nombre.' guardada.'.$condTxt.($cambia ? ' La variación queda pendiente de comunicar a la TGSS.' : ''));
     }
 
     public function eliminar(Request $request, Trabajador $trabajador)
@@ -363,9 +407,22 @@ class LaboralController extends Controller
             $sel['n'] = $this->nomina->nomina($w, $b['anio'], $b['mes'], $inc, (float) $b['P']['at'], $recibo);
             $ed = ['g' => $g, 'doc' => $doc, 'avisos' => Nomina::avisos($w, $doc, (float) $ir['tipo']), 'recibo' => $recibo,
                 'recibos' => Nomina::otrosRecibos((int) $w['id'], $b['anio'], $b['mes']), 'embargos' => $w['embargos'] ?? [],
-                'tab' => in_array($request->query('vista'), ['borrador', 'variables', 'convenio', 'nominas'], true) ? $request->query('vista') : 'borrador',
+                'tab' => in_array($request->query('vista'), ['borrador', 'variables', 'calendario', 'convenio', 'nominas'], true) ? $request->query('vista') : 'borrador',
                 'cat' => collect($b['P']['conv']['cats'])->firstWhere('cat', $w['convCat'] ?? ''),
                 'anio' => collect(range(1, 12))->filter(fn ($x) => Nomina::activo($w, $b['anio'], $x))->map(fn ($x) => ['m' => $x, 'n' => $this->nomina->nomina($w, $b['anio'], $x, $inc, (float) $b['P']['at'])])->values()->all()];
+        }
+
+        if ($ed && $ed['tab'] === 'calendario') {
+            $wP = Nomina::paraPeriodo($sel['w'], $b['anio'], $b['mes']);
+            $cal = Calendario::mes($wP, $b['anio'], $b['mes']);
+            $ini = sprintf('%04d-%02d-01', $b['anio'], $b['mes']);
+            $fin = Carbon::parse($ini)->endOfMonth()->toDateString();
+            $ed['cal'] = ['cal' => $cal, 'w' => $wP,
+                'ausencias' => JornadaAusencia::where('trabajador_id', $wP['id'])->whereDate('desde', '<=', $fin)->whereDate('hasta', '>=', $ini)->orderBy('desde')->get(),
+                'horas' => LaboralHora::where('trabajador_id', $wP['id'])->whereBetween('fecha', [$ini, $fin])->orderBy('fecha')->get(),
+                'exceso' => Calendario::excesoFichajes($wP, $cal),
+                'conceptosHora' => collect($wP['_conv']['pluses'] ?? [])->where('unidad', 'hora')->pluck('nombre')->values()->all(),
+                'festivos' => collect(Plazos::festivos($b['anio'], $c->id))->filter(fn ($n, $f) => str_starts_with($f, substr($ini, 0, 7)))->all()];
         }
 
         return view('laboral.integral', $b + ['plantilla' => $plantilla, 'noms' => $noms, 'asiento' => $asiento, 'sel' => $sel, 'idx' => $idx, 'ir' => $ir, 'ed' => $ed,
@@ -575,6 +632,15 @@ class LaboralController extends Controller
         $ipAuto = (float) $this->nomina->tipoIrpf($w, $anio, $mes, $inc)['tipo'];
         [$pd, $ph, $pdias, $pmes] = Nomina::periodo($w, $anio, $mes);
         $doc = ['lineas' => $L, 'deducciones' => $D, 'tipos' => $tipos, 'recibo' => $recibo, 'dias' => $pdias, 'diasMes' => $pmes, 'desde' => $pd, 'hasta' => $ph];
+        if ($recibo === 'Nómina') {
+            // Lo que sale del calendario (cotización de los días de IT y sus avisos) se recalcula siempre: no se edita a mano
+            $auto = Nomina::conceptos($w, $mes, $inc[$mes][$trabajador->id] ?? [], $P, $anio);
+            $doc += ['itCot' => $auto['itCot'], 'calendario' => $auto['calendario'], 'avisosCal' => $auto['avisosCal']];
+            $errCal = array_values(array_filter($auto['avisosCal'], fn ($x) => $x[0] === 'error'));
+            if ($accion === 'emitir' && $errCal) {
+                return $volver->withErrors(['ficha' => 'No se puede emitir: '.implode(' ', array_column($errCal, 1))]);
+            }
+        }
         $calc = Nomina::computar(Nomina::paraPeriodo($w, $anio, $mes), $doc, isset($tipos['irpf']) ? (float) $tipos['irpf'] : $ipAuto, (float) $P['at']);
         $doc['retenido'] = collect($calc['deducciones'])->filter(fn ($d) => ! empty($d['ref']))->mapWithKeys(fn ($d) => [$d['ref'] => $d['importe']])->all();
         $fp = (string) $request->input('fecha_pago');

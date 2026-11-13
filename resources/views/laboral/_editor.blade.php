@@ -41,7 +41,7 @@
   @if($next)<a class="btn white sm" href="{{ route('laboral.integral', $q + ['t' => $next]) }}">Siguiente →</a>@endif
 </div>
 <div class="chipbar" style="border-radius:11px">
-  @foreach([['contrato', 'Contrato', route('laboral.ficha', [$w['id'], 'sec' => 'contrato'])], ['nominas', 'Nóminas', $tabUrl('nominas')], ['m145', 'Mod. 145', route('laboral.ficha', [$w['id'], 'sec' => 'irpf'])], ['borrador', 'Borrador', $tabUrl('borrador')], ['variables', 'Variables', $tabUrl('variables')], ['convenio', 'Convenio', $tabUrl('convenio')]] as [$id, $l, $u])
+  @foreach([['contrato', 'Contrato', route('laboral.ficha', [$w['id'], 'sec' => 'contrato'])], ['nominas', 'Nóminas', $tabUrl('nominas')], ['m145', 'Mod. 145', route('laboral.ficha', [$w['id'], 'sec' => 'irpf'])], ['borrador', 'Borrador', $tabUrl('borrador')], ['variables', 'Variables', $tabUrl('variables')], ['calendario', 'Calendario', $tabUrl('calendario')], ['convenio', 'Convenio', $tabUrl('convenio')]] as [$id, $l, $u])
     <a class="{{ $ed['tab'] === $id ? 'on' : '' }}" style="padding:7px 13px;border-radius:8px" href="{{ $u }}">{{ $l }}</a>
   @endforeach
 </div>
@@ -67,6 +67,8 @@
   @if($nAv)
     <div class="ne-aviso"><b>⚠ {{ $nAv }} {{ $nAv === 1 ? 'concepto no es' : 'conceptos no son' }} por convenio</b>@foreach($av['generales'] as $x)<span>{{ $x }}</span>@endforeach<span>Las líneas afectadas están marcadas en amarillo.</span></div>
   @endif
+  @foreach($av['errores'] ?? [] as $x)<div class="ferr" role="alert" style="font-weight:500"><b>Error:</b> {{ $x }}</div>@endforeach
+  @foreach($av['calendario'] ?? [] as $x)<div class="msg warn" style="font-weight:500">{{ $x }}</div>@endforeach
   @foreach($av['info'] ?? [] as $x)<div class="msg" style="font-weight:500;background:#E3ECFF;color:#1D3A8A">{{ $x }}</div>@endforeach
   @if($rq !== 'Nómina' && ! $g)<div class="msg" style="font-weight:500;background:#E3ECFF;color:#1D3A8A">Este recibo todavía no existe: revisa los conceptos propuestos y pulsa «Guardar» para crearlo. {{ ['Extra' => 'Mientras exista, la paga de este mes no se repite en la nómina.', 'Finiquito' => 'Las vacaciones, las partes proporcionales y la indemnización se proponen con la fecha y la causa de la baja: compruébalas con tu convenio.', 'Atrasos' => 'Los atrasos cotizan en una liquidación complementaria (L03) del mes al que corresponden.', 'Sal. tramitación' => 'Los salarios de tramitación cotizan en la liquidación correspondiente al periodo que cubren.'][$rq] ?? '' }}</div>@endif
   @unless($ed['cat'] || $aut || $rq !== 'Nómina')
@@ -251,6 +253,8 @@
   @if(Nomina::guardada((int) $w['id'], $anio, $mes))<div class="msg warn" style="font-weight:500">Esta nómina tiene un borrador guardado: las variables nuevas se aplican al pulsar «Recalcular desde convenio» en el Borrador, o añadiéndolas allí como concepto.</div>@endif
 </form>
 
+@elseif($ed['tab'] === 'calendario')
+@include('laboral._calendario')
 @elseif($ed['tab'] === 'convenio')
 <div class="card">
   <span style="font-size:15px;font-weight:700">{{ $P['conv']['nombre'] ?: 'Sin convenio colectivo cargado' }}</span>
