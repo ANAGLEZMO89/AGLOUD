@@ -84,10 +84,7 @@
         @endforeach
       </div>
     </div>
-    <div class="card" style="align-items:flex-start">
-      <span class="lbl-mono">PRÓXIMAS FASES</span>
-      <span style="font-size:14px;color:#3C3C3C;line-height:1.5">Aquí aparecerán los plazos, las notificaciones y las tareas de {{ $ctx->nombre }} cuando activemos esos módulos. De momento están disponibles Clientes y Documentos.</span>
-    </div>
+    @if($panel)@include('escritorio._panel', ['P' => $panel])@endif
   @endif
 </div>
 @endsection

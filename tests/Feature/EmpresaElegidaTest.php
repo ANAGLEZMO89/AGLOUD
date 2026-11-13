@@ -126,4 +126,19 @@ class EmpresaElegidaTest extends TestCase
         $this->assertSame('2026-11-18', Plazos::vencimiento('2026-11-04', 10, 'h', $this->b->id)->toDateString());
         $this->assertSame('2026-11-18', Plazos::vencimiento('2026-11-04', 10, 'h', $this->desp->id)->toDateString());
     }
+
+    public function test_escritorio_con_empresa_elegida_muestra_el_panel_con_sus_datos(): void
+    {
+        Tercero::create(['cliente_id' => $this->a->id, 'clase' => 'proveedor', 'cuenta' => '400000001', 'nombre' => 'Suministros SL', 'nif' => 'B21111111']);
+        Tarea::create(['titulo' => 'Revisar IVA', 'cliente_id' => $this->a->id, 'fecha' => Plazos::hoy()->subDays(2)->toDateString(), 'prioridad' => 'Alta', 'hecha' => false]);
+        $html = $this->con($this->a)->get('/escritorio')->assertOk()
+            ->assertSee('PANEL DE CAFÉ LAS COLONIAS SL')->assertSee('Modelos fiscales')->assertSee('Facturas emitidas')->assertSee('Compras y gastos')
+            ->assertSee('Nóminas')->assertSee('CRM')->assertSee('Clientes y proveedores')->assertSee('Documentos')->assertSee('Avisos y trámites')
+            ->assertSee('1 atrasadas')->getContent();
+        $this->assertStringContainsString('Sin plantilla', $html);
+        // El despacho ve las tareas de todos los clientes
+        $this->con($this->desp)->get('/escritorio')->assertOk()->assertSee('Clientes del despacho')->assertSee('de todos los clientes')->assertSee('1 atrasadas');
+        // Eligiendo empresa no hay panel
+        $this->con($this->a)->get('/escritorio?cambiar=1')->assertOk()->assertDontSee('PANEL DE');
+    }
 }

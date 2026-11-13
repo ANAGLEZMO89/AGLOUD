@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\Documento;
 use App\Models\User;
 use App\Services\Auditoria;
+use App\Services\PanelEmpresa;
 use App\Support\Formato;
 use App\Support\SeccionesAlta;
 use Illuminate\Http\Request;
@@ -37,10 +38,11 @@ class EscritorioController extends Controller
             ->orderBy('nombre')->limit(100)->get();
 
         $facts = $ctx ? $this->facts($ctx) : [];
+        $panel = $ctx && ! $elegir ? app(PanelEmpresa::class)->datos($ctx) : null;
 
         return view('escritorio.index', [
             'titulo' => 'Escritorio', 'activo' => 'escritorio',
-            'elegir' => $elegir, 'lista' => $lista, 'tab' => $tab, 'q' => $q, 'n' => $n, 'facts' => $facts,
+            'elegir' => $elegir, 'lista' => $lista, 'tab' => $tab, 'q' => $q, 'n' => $n, 'facts' => $facts, 'panel' => $panel,
             'hoy' => now(), 'nRevisar' => $this->nRevisar(),
         ]);
     }
