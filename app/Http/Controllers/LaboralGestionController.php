@@ -307,7 +307,7 @@ class LaboralGestionController extends LaboralController
             if (! is_array($x) || trim((string) ($x['cat'] ?? '')) === '') {
                 continue;
             }
-            $cats[] = ['cat' => mb_substr(trim($x['cat']), 0, 120), 'grupo' => (string) max(1, min(7, (int) ($x['grupo'] ?? 7))),
+            $cats[] = ['cat' => mb_substr(trim($x['cat']), 0, 120), 'grupo' => (string) max(1, min(11, (int) ($x['grupo'] ?? 7))),
                 'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2)];
         }
         $this->guardarConfig($c, ['conv' => ['nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),

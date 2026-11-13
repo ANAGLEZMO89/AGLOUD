@@ -10,7 +10,7 @@
   $cents = $centros; if ($d['centro'] && ! in_array($d['centro'], $cents, true)) array_unshift($cents, $d['centro']); if (! $cents) $cents = ['Centro principal'];
   $cats = array_column($P['conv']['cats'], 'cat'); if ($d['convCat'] && ! in_array($d['convCat'], $cats, true)) array_unshift($cats, $d['convCat']);
   $catsData = collect($P['conv']['cats'])->mapWithKeys(fn ($x) => [$x['cat'] => [Formato::num($x['base']), Formato::num($x['plus'] ?? 0), (string) $x['grupo']]])->all();
-  $val = fn ($k) => is_float($d[$k] ?? null) || is_int($d[$k] ?? null) ? (in_array($k, ['salBase', 'plus', 'irpf', 'jor'], true) ? Formato::num($d[$k], in_array($k, ['jor'], true) ? 0 : 2) : (string) $d[$k]) : (string) ($d[$k] ?? '');
+  $val = fn ($k) => is_float($d[$k] ?? null) || is_int($d[$k] ?? null) ? (in_array($k, ['salBase', 'salDia', 'plus', 'irpf', 'jor'], true) ? Formato::num($d[$k], in_array($k, ['jor'], true) ? 0 : 2) : (string) $d[$k]) : (string) ($d[$k] ?? '');
   // Campo de la ficha (fb del prototipo)
   $fb = function (string $k, string $l, $type = 'text', bool $wide = false, string $hint = '', array $attr = []) use ($d, $val) {
       $a = ''; foreach ($attr as $ak => $av) { $a .= ' '.$ak.'="'.e($av).'"'; }
@@ -127,11 +127,15 @@
         {{-- Retribución --}}
         <div class="lb-panel" data-lb-panel="retrib" @if($sec !== 'retrib') hidden @endif style="display:flex;flex-direction:column;gap:16px">
           <div class="card"><div class="lb-fields">
-            {{ $fb('salBase', 'Salario base mensual (€)', 'num') }}{{ $fb('plus', 'Complementos salariales mensuales (€)', 'num') }}{{ $fb('pagas', 'Número de pagas', ['14', '12']) }}{{ $fb('prorr', 'Prorratear las pagas extraordinarias', 'bool') }}
+            {{ $fb('salTipo', 'Forma de retribución', [['Mensual', 'Salario mensual'], ['Diario', 'Salario diario (por día natural)']]) }}
+            {{ $fb('salBase', 'Salario base mensual (€)', 'num', false, '', Nomina::diario($d) ? ['data-lb-mens' => '1', 'hidden' => 'hidden'] : ['data-lb-mens' => '1']) }}
+            {{ $fb('salDia', 'Salario base diario (€/día)', 'num', false, 'En cada nómina se multiplica por los días naturales del mes', Nomina::diario($d) ? ['data-lb-dia' => '1'] : ['data-lb-dia' => '1', 'hidden' => 'hidden']) }}
+            {{ $fb('diasExtra', 'Días de salario por paga extra', 'num', false, 'Lo que diga el convenio (habitual: 30)', Nomina::diario($d) ? ['data-lb-dia' => '1'] : ['data-lb-dia' => '1', 'hidden' => 'hidden']) }}
+            {{ $fb('plus', 'Complementos salariales mensuales (€)', 'num') }}{{ $fb('pagas', 'Número de pagas', ['14', '12']) }}{{ $fb('prorr', 'Prorratear las pagas extraordinarias', 'bool') }}
           </div></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
             <div style="background:#0B0B0B;color:#F4F4F0;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#BDBDB7">Bruto anual</span><span style="font:700 26px/1.1 var(--mono);color:#C8F031" data-lb-anual>{{ Formato::eur($anual) }}</span><span style="font-size:12.5px">{{ $d['pagas'] }} pagas{{ $d['prorr'] ? ' · extras prorrateadas' : '' }}{{ $catC ? ' · convenio: '.Formato::eur((float) $catC['base']).' de salario base' : '' }}</span></div>
-            <div class="card" style="gap:6px;padding:16px 18px"><span style="font-size:13px;color:#6A6A65">Devengo mensual ordinario</span><span style="font:600 24px/1.1 var(--mono)" data-lb-mensual>{{ Formato::eur(Nomina::n($d['salBase']) + Nomina::n($d['plus']) + ($d['prorr'] && (int) $d['pagas'] === 14 ? Nomina::n($d['salBase']) * 2 / 12 : 0)) }}</span><span style="font-size:12.5px;color:#3C3C3C">Salario base y complementos</span></div>
+            <div class="card" style="gap:6px;padding:16px 18px"><span style="font-size:13px;color:#6A6A65">Devengo mensual ordinario</span><span style="font:600 24px/1.1 var(--mono)" data-lb-mensual>{{ Formato::eur((Nomina::diario($d) ? Nomina::n($d['salDia']) * 30 : Nomina::n($d['salBase'])) + Nomina::n($d['plus']) + ($d['prorr'] && (int) $d['pagas'] === 14 ? Nomina::pagaExtra($d) * 2 / 12 : 0)) }}</span><span style="font-size:12.5px;color:#3C3C3C">Salario base y complementos{{ Nomina::diario($d) ? ' (mes de 30 días)' : '' }}</span></div>
           </div>
         </div>
 

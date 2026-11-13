@@ -23,6 +23,9 @@ class Nomina
     /** Bases mínimas mensuales por grupo de cotización y base máxima (2026) */
     public const BASE_MIN = [1 => 1989.30, 2 => 1649.70, 3 => 1435.20, 4 => 1424.40, 5 => 1424.40, 6 => 1424.40, 7 => 1424.40];
 
+    /** Grupos 8 a 11: base mínima DIARIA (la mensual de los grupos 4-7 entre 30), por los días naturales del mes */
+    public const BASE_MIN_DIA = [8 => 47.48, 9 => 47.48, 10 => 47.48, 11 => 47.48];
+
     public const BASE_MAX = 5101.20;
 
     /** SMI anual de 2026 (14 pagas) usado en la comprobación legal del contrato */
@@ -31,7 +34,7 @@ class Nomina
     /** Tipos de cotización 2026 en tanto por uno: [trabajador, empresa] */
     public const TIPOS = ['cc' => [0.047, 0.236], 'mei' => [0.0015, 0.0075], 'des_ind' => [0.0155, 0.055], 'des_tmp' => [0.016, 0.067], 'fp' => [0.001, 0.006], 'fog' => [0, 0.002]];
 
-    public const GRUPOS = ['1 · Ingenieros y licenciados', '2 · Ingenieros técnicos y peritos', '3 · Jefes administrativos y de taller', '4 · Ayudantes no titulados', '5 · Oficiales administrativos', '6 · Subalternos', '7 · Auxiliares administrativos'];
+    public const GRUPOS = ['1 · Ingenieros y licenciados', '2 · Ingenieros técnicos y peritos', '3 · Jefes administrativos y de taller', '4 · Ayudantes no titulados', '5 · Oficiales administrativos', '6 · Subalternos', '7 · Auxiliares administrativos', '8 · Oficiales de primera y segunda', '9 · Oficiales de tercera y especialistas', '10 · Peones', '11 · Trabajadores menores de 18 años'];
 
     public const CONTRATOS = ['100 · Indefinido a tiempo completo · ordinario', '200 · Indefinido a tiempo parcial · ordinario', '300 · Fijo discontinuo', '402 · Duración determinada a tiempo completo · circunstancias de la producción', '410 · Duración determinada a tiempo completo · sustitución', '130 · Indefinido a tiempo completo · persona con discapacidad', '150 · Indefinido a tiempo completo · con incentivos', '189 · Indefinido a tiempo completo · transformación de temporal', '230 · Indefinido a tiempo parcial · persona con discapacidad', '250 · Indefinido a tiempo parcial · con incentivos', '289 · Indefinido a tiempo parcial · transformación de temporal', '420 · Formativo para la obtención de práctica profesional · tiempo completo', '421 · Formación en alternancia', '502 · Duración determinada a tiempo parcial · circunstancias de la producción', '510 · Duración determinada a tiempo parcial · sustitución', '520 · Formativo para la obtención de práctica profesional · tiempo parcial'];
 
@@ -152,7 +155,7 @@ class Nomina
             'contrato' => self::CONTRATOS[0], 'alta' => '', 'fin' => '', 'causa' => '', 'sustituido' => '', 'jor' => 100,
             'horas' => (string) round(40 * $jor / 100), 'horario' => $jor < 100 ? 'De lunes a viernes de 9:00 a 13:00' : 'De lunes a viernes de 8:00 a 16:00', 'centro' => '', 'convCat' => $w['cat'] ?? '',
             'prueba' => ((int) ($w['grupo'] ?? 7)) <= 2 ? '6 meses' : '2 meses', 'vac' => '30',
-            'salBase' => 0, 'plus' => 0, 'pagas' => 14, 'prorr' => false, 'irpfModo' => 'auto', 'irpf' => 2,
+            'salBase' => 0, 'salTipo' => 'Mensual', 'salDia' => 0, 'diasExtra' => 30, 'plus' => 0, 'pagas' => 14, 'prorr' => false, 'irpfModo' => 'auto', 'irpf' => 2,
             'm145' => ['sit' => '3', 'nifCony' => '', 'movil' => false, 'pension' => '', 'alimentos' => '', 'vivienda' => false, 'fecha' => '', 'hijos' => [], 'asc' => []],
             'claus' => ['conf', 'datos', 'desc', 'reg'], 'docs' => [], 'nombre' => '', 'cat' => '',
             'regimen' => 'General', 'autTipo' => self::TIPOS_AUTONOMO[0], 'autBase' => 0, 'autCuota' => 0, 'autRend' => 0, 'autMutua' => '', 'autCese' => true,
@@ -160,8 +163,32 @@ class Nomina
         ], $w);
     }
 
+    /** Retribución por día trabajado (salario diario) en vez de mensual */
+    public static function diario(array $w): bool
+    {
+        return ($w['salTipo'] ?? 'Mensual') === 'Diario';
+    }
+
+    /** Importe de cada paga extraordinaria: el salario base mensual, o los días de salario que fije el convenio si cobra por día */
+    public static function pagaExtra(array $w): float
+    {
+        return self::diario($w) ? round(self::n($w['salDia'] ?? 0) * ((int) ($w['diasExtra'] ?? 30) ?: 30), 2) : self::n($w['salBase'] ?? 0);
+    }
+
+    /** Días naturales del mes (salario diario y base mínima de los grupos 8 a 11) */
+    public static function diasMes(?int $anio, int $m): int
+    {
+        return Carbon::create($anio ?: (int) now()->year, max(1, min(12, $m)), 1)->daysInMonth;
+    }
+
     public static function anual(array $w): float
     {
+        if (self::diario($w)) {
+            $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
+
+            return round(self::n($w['salDia'] ?? 0) * 365 + ($pagas - 12) * self::pagaExtra($w) + self::n($w['plus'] ?? 0) * 12, 2);
+        }
+
         return self::n($w['salBase'] ?? 0) * ((int) ($w['pagas'] ?? 14) ?: 14) + self::n($w['plus'] ?? 0) * 12;
     }
 
@@ -288,9 +315,17 @@ class Nomina
         $cat = $P ? collect($P['conv']['cats'] ?? [])->firstWhere('cat', $w['convCat'] ?? '') : null;
         $convBase = $cat ? round((float) $cat['base'] * $coef, 2) : null;
         $convPlus = $cat ? round((float) ($cat['plus'] ?? 0) * $coef, 2) : null;
+        $dias = self::diasMes($anio, $m);
         $sb = self::n($w['salBase'] ?? 0) ?: round(self::n($w['sal'] ?? 0) / $pagas, 2);
         $pl = self::n($w['plus'] ?? 0);
-        $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base mensual', 'importe' => round($sb, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => $convBase]];
+        if (self::diario($w)) {
+            $sd = self::n($w['salDia'] ?? 0);
+            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base ('.$dias.' días)', 'cant' => $dias, 'precio' => $sd, 'importe' => round($sd * $dias, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => null]];
+            $sb = self::pagaExtra($w);
+            $convBase = null;
+        } else {
+            $L = [['id' => 'sb', 'cod' => '01', 'concepto' => 'Salario base mensual', 'importe' => round($sb, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => $convBase]];
+        }
         if ($pl || $convPlus) {
             $L[] = ['id' => 'pl', 'cod' => '02', 'concepto' => 'Plus de convenio y complementos', 'importe' => round($pl, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => $convPlus];
         }
@@ -336,7 +371,7 @@ class Nomina
             $D[] = $e;
         }
 
-        return ['lineas' => $L, 'deducciones' => $D, 'tipos' => []];
+        return ['lineas' => $L, 'deducciones' => $D, 'tipos' => [], 'dias' => $dias];
     }
 
     /** Calcula la nómina (o el recibo) a partir de sus conceptos, automáticos o editados en el Integral de nóminas */
@@ -363,9 +398,11 @@ class Nomina
         $prorrateadas = ! empty($w['prorr']) && $pagas === 14;
         if ($recibo === 'Nómina') {
             // Prorrata de las pagas que se cobran en su mes: entra en la base de cotización todos los meses
-            $prorB = $pagas === 14 ? ($prorrateadas ? $pror : round(($sb ?: self::n($w['salBase'] ?? 0)) * 2 / 12, 2)) : 0;
+            $pe = self::diario($w) ? self::pagaExtra($w) : ($sb ?: self::n($w['salBase'] ?? 0));
+            $prorB = $pagas === 14 ? ($prorrateadas ? $pror : round($pe * 2 / 12, 2)) : 0;
             $jor = self::n($w['jor'] ?? 100) ?: 100;
-            $minB = (self::BASE_MIN[(int) ($w['grupo'] ?? 7)] ?? self::BASE_MIN[7]) * $jor / 100;
+            $g = (int) ($w['grupo'] ?? 7);
+            $minB = (isset(self::BASE_MIN_DIA[$g]) ? self::BASE_MIN_DIA[$g] * ((int) ($doc['dias'] ?? 30) ?: 30) : (self::BASE_MIN[$g] ?? self::BASE_MIN[7])) * $jor / 100;
             // Base de contingencias comunes (sin horas extra) y base de AT y EP, desempleo, FP y FOGASA (con horas extra)
             $base = min(max($salarial + ($prorrateadas ? $pror : $prorB), $minB), self::BASE_MAX);
         } else {
@@ -477,7 +514,7 @@ class Nomina
     {
         $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
         $pro = ! empty($w['prorr']) && $pagas === 14;
-        $sb = self::n($w['salBase'] ?? 0) ?: round(self::n($w['sal'] ?? 0) / $pagas, 2);
+        $sb = self::diario($w) ? self::pagaExtra($w) : (self::n($w['salBase'] ?? 0) ?: round(self::n($w['sal'] ?? 0) / $pagas, 2));
         $pl = self::n($w['plus'] ?? 0);
         $L = [];
         if ($recibo === 'Extra') {
@@ -502,7 +539,7 @@ class Nomina
     {
         $fin = Carbon::parse($w['baja'] ?: Carbon::create($anio, $m, 1)->endOfMonth()->toDateString())->startOfDay();
         $alta = Carbon::parse($w['alta'] ?: $fin->toDateString())->startOfDay();
-        $anual = self::n($w['sal'] ?? 0) ?: ($sb + $pl) * $pagas;
+        $anual = self::n($w['sal'] ?? 0) ?: (self::diario($w) ? self::anual($w) : ($sb + $pl) * $pagas);
         $diario = round($anual / 365, 2);
         $L = [];
         // Vacaciones: días del convenio (30 naturales si no dice otra cosa) en proporción a lo trabajado en el año, menos las disfrutadas
@@ -722,7 +759,7 @@ class Nomina
         $ip = (float) $this->tipoIrpf($w, $anio, $m, $incAnio)['tipo'];
         $g = ! empty($w['id']) ? self::guardada((int) $w['id'], $anio, $m, $recibo) : null;
         if ($g) {
-            $doc = ($g->datos ?? []) + ['recibo' => $recibo];
+            $doc = ($g->datos ?? []) + ['recibo' => $recibo, 'dias' => self::diasMes($anio, $m)];
             $ipG = isset($doc['tipos']['irpf']) && $doc['tipos']['irpf'] !== null && $doc['tipos']['irpf'] !== '' ? (float) $doc['tipos']['irpf'] : $ip;
 
             return self::computar($w, $doc, $ipG, $at) + ['estado' => $g->estado, 'ipAuto' => $ip];
@@ -802,7 +839,7 @@ class Nomina
         return ['empresa' => $c->nombre, 'cif' => (string) $c->nif, 'ccc' => (string) $w['ccc'], 'trabajador' => (string) $w['nombre'], 'nif' => (string) $w['nif'], 'naf' => (string) $w['naf'],
             'categoria' => (string) ($w['convCat'] ?: $w['cat']), 'grupo' => (string) $w['grupo'], 'centro' => (string) ($w['centro'] ?: 'indicado'), 'inicio' => Formato::fecha($w['alta']), 'fin' => $temp ? Formato::fecha($w['fin']) : 'Indefinido',
             'duracion' => $temp ? 'El contrato se concierta por duración determinada desde el '.Formato::fecha($w['alta']).' hasta el '.Formato::fecha($w['fin']).' por la siguiente causa: '.$w['causa'].' (art. 15 ET).' : 'El contrato se concierta por tiempo indefinido desde el '.Formato::fecha($w['alta']).'.',
-            'causa' => (string) $w['causa'], 'horas' => (string) $w['horas'], 'jornada' => Formato::num($w['jor'], 0).' %', 'horario' => (string) $w['horario'], 'retribucion' => Formato::eur(self::anual($w)), 'salario' => Formato::eur(self::n($w['salBase'])),
+            'causa' => (string) $w['causa'], 'horas' => (string) $w['horas'], 'jornada' => Formato::num($w['jor'], 0).' %', 'horario' => (string) $w['horario'], 'retribucion' => Formato::eur(self::anual($w)), 'salario' => self::diario($w) ? Formato::eur(self::n($w['salDia'])).' diarios' : Formato::eur(self::n($w['salBase'])),
             'pagas' => (string) $w['pagas'], 'convenio' => $conv, 'prueba' => (string) $w['prueba'], 'vacaciones' => (string) $w['vac'], 'municipio' => (string) ($c->municipio ?: $c->provincia), 'contrato' => (string) $w['contrato']];
     }
 
@@ -852,7 +889,7 @@ class Nomina
             $l[] = [$meses >= 5.95 && $meses <= 12.05, 'Duración entre 6 meses y 1 año (art. 11.3 ET)'];
             $l[] = [array_search($d['nivForm'], self::NIVEL_FORMATIVO, true) >= 4, 'Titulación de FP o universitaria'];
         }
-        $l[] = [! $cat || self::n($d['salBase']) + 0.001 >= (float) $cat['base'], $cat ? 'Salario base igual o superior al del convenio ('.Formato::eur((float) $cat['base']).')' : 'Categoría del convenio asignada'];
+        $l[] = [! $cat || (self::diario($d) ? self::anual($d) / ((int) $d['pagas'] ?: 14) : self::n($d['salBase'])) + 0.001 >= (float) $cat['base'], $cat ? 'Salario base igual o superior al del convenio ('.Formato::eur((float) $cat['base']).')' : 'Categoría del convenio asignada'];
         $l[] = [$anual + 0.01 >= self::SMI_ANUAL * $jor / 100, 'Retribución anual igual o superior al SMI de 2026 proporcional a la jornada'];
         $l[] = [$pruebaM <= $max, 'Periodo de prueba dentro del máximo legal ('.($max === 1 ? '1 mes' : $max.' meses').')'];
         $l[] = [! $tp || mb_strlen(trim((string) $d['horario'])) > 5, 'Distribución del horario indicada'];

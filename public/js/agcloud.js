@@ -623,11 +623,15 @@
     on(sit, 'change', function () { if (cony) cony.hidden = sit.value !== '2'; });
     var retr = function () {
       var sb = pnum(F('salBase') && F('salBase').value), pl = pnum(F('plus') && F('plus').value), pg = +(F('pagas') && F('pagas').value) || 14, pr = F('prorr') && F('prorr').checked;
+      var dia = F('salTipo') && F('salTipo').value === 'Diario', sd = pnum(F('salDia') && F('salDia').value), de = pnum(F('diasExtra') && F('diasExtra').value) || 30;
+      box('data-lb-mens').forEach(function (x) { x.hidden = dia; });
+      box('data-lb-dia').forEach(function (x) { x.hidden = !dia; });
+      var pe = dia ? sd * de : sb, mes = dia ? sd * 30 : sb;
       var a = $('[data-lb-anual]'), m = $('[data-lb-mensual]');
-      if (a) a.textContent = eu(sb * pg + pl * 12) + ' €';
-      if (m) m.textContent = eu(sb + pl + (pr && pg === 14 ? sb * 2 / 12 : 0)) + ' €';
+      if (a) a.textContent = eu(dia ? sd * 365 + (pg - 12) * pe + pl * 12 : sb * pg + pl * 12) + ' €';
+      if (m) m.textContent = eu(mes + pl + (pr && pg === 14 ? pe * 2 / 12 : 0)) + ' €';
     };
-    ['salBase', 'plus', 'pagas', 'prorr'].forEach(function (n) { on(F(n), 'input', retr); on(F(n), 'change', retr); });
+    ['salBase', 'salTipo', 'salDia', 'diasExtra', 'plus', 'pagas', 'prorr'].forEach(function (n) { on(F(n), 'input', retr); on(F(n), 'change', retr); });
     lbTemp(); fijo();
   }
 

@@ -88,6 +88,24 @@ class LaboralTest extends TestCase
         $this->assertSame(1, Trabajador::count());
     }
 
+    public function test_grupo_10_y_salario_diario(): void
+    {
+        $this->en()->get('/laboral/trabajador/nuevo?sec=afil')->assertOk()->assertSee('10 · Peones')->assertSee('11 · Trabajadores menores de 18 años');
+        $this->en()->get('/laboral/trabajador/nuevo?sec=retrib')->assertOk()->assertSee('Salario base diario (€/día)');
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['grupo' => '10', 'salTipo' => 'Diario', 'salDia' => '50,25', 'diasExtra' => '30', 'salBase' => '']))->assertSessionHasNoErrors()->assertRedirect();
+        $t = Trabajador::firstOrFail();
+        $this->assertSame([10, 'Diario', 50.25, 30], [(int) $t->datos['grupo'], $t->datos['salTipo'], (float) $t->datos['salDia'], (int) $t->datos['diasExtra']]);
+        // Anual: 365 días + 2 pagas de 30 días
+        $this->assertEqualsWithDelta(50.25 * 365 + 2 * 50.25 * 30, Nomina::anual($t->datos), 0.01);
+        $w = Nomina::rellenar(['id' => 9, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => 10, 'salTipo' => 'Diario', 'salDia' => 50.25, 'pagas' => 14, 'jor' => 100, 'alta' => '2026-01-01'], $this->a);
+        // Febrero de 2026: 28 días; junio (30 días) con paga extra de 30 días
+        $this->assertEqualsWithDelta(28 * 50.25, Nomina::calcular($w, 2, [], 0)['dev'], 0.001);
+        $this->assertEqualsWithDelta(30 * 50.25 + 30 * 50.25, Nomina::calcular($w, 6, [], 0)['dev'], 0.001);
+        // Base mínima diaria del grupo 10 por los días del mes
+        $bajo = array_merge($w, ['salDia' => 30]);
+        $this->assertEqualsWithDelta(47.48 * 31, Nomina::calcular($bajo, 3, [], 0)['base'], 0.001);
+    }
+
     public function test_calculo_de_la_nomina_y_cotizaciones_2026(): void
     {
         $w = Nomina::rellenar(['id' => 1, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => 5, 'salBase' => 1500, 'plus' => 0, 'pagas' => 14, 'jor' => 100, 'alta' => '2026-01-01'], $this->a);
