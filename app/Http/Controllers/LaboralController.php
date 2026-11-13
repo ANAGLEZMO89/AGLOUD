@@ -193,7 +193,18 @@ class LaboralController extends Controller
             : ($d['irpfModo'] === 'fijo' && ($d['irpf'] < 0 || $d['irpf'] > 47) ? 'Revisa el tipo fijo de IRPF.'
             : ($d['iban'] !== '' && ! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/', $d['iban']) ? 'Revisa el IBAN para la nómina.' : '')))))))));
         if ($err) {
-            return back()->withInput()->withErrors(['ficha' => $err]);
+            // Vuelve al apartado donde está el dato que falta, con el aviso bien visible
+            $secErr = match (true) {
+                str_contains($err, 'afiliación') => 'afil',
+                str_contains($err, 'salario') => 'retrib',
+                str_contains($err, 'IRPF') => 'irpf',
+                str_contains($err, 'RETA') || str_contains($err, 'tarifa') || str_contains($err, 'cuota') => 'aut',
+                str_contains($err, 'contrato') || str_contains($err, 'temporal') => 'contrato',
+                default => 'personal',
+            };
+
+            return redirect()->route('laboral.ficha', [$t ? $t->id : 'nuevo', 'sec' => $secErr])->withInput()
+                ->withErrors(['ficha' => 'No se ha guardado la ficha: '.mb_strtolower(mb_substr($err, 0, 1)).mb_substr($err, 1).' El resto de datos sigue rellenado: corrígelo y vuelve a pulsar «Guardar ficha».']);
         }
         if (! $temp || $aut) {
             $d['fin'] = '';

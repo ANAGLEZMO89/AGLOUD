@@ -80,7 +80,10 @@ class LaboralTest extends TestCase
     public function test_validaciones_de_la_ficha(): void
     {
         $this->en()->from('/laboral/trabajador/nuevo')->post('/laboral/trabajador/nuevo', $this->ficha(['nif' => '29112233A']))->assertSessionHasErrors('ficha');
-        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['naf' => '123']))->assertSessionHasErrors('ficha');
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['naf' => '123']))->assertSessionHasErrors('ficha')->assertRedirect('/laboral/trabajador/nuevo?sec=afil');
+        $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['salBase' => '0']))->assertRedirect('/laboral/trabajador/nuevo?sec=retrib');
+        $this->en()->followingRedirects()->post('/laboral/trabajador/nuevo', $this->ficha(['salBase' => '0', 'nom1' => 'Beka', '_ficha' => '1']))
+            ->assertSee('No se ha guardado la ficha: indica el salario.')->assertSee('value="Beka"', false);
         $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['contrato' => '402', 'fin' => '']))->assertSessionHasErrors('ficha');
         $this->en()->post('/laboral/trabajador/nuevo', $this->ficha(['contrato' => '402', 'fin' => '2026-06-30', 'causa' => 'corta']))->assertSessionHasErrors('ficha');
         $this->assertSame(0, Trabajador::count());
