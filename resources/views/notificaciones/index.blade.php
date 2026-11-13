@@ -41,17 +41,17 @@
   <div class="ntbar">
     <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 280px">
       <span style="font-size:13px;font-weight:600">Notificaciones con el certificado digital {{ $desp ? 'de cada cliente' : 'de la ficha del cliente' }}</span>
-      <span style="font-size:12px;color:{{ $dehuEstado[1] ? '#BDBDB7' : '#F5C26B' }}">{{ $dehuEstado[0] }} Solo se listan: nada se abre hasta que pulses «Abrir en la DEHú».</span>
+      <span style="font-size:12px;color:{{ $dehuEstado[1] ? '#BDBDB7' : '#F5C26B' }}">{{ $dehuEstado[0] }} Consultar no abre nada: el plazo solo empieza cuando pulses «Abrir en la DEHú».</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-      @foreach([['dehu', 'DEHú', 'Notificaciones DEHú', 'https://dehu.redsara.es/'], ['aeat', 'AEAT', 'Notificaciones AEAT', config('agcloud.organismos_url.AEAT')], ['ss', 'Seg. Social', 'Seguridad Social', config('agcloud.organismos_url.TGSS')]] as [$k, $o, $l, $href])
-        <a class="cn {{ $fuente === $k ? 'on' : '' }}" href="{{ $url(['fuente' => $fuente === $k ? null : $k, 'sel' => null]) }}" title="{{ $l }}" @if($fuente === $k) style="background:#0B0B0B;color:#fff" @endif><i></i><b>{{ $o }}</b><span>{{ $fuente === $k ? 'Quitar filtro' : 'Ver' }}</span></a>
+      @foreach([['dehu', 'DEHú', 'Notificaciones DEHú'], ['aeat', 'AEAT', 'Notificaciones AEAT'], ['ss', 'Seg. Social', 'Notificaciones de la Seguridad Social']] as [$k, $o, $l])
+        <form method="POST" action="{{ route('notificaciones.dehu') }}">@csrf<input type="hidden" name="fuente" value="{{ $k }}">
+          <button class="cn {{ $fuente === $k ? 'on' : '' }}" type="submit" title="{{ $l }}: consultar ahora con el certificado {{ $desp ? 'de cada cliente' : 'de '.$c->nombre }}" style="border:0;cursor:pointer;font:inherit;{{ $fuente === $k ? 'background:#C8F031;color:#0B0B0B' : '' }}"><i></i><b>{{ $o }}</b><span>Consultar</span></button>
+        </form>
       @endforeach
-      <form method="POST" action="{{ route('notificaciones.dehu') }}">@csrf<button class="btn lime sm" type="submit" @disabled(! $dehuEstado[1])>Consultar ahora</button></form>
+      @if($fuente)<a class="cn" href="{{ $url(['fuente' => null, 'sel' => null]) }}" style="text-decoration:none"><b>Ver todas</b></a>@endif
     </div>
-    <span style="flex-basis:100%;font-size:12px;color:#BDBDB7">Las notificaciones de la AEAT y la Seguridad Social llegan también a la DEHú. Las que solo estén en su sede:
-      @foreach([['DEHú', 'https://dehu.redsara.es/'], ['Sede AEAT', config('agcloud.organismos_url.AEAT')], ['Sede TGSS', config('agcloud.organismos_url.TGSS')]] as [$o, $href])<a href="{{ $href }}" target="_blank" rel="noopener noreferrer" style="color:#C8F031">{{ $o }} ↗</a>@if(! $loop->last) · @endif @endforeach
-      y anótalas con «Registrar notificación».</span>
+    <span style="flex-basis:100%;font-size:12px;color:#BDBDB7">Cada botón consulta con el certificado de la ficha y muestra aquí lo que haya: la DEHú reúne también lo de la AEAT y la Seguridad Social. Lo que llegue solo por correo postal u otra vía, anótalo con «Registrar notificación».</span>
   </div>
   @if($errors->has('dehu'))<div class="ferr">{{ $errors->first('dehu') }}</div>@endif
 

@@ -86,7 +86,7 @@ class DehuTest extends TestCase
 
     public function test_consultar_lista_sin_abrir_y_no_duplica(): void
     {
-        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->post(route('notificaciones.dehu'))->assertSessionHas('ok');
+        $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->post(route('notificaciones.dehu'), ['fuente' => 'aeat'])->assertRedirect(route('notificaciones.index', ['fuente' => 'aeat']))->assertSessionHas('ok');
         $this->assertSame(['Localiza'], array_column($this->llamadas, 0));
         $n = Notificacion::where('dehu_id', 'ENV-1')->firstOrFail();
         $this->assertSame(['AEAT', 'DEHú', 'Pendiente', '2026-11-10'], [$n->organismo, $n->canal, $n->estado, $n->puesta->toDateString()]);
@@ -100,7 +100,7 @@ class DehuTest extends TestCase
         $this->assertSame(2, Notificacion::count());
         $this->assertTrue($this->a->fresh()->datos['dehuSync']['ok']);
         $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('notificaciones.index'))->assertOk()
-            ->assertSee('Consultar ahora')->assertSee('Conectada con el certificado de EMPRESA A SL')->assertSee('Requerimiento IVA 3T');
+            ->assertSee('Notificaciones AEAT: consultar ahora con el certificado de Empresa A SL')->assertSee('Conectada con el certificado de EMPRESA A SL')->assertSee('Requerimiento IVA 3T');
     }
 
     public function test_comparecer_pide_confirmacion_abre_y_guarda_documentos(): void

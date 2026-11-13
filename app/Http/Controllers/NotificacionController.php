@@ -20,7 +20,7 @@ use Illuminate\Validation\Rule;
 /**
  * Notificaciones administrativas.
  *
- * - DEHú: se consultan con el certificado de la ficha de cada cliente (cada día y con «Consultar ahora»)
+ * - DEHú: se consultan con el certificado de la ficha de cada cliente (cada día y al pulsar DEHú, AEAT o Seg. Social)
  *   y solo se abren (comparecencia, art. 43 Ley 39/2015) cuando un usuario del despacho lo pide.
  * - Lo que solo llega a otras sedes se sigue anotando a mano.
  * La aplicación calcula la caducidad (10 días naturales) y el vencimiento del plazo para actuar.
@@ -179,17 +179,19 @@ class NotificacionController extends Controller
             ->with('ok', 'Notificación registrada para '.$cli->nombre.'.'.($n->caducada ? ' Ya habían pasado 10 días naturales: se da por notificada el '.Formato::fecha($n->acceso).'.' : ''));
     }
 
-    /** «Consultar ahora»: lista en la DEHú lo pendiente del cliente (o de todos, desde el despacho). No abre nada. */
+    /** Botones DEHú / AEAT / Seg. Social: lista en la DEHú lo pendiente del cliente (o de todos, desde el despacho). No abre nada. */
     public function consultarDehu(Request $request, NotificacionesDehu $dehu)
     {
         $ctx = $request->attributes->get('ctx');
         abort_unless($ctx, 403);
         @set_time_limit(300);
+        $fuente = in_array($request->input('fuente'), ['dehu', 'aeat', 'ss'], true) ? (string) $request->input('fuente') : null;
+        $volver = redirect()->route('notificaciones.index', array_filter(['fuente' => $fuente]));
         $clientes = $ctx->es_despacho
             ? Cliente::where('es_despacho', false)->where('estado', '!=', 'Baja')->orderBy('nombre')->get()->filter(fn ($c) => NotificacionesDehu::certificado($c)[1] === null)
             : collect([$ctx]);
-        if ($clientes->isEmpty()) {
-            return back()->withErrors(['dehu' => 'Ningún cliente tiene listo el certificado para la DEHú (marcado «Uso DEHú», .p12/.pfx con contraseña, vigente y con el alta como Gran Destinatario).']);
+        if ($ctx->es_despacho && $clientes->isEmpty()) {
+            return $volver->withErrors(['dehu' => 'Ningún cliente tiene listo el certificado para la DEHú (marcado «Uso DEHú», .p12/.pfx con contraseña, vigente y con el alta como Gran Destinatario).']);
         }
         $nuevas = 0;
         $fallos = [];
@@ -197,13 +199,15 @@ class NotificacionController extends Controller
             try {
                 $nuevas += $dehu->sincronizar($c)['nuevas'];
             } catch (\Throwable $e) {
-                $fallos[] = $c->nombre.': '.NotificacionesDehu::mensaje($e);
+                $fallos[] = ($ctx->es_despacho ? $c->nombre.': ' : '').NotificacionesDehu::mensaje($e);
             }
         }
         $ok = $clientes->count() - count($fallos);
-        $r = back()->with('ok', 'DEHú consultada'.($ctx->es_despacho ? ' para '.$ok.' de '.$clientes->count().' clientes' : '').': '.($nuevas ? $nuevas.' '.($nuevas === 1 ? 'notificación nueva' : 'notificaciones nuevas').' sin abrir.' : 'sin novedades.'));
+        if ($ok) {
+            $volver->with('ok', 'Consultado con el certificado '.($ctx->es_despacho ? 'de '.$ok.' de '.$clientes->count().' clientes' : 'de '.$ctx->nombre).': '.($nuevas ? $nuevas.' '.($nuevas === 1 ? 'notificación nueva' : 'notificaciones nuevas').' sin abrir.' : 'sin novedades.'));
+        }
 
-        return $fallos ? $r->withErrors(['dehu' => implode(' · ', array_slice($fallos, 0, 5)).(count($fallos) > 5 ? ' · y '.(count($fallos) - 5).' más' : '')]) : $r;
+        return $fallos ? $volver->withErrors(['dehu' => ($ok ? '' : 'No se ha podido consultar. ').implode(' · ', array_slice($fallos, 0, 5)).(count($fallos) > 5 ? ' · y '.(count($fallos) - 5).' más' : '')]) : $volver;
     }
 
     /** Abrir en la DEHú (comparecencia): desde este momento se entiende notificada y empieza el plazo */
