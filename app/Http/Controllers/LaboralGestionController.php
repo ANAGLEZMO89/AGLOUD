@@ -4,15 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\Ajuste;
 use App\Models\Cliente;
+use App\Models\Convenio;
+use App\Models\ConvenioDocumento;
+use App\Models\ConvenioVersion;
+use App\Models\Documento;
+use App\Models\EmpresaConvenio;
 use App\Models\LaboralMes;
 use App\Models\Trabajador;
+use App\Services\AlmacenDocumentos;
 use App\Services\Auditoria;
 use App\Services\ConvenioIA;
+use App\Services\Convenios;
 use App\Services\Nomina;
+use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
 use App\Support\Plazos;
 use App\Support\Validacion;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -294,7 +303,102 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
 
-        return view('laboral.convenios', $this->base($request, $c, 'g-conv'));
+        $cv = Convenios::asignacion($c)?->convenio;
+        $ver = $cv ? Convenios::editable($cv, (int) $request->query('version')) : null;
+
+        return view('laboral.convenios', $this->base($request, $c, 'g-conv') + [
+            'cv' => $cv, 'ver' => $ver, 'convEd' => $cv ? Convenios::forma($cv, $ver) : null,
+            'versiones' => $cv ? ConvenioVersion::withoutGlobalScopes()->withCount(['categorias' => fn ($q) => $q->withoutGlobalScopes()])->where('convenio_id', $cv->id)->orderByRaw('efectos_desde is null')->orderBy('efectos_desde')->orderBy('id')->get() : collect(),
+            'validacion' => $cv ? Convenios::validar($cv) : [],
+            'nEmpresas' => $cv ? EmpresaConvenio::withoutGlobalScopes()->where('convenio_id', $cv->id)->distinct('cliente_id')->count('cliente_id') : 0,
+            'todos' => Convenio::orderBy('nombre')->get(['id', 'nombre', 'codigo', 'estado']),
+            'docs' => $cv ? ConvenioDocumento::with('documento')->where('convenio_id', $cv->id)->orderByDesc('id')->get() : collect(),
+        ]);
+    }
+
+    /** Asigna a la empresa un convenio del despacho (o uno nuevo) desde el primer día del mes */
+    public function asignarConvenio(Request $request)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
+        }
+        $sel = (string) $request->input('convenio_id');
+        $actual = Convenios::asignacion($c);
+        if ($sel === 'nuevo') {
+            $nombre = mb_substr(trim((string) $request->input('nombre')), 0, 250);
+            if ($nombre === '') {
+                return back()->withErrors(['conv' => 'Escribe el nombre del convenio nuevo.']);
+            }
+            $cv = Convenio::create(['nombre' => $nombre, 'estado' => 'borrador', 'created_by' => $request->user()->id]);
+        } else {
+            $cv = Convenio::findOrFail((int) $sel);
+        }
+        if ($actual && $actual->convenio_id === $cv->id) {
+            return back()->with('ok', 'La empresa ya tiene asignado ese convenio.');
+        }
+        $desde = now()->startOfMonth();
+        if ($actual) {
+            // El convenio anterior queda para los meses ya pasados
+            $actual->hasta = $actual->desde && $actual->desde->gte($desde) ? $actual->desde : $desde->copy()->subDay();
+            $actual->save();
+        }
+        EmpresaConvenio::create(['cliente_id' => $c->id, 'convenio_id' => $cv->id, 'desde' => $actual ? $desde->toDateString() : null]);
+        Nomina::olvidarReglas();
+        Auditoria::registrar('laboral.convenio.asignar', 'Convenio «'.$cv->nombre.'» asignado a '.$c->nombre, null, $c->id);
+
+        return redirect()->route('laboral.convenios')->with('ok', 'Convenio «'.$cv->nombre.'» asignado a '.$c->nombre.($actual ? ' desde el '.$desde->format('d/m/Y').'.' : '.'));
+    }
+
+    /** Nueva versión (copia de la seleccionada) con su fecha de efectos; opcionalmente cierra la anterior el día antes */
+    public function nuevaVersion(Request $request)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
+        }
+        $cv = Convenios::asignacion($c)?->convenio ?? abort(404);
+        $data = $request->validate(['base_id' => ['required', 'integer'], 'nombre' => ['required', 'string', 'max:160'], 'efectos_desde' => ['required', 'date']],
+            ['efectos_desde.required' => 'Indica desde cuándo tiene efectos económicos la nueva versión.']);
+        $base = ConvenioVersion::withoutGlobalScopes()->where('convenio_id', $cv->id)->findOrFail($data['base_id']);
+        $n = Convenios::nuevaVersion($base, ['nombre' => $data['nombre'], 'efectos_desde' => $data['efectos_desde']]);
+        if ($request->boolean('cerrar') && (! $base->efectos_hasta || $base->efectos_hasta->toDateString() >= $data['efectos_desde'])) {
+            $base->efectos_hasta = Carbon::parse($data['efectos_desde'])->subDay();
+            $base->save();
+        }
+        Auditoria::registrar('laboral.convenio.version', 'Nueva versión «'.$n->nombre.'» del convenio «'.$cv->nombre.'»', null, $c->id);
+
+        return redirect()->route('laboral.convenios', ['version' => $n->id])->with('ok', 'Versión «'.$n->nombre.'» creada en borrador con los datos de «'.$base->nombre.'». Revisa las tablas y apruébala.');
+    }
+
+    /** PDF del convenio (texto, anexo, tablas o revisión) en el gestor documental del despacho */
+    public function documentoConvenio(Request $request, AlmacenDocumentos $almacen)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
+        }
+        $cv = Convenios::asignacion($c)?->convenio ?? abort(404);
+        $request->validate(['pdf' => ['required', 'file', 'mimes:pdf', 'max:30000'], 'tipo' => ['required', 'in:'.implode(',', array_keys(ConvenioDocumento::TIPOS))]],
+            ['pdf.mimes' => 'Sube un PDF.', 'pdf.max' => 'El PDF no puede pasar de 30 MB.']);
+        $doc = self::guardarPdf($almacen, $request->file('pdf'), $request->user()->id);
+        ConvenioDocumento::create(['convenio_id' => $cv->id, 'version_id' => $request->integer('version_id') ?: null, 'documento_id' => $doc->id, 'tipo' => $request->input('tipo'),
+            'descripcion' => mb_substr((string) $request->input('descripcion'), 0, 250) ?: null]);
+        Auditoria::registrar('laboral.convenio.documento', 'PDF añadido al convenio «'.$cv->nombre.'»', null, $c->id);
+
+        return back()->with('ok', 'Documento guardado (cifrado) en el convenio.');
+    }
+
+    /** Los PDF de convenios se guardan en los documentos del despacho: son públicos y sirven para varias empresas */
+    public static function guardarPdf(AlmacenDocumentos $almacen, UploadedFile $f, int $userId): Documento
+    {
+        $desp = Cliente::where('es_despacho', true)->first();
+        abort_unless($desp, 422, 'Falta la ficha del despacho.');
+        $g = $almacen->guardar($f, $desp->id);
+
+        return Documento::create(['cliente_id' => $desp->id, 'ambito' => 'gestor', 'borrador' => false, 'carpeta' => 'otros/varios', 'tipo' => 'docu',
+            'nombre' => ClasificadorDocumentos::nombreSeguro('Convenio - '.$f->getClientOriginalName()), 'nombre_original' => ClasificadorDocumentos::nombreSeguro($f->getClientOriginalName()),
+            'fecha' => now()->toDateString(), 'mime' => $g['mime'], 'tamano' => $g['tamano'], 'ruta' => $g['ruta'], 'sha256' => $g['sha256'], 'origen' => 'Despacho', 'subido_por' => $userId]);
     }
 
     public function guardarConvenios(Request $request)
@@ -310,7 +414,9 @@ class LaboralGestionController extends LaboralController
                 continue;
             }
             $cats[] = ['cat' => mb_substr(trim($x['cat']), 0, 120), 'grupo' => (string) max(1, min(11, (int) ($x['grupo'] ?? 7))),
-                'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2),
+                'grupo_profesional' => mb_substr(trim((string) ($x['grupo_profesional'] ?? '')), 0, 80), 'nivel' => mb_substr(trim((string) ($x['nivel'] ?? '')), 0, 40),
+                // Sin importe = no localizado (nunca cero)
+                'base' => trim((string) ($x['base'] ?? '')) === '' ? null : round(Formato::parseNum((string) $x['base']), 4), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 4),
                 'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes', 'art' => mb_substr((string) ($x['art'] ?? ''), 0, 80)];
         }
         $num = fn ($v) => trim((string) $v) === '' ? null : round(Formato::parseNum((string) $v), 2);
@@ -343,15 +449,47 @@ class LaboralGestionController extends LaboralController
             'pct' => max(0, min(100, (float) Formato::parseNum((string) ($t['pct'] ?? 0))))], array_filter((array) $l, fn ($t) => is_array($t) && trim((string) ($t['pct'] ?? '')) !== '')));
         $hx = in_array($request->input('hx_tipo'), ['importe', 'recargo'], true) && $num($request->input('hx_valor'))
             ? ['tipo' => $request->input('hx_tipo'), 'valor' => $num($request->input('hx_valor')), 'art' => ''] : null;
-        $prevConv = Nomina::config($c)['conv'];
-        $this->guardarConfig($c, ['conv' => array_replace($prevConv, ['extras' => $extras, 'antig' => $antig, 'pluses' => $pluses,
+        $fechas = [];
+        foreach (['ver_efectos_desde', 'ver_efectos_hasta', 'ver_vigencia_desde', 'ver_vigencia_hasta', 'conv_fecha_pub'] as $k) {
+            $x = trim((string) $request->input($k, ''));
+            if ($x !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $x)) {
+                return back()->withInput()->withErrors(['conv' => 'Revisa las fechas del convenio.']);
+            }
+            $fechas[$k] = $x !== '' ? $x : null;
+        }
+        if ($fechas['ver_efectos_desde'] && $fechas['ver_efectos_hasta'] && $fechas['ver_efectos_hasta'] < $fechas['ver_efectos_desde']) {
+            return back()->withInput()->withErrors(['conv' => 'La fecha final de efectos no puede ser anterior a la inicial.']);
+        }
+        $cv = Convenios::deEmpresa($c, $request->user()->id);
+        $ver = Convenios::editable($cv, $request->integer('version_id') ?: null);
+        if ($request->has('conv_estado')) {
+            $cv->fill(['sector' => $s('conv_sector') ?: null, 'ambito_funcional' => $s('conv_ambito_funcional', 500) ?: null, 'ambito_personal' => $s('conv_ambito_personal', 500) ?: null,
+                'publicacion' => $s('conv_publicacion', 250) ?: null, 'url' => $s('conv_url', 500) ?: null, 'fecha_publicacion' => $fechas['conv_fecha_pub'],
+                'estado' => array_key_exists($request->input('conv_estado'), Convenio::ESTADOS) ? $request->input('conv_estado') : $cv->estado,
+                'observaciones' => mb_substr((string) $request->input('conv_observaciones'), 0, 5000) ?: null, 'no_soportado' => mb_substr((string) $request->input('conv_no_soportado'), 0, 5000) ?: null])->save();
+        }
+        if ($request->has('ver_nombre')) {
+            $ver->fill(['nombre' => $s('ver_nombre') ?: $ver->nombre, 'efectos_desde' => $fechas['ver_efectos_desde'], 'efectos_hasta' => $fechas['ver_efectos_hasta'],
+                'vigencia_desde' => $fechas['ver_vigencia_desde'], 'vigencia_hasta' => $fechas['ver_vigencia_hasta']]);
+            $est = (string) $request->input('ver_estado', $ver->estado);
+            if (array_key_exists($est, Convenio::ESTADOS) && $est !== $ver->estado) {
+                $ver->estado = $est;
+                if ($est === 'aprobado') {
+                    $ver->aprobada_por = $request->user()->id;
+                    $ver->aprobada_at = now();
+                }
+            }
+            $ver->save();
+        }
+        $prevConv = Convenios::forma($cv, $ver);
+        Convenios::guardar($ver, array_replace($prevConv, ['extras' => $extras, 'antig' => $antig, 'pluses' => $pluses,
             'it' => ['cc' => $tramos($request->input('it_cc', [])), 'at' => $tramos($request->input('it_at', [])), 'art' => $prevConv['it']['art'] ?? ''], 'hx' => $hx,
             'nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
-            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => $extras ? (string) (12 + count($extras)) : (in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14'), 'cats' => $cats])]);
+            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => $extras ? (string) (12 + count($extras)) : (in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14'), 'cats' => $cats]));
         $bajo = self::bajoConvenio($c, $cats);
         Auditoria::registrar('laboral.convenio', 'Convenio de '.$c->nombre.' guardado', null, $c->id);
 
-        return redirect()->route('laboral.convenios')->with('ok', 'Convenio guardado y aplicado a las nóminas de '.$c->nombre.'.'.($bajo ? ' Hay '.count($bajo).' trabajadores por debajo del convenio: revísalos (no se ha cambiado ningún salario).' : ''));
+        return redirect()->route('laboral.convenios', ['version' => $ver->id])->with('ok', 'Versión «'.$ver->nombre.'» guardada'.($ver->estado === 'aprobado' ? ' y aplicada a las nóminas de '.$c->nombre.' en su periodo de efectos' : ' en '.mb_strtolower(Convenio::ESTADOS[$ver->estado]).': las nóminas solo la usan si no hay una versión aprobada para ese mes').'.'.($bajo ? ' Hay '.count($bajo).' trabajadores por debajo del convenio: revísalos (no se ha cambiado ningún salario).' : ''));
     }
 
     /** Lee el PDF del convenio con IA y aplica sus tablas y reglas a la empresa y a su plantilla */
@@ -368,7 +506,9 @@ class LaboralGestionController extends LaboralController
             return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se ha podido leer el convenio: '.$e->getMessage()]);
         }
 
-        return $this->aplicarConvenio($c, $r, $request->file('pdf')->getClientOriginalName());
+        $doc = Cliente::where('es_despacho', true)->exists() ? self::guardarPdf(app(AlmacenDocumentos::class), $request->file('pdf'), $request->user()->id) : null;
+
+        return $this->aplicarConvenio($c, $r, $request->file('pdf')->getClientOriginalName(), $doc?->id);
     }
 
     /** Lectura gratuita: el convenio se lee en claude.ai con la suscripción del despacho y aquí se pega la respuesta */
@@ -389,12 +529,12 @@ class LaboralGestionController extends LaboralController
     }
 
     /** La lectura del PDF (con IA o pegada desde claude.ai) queda como PROPUESTA: no toca el convenio ni la plantilla hasta que se aprueba */
-    private function aplicarConvenio(Cliente $c, array $r, string $archivo)
+    private function aplicarConvenio(Cliente $c, array $r, string $archivo, ?int $docId = null)
     {
         if (! $r['cats']) {
             return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se han encontrado tablas salariales. Comprueba que el PDF es el convenio completo (con sus anexos) y no solo la resolución de publicación. No se ha guardado nada.']);
         }
-        $this->guardarConfig($c, ['convPropuesta' => $r + ['_meta' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'usuario' => auth()->id()]]]);
+        $this->guardarConfig($c, ['convPropuesta' => $r + ['_meta' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'usuario' => auth()->id(), 'documento_id' => $docId]]]);
         Auditoria::registrar('laboral.convenio.propuesta', 'Propuesta de convenio leída ('.$archivo.') para '.$c->nombre.': '.count($r['cats']).' categorías', null, $c->id);
 
         return redirect()->route('laboral.convenios', ['revisar' => 1])->with('ok', 'Propuesta lista para revisar: todavía no se ha aplicado nada al convenio ni a las nóminas.');
@@ -419,15 +559,23 @@ class LaboralGestionController extends LaboralController
             return redirect()->route('laboral.convenios')->with('ok', 'Propuesta descartada. El convenio no ha cambiado.');
         }
         $m = $r['_meta'] ?? [];
-        $conv = array_replace($P['conv'], array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
+        $cv = Convenios::deEmpresa($c, $request->user()->id);
+        $ver = Convenios::editable($cv, $request->integer('version_id') ?: null);
+        $conv = array_replace(Convenios::forma($cv, $ver), array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
             'jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== ''), [
                 'cats' => $r['cats'], 'extras' => $r['extras'], 'antig' => $r['antig'], 'pluses' => $r['pluses'], 'it' => $r['it'], 'hx' => $r['hx'],
                 'pagas' => $r['extras'] ? (string) (12 + count($r['extras'])) : ($P['conv']['pagas'] ?? '14'),
                 'ia' => ['fecha' => $m['fecha'] ?? now()->toDateTimeString(), 'archivo' => $m['archivo'] ?? '', 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos'],
                     'aprobado' => now()->toDateTimeString(), 'aprobadoPor' => $request->user()->id],
             ]);
-        $this->guardarConfig($c, ['conv' => $conv, 'convPropuesta' => null]);
-        Auditoria::registrar('laboral.convenio.ia', 'Propuesta de convenio aprobada por '.$request->user()->name.' para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
+        Convenios::guardar($ver, $conv);
+        $ver->fuente = 'ia';
+        $ver->save();
+        if (! empty($m['documento_id'])) {
+            ConvenioDocumento::firstOrCreate(['convenio_id' => $cv->id, 'documento_id' => $m['documento_id']], ['version_id' => $ver->id, 'tipo' => 'texto', 'descripcion' => 'PDF leído con IA']);
+        }
+        $this->guardarConfig($c, ['convPropuesta' => null]);
+        Auditoria::registrar('laboral.convenio.ia', 'Propuesta aplicada a la versión «'.$ver->nombre.'». Aprobada por '.$request->user()->name.' para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
         $bajo = self::bajoConvenio($c, $conv['cats']);
 
         return redirect()->route('laboral.convenios')->with('ok', 'Convenio aplicado. Los salarios de la plantilla no se han modificado'.($bajo ? ': revisa los '.count($bajo).' trabajadores por debajo del convenio.' : '.'));

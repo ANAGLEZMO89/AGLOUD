@@ -122,7 +122,7 @@ class ConvenioIATest extends TestCase
             'pluses' => [['nombre' => 'Plus de asistencia', 'valor' => '60,00', 'tipo' => 'importe', 'unidad' => 'mes', 'auto' => '1', 'cotiza' => '1', 'tributa' => '1'],
                 ['nombre' => 'Plus de nocturnidad', 'valor' => '2,00', 'tipo' => 'importe', 'unidad' => 'hora', 'cotiza' => '1', 'tributa' => '1']],
             'it_cc' => [['desde' => '4', 'hasta' => '', 'pct' => '100']], 'hx_tipo' => 'importe', 'hx_valor' => '14,00'])
-            ->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+            ->assertRedirect()->assertSessionHas('ok');
         $P = Nomina::config($this->a);
         $this->assertSame(['14', 'dia'], [$P['conv']['pagas'], $P['conv']['cats'][0]['unidad']]);
         $this->assertSame(['porcentaje', 5.0, 5], [$P['conv']['antig']['tipo'], (float) $P['conv']['antig']['valor'], $P['conv']['antig']['periodo']]);

@@ -3,12 +3,68 @@
   use App\Services\Nomina;
   use App\Support\Formato;
   $o = fn ($k, $def) => old($k, $def);
-  $conv = $P['conv'];
+  $conv = $convEd ?? $P['conv'];
+  $cvE = $cv ? \App\Models\Convenio::ESTADOS : [];
   $cats = old('_enviado') ? array_values((array) old('cats', [])) : $conv['cats'];
 @endphp
 @section('content')
 <div class="page" style="gap:16px">
   @include('laboral._cabecera')
+  <div class="card" style="gap:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:15px;font-weight:700">Convenio de {{ $c->nombre }}</span>
+        <span style="font-size:12.5px;color:#6A6A65">{{ $cv ? $cv->nombre.' · '.(\App\Models\Convenio::ESTADOS[$cv->estado] ?? $cv->estado).($nEmpresas > 1 ? ' · lo usan '.$nEmpresas.' empresas: los cambios les afectan a todas' : '') : 'Sin convenio asignado' }}</span></div>
+      <form method="POST" action="{{ route('laboral.convenios.asignar') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">@csrf
+        <label class="lbl-s" style="min-width:220px">Asignar convenio del despacho<select class="sel" name="convenio_id" data-lb-asig>@foreach($todos as $t)<option value="{{ $t->id }}" @selected($cv && $cv->id === $t->id)>{{ $t->nombre }}{{ $t->codigo ? ' · '.$t->codigo : '' }}</option>@endforeach<option value="nuevo" @selected(! $cv)>+ Convenio nuevo…</option></select></label>
+        <label class="lbl-s">Nombre (si es nuevo)<input class="inp" name="nombre" maxlength="250" placeholder="Convenio de la construcción de Huelva"></label>
+        <button class="btn soft sm" type="submit">Asignar</button>
+      </form>
+    </div>
+    @if($cv)
+      <div style="overflow-x:auto"><table class="lb-tab" style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr style="text-align:left;color:#6A6A65;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em"><th style="padding:6px 8px">Versión</th><th style="padding:6px 8px">Efectos económicos</th><th style="padding:6px 8px">Estado</th><th style="padding:6px 8px">Categorías</th><th></th></tr></thead>
+        <tbody>
+        @foreach($versiones as $v)
+          <tr style="border-top:1px solid #F1F1EC;{{ $ver && $ver->id === $v->id ? 'background:#F7F8EE' : '' }}">
+            <td style="padding:7px 8px;font-weight:600">{{ $v->nombre }}</td>
+            <td style="padding:7px 8px" class="mono12">{{ $v->efectos_desde ? Formato::fecha($v->efectos_desde) : 'sin fecha' }} – {{ $v->efectos_hasta ? Formato::fecha($v->efectos_hasta) : 'abierta' }}</td>
+            <td style="padding:7px 8px">{{ \App\Models\Convenio::ESTADOS[$v->estado] ?? $v->estado }}{{ $v->fuente === 'ia' ? ' · leída con IA' : '' }}</td>
+            <td style="padding:7px 8px">{{ $v->categorias_count }}</td>
+            <td style="padding:7px 8px;text-align:right">@if($ver && $ver->id === $v->id)<b>Editando</b>@else<a href="{{ route('laboral.convenios', ['version' => $v->id]) }}">Editar</a>@endif</td>
+          </tr>
+        @endforeach
+        </tbody></table></div>
+      @if($ver)
+      <details><summary style="cursor:pointer;font-size:13px;font-weight:600">+ Nueva versión (revisión salarial, tablas de otro año…)</summary>
+        <form method="POST" action="{{ route('laboral.convenios.version') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">@csrf<input type="hidden" name="base_id" value="{{ $ver->id }}">
+          <label class="lbl-s">Nombre<input class="inp" name="nombre" required maxlength="160" placeholder="Tablas {{ now()->year + 1 }}"></label>
+          <label class="lbl-s">Efectos económicos desde<input class="inp" type="date" name="efectos_desde" required></label>
+          <label class="chk" style="gap:6px;font-size:12.5px"><input type="checkbox" name="cerrar" value="1" checked>Cerrar «{{ $ver->nombre }}» el día anterior</label>
+          <button class="btn soft sm" type="submit">Crear copiando «{{ $ver->nombre }}»</button>
+        </form>
+      </details>
+      @endif
+      @if($validacion)
+        <div style="display:flex;flex-direction:column;gap:4px">
+          @foreach($validacion as [$niv, $txt])<div style="display:flex;gap:8px;font-size:12.5px;align-items:flex-start"><span style="font-weight:700;color:{{ ['error' => '#8A1C1C', 'aviso' => '#6E4300', 'info' => '#3C3C3C'][$niv] }}" aria-label="{{ ['error' => 'Error', 'aviso' => 'Advertencia', 'info' => 'Información'][$niv] }}">{{ ['error' => '!', 'aviso' => '?', 'info' => 'i'][$niv] }}</span><span>{{ $txt }}</span></div>@endforeach
+        </div>
+      @endif
+      <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid #F1F1EC">
+        <span style="font-size:13px;font-weight:600">Documentos del convenio</span>
+        @forelse($docs as $d)
+          <span style="font-size:12.5px">{{ \App\Models\ConvenioDocumento::TIPOS[$d->tipo] ?? $d->tipo }}: @if($d->documento)<a href="{{ route('documentos.ver', $d->documento_id) }}" target="_blank" rel="noopener">{{ $d->documento->nombre }}</a>@endif {{ $d->descripcion ? '· '.$d->descripcion : '' }}</span>
+        @empty
+          <span class="hint muted">Ningún PDF guardado todavía.</span>
+        @endforelse
+        <form method="POST" action="{{ route('laboral.convenios.documento') }}" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">@csrf<input type="hidden" name="version_id" value="{{ $ver?->id }}">
+          <label class="lbl-s">Tipo<select class="sel" name="tipo">@foreach(\App\Models\ConvenioDocumento::TIPOS as $k => $l)<option value="{{ $k }}">{{ $l }}</option>@endforeach</select></label>
+          <label class="lbl-s">Descripción<input class="inp" name="descripcion" maxlength="250" placeholder="BOP de Huelva nº 123, 12/03/2026"></label>
+          <label class="lbl-s">PDF<input class="inp" type="file" name="pdf" accept="application/pdf" required style="padding-top:8px"></label>
+          <button class="btn soft sm" type="submit">Guardar PDF</button>
+        </form>
+      </div>
+    @endif
+  </div>
   @php $prop = $P['convPropuesta'] ?? null; $bajo = \App\Http\Controllers\LaboralGestionController::bajoConvenio($c, $conv['cats'] ?? []); @endphp
   @if($prop)
     @php
@@ -90,7 +146,7 @@
     @endif
   </div>
   <form method="POST" action="{{ route('laboral.convenios.guardar') }}" style="display:flex;flex-direction:column;gap:16px" data-lb-par>
-    @csrf<input type="hidden" name="_enviado" value="1">
+    @csrf<input type="hidden" name="_enviado" value="1"><input type="hidden" name="version_id" value="{{ $ver?->id }}">
       <div class="card">
         <span style="font-size:15px;font-weight:700">Convenio colectivo aplicable</span>
         @if($conv['nombre'])
@@ -111,15 +167,44 @@
           @endforeach
           <label class="lb-f"><span class="lb-l">Pagas</span><select class="sel lb-in" name="conv_pagas">@foreach(['14', '12', '15', '16'] as $x)<option @selected((string) $o('conv_pagas', $conv['pagas']) === $x)>{{ $x }}</option>@endforeach</select></label>
         </div>
+        @if($cv)
+        <details @if($errors->has('conv')) open @endif><summary style="cursor:pointer;font-size:13px;font-weight:600">Identificación y publicación</summary>
+        <div class="lb-fields" style="margin-top:8px">
+          <label class="lb-f"><span class="lb-l">Sector</span><input class="inp lb-in" name="conv_sector" value="{{ $o('conv_sector', $cv->sector) }}" maxlength="160"></label>
+          <label class="lb-f" style="grid-column:1 / -1"><span class="lb-l">Ámbito funcional</span><input class="inp lb-in" name="conv_ambito_funcional" value="{{ $o('conv_ambito_funcional', $cv->ambito_funcional) }}" maxlength="500"></label>
+          <label class="lb-f" style="grid-column:1 / -1"><span class="lb-l">Ámbito personal</span><input class="inp lb-in" name="conv_ambito_personal" value="{{ $o('conv_ambito_personal', $cv->ambito_personal) }}" maxlength="500"></label>
+          <label class="lb-f"><span class="lb-l">Publicación oficial</span><input class="inp lb-in" name="conv_publicacion" value="{{ $o('conv_publicacion', $cv->publicacion) }}" maxlength="250" placeholder="BOP de Huelva nº 123"></label>
+          <label class="lb-f"><span class="lb-l">Fecha de publicación</span><input class="inp lb-in" type="date" name="conv_fecha_pub" value="{{ $o('conv_fecha_pub', $cv->fecha_publicacion?->toDateString()) }}"></label>
+          <label class="lb-f"><span class="lb-l">Enlace</span><input class="inp lb-in" name="conv_url" value="{{ $o('conv_url', $cv->url) }}" maxlength="500" placeholder="https://"></label>
+          <label class="lb-f"><span class="lb-l">Estado del convenio</span><select class="sel lb-in" name="conv_estado">@foreach($cvE as $k => $l)<option value="{{ $k }}" @selected($o('conv_estado', $cv->estado) === $k)>{{ $l }}</option>@endforeach</select></label>
+          <label class="lb-f" style="grid-column:1 / -1"><span class="lb-l">Observaciones</span><textarea class="txa" name="conv_observaciones" rows="2" maxlength="5000">{{ $o('conv_observaciones', $cv->observaciones) }}</textarea></label>
+          <label class="lb-f" style="grid-column:1 / -1"><span class="lb-l">Reglas del convenio que AG Cloud todavía no calcula (para revisarlas a mano)</span><textarea class="txa" name="conv_no_soportado" rows="2" maxlength="5000">{{ $o('conv_no_soportado', $cv->no_soportado) }}</textarea></label>
+        </div>
+        </details>
+        @endif
+        @if($ver)
+        <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:#F7F8EE">
+          <span style="font-size:13.5px;font-weight:700">Versión que estás editando</span>
+          <div class="lb-fields">
+            <label class="lb-f"><span class="lb-l">Nombre de la versión</span><input class="inp lb-in" name="ver_nombre" value="{{ $o('ver_nombre', $ver->nombre) }}" maxlength="160" required></label>
+            <label class="lb-f"><span class="lb-l">Efectos económicos desde</span><input class="inp lb-in" type="date" name="ver_efectos_desde" value="{{ $o('ver_efectos_desde', $ver->efectos_desde?->toDateString()) }}"></label>
+            <label class="lb-f"><span class="lb-l">Efectos económicos hasta</span><input class="inp lb-in" type="date" name="ver_efectos_hasta" value="{{ $o('ver_efectos_hasta', $ver->efectos_hasta?->toDateString()) }}"></label>
+            <label class="lb-f"><span class="lb-l">Vigencia del texto desde</span><input class="inp lb-in" type="date" name="ver_vigencia_desde" value="{{ $o('ver_vigencia_desde', $ver->vigencia_desde?->toDateString()) }}"></label>
+            <label class="lb-f"><span class="lb-l">Vigencia del texto hasta</span><input class="inp lb-in" type="date" name="ver_vigencia_hasta" value="{{ $o('ver_vigencia_hasta', $ver->vigencia_hasta?->toDateString()) }}"></label>
+            <label class="lb-f"><span class="lb-l">Estado de la versión</span><select class="sel lb-in" name="ver_estado">@foreach(\App\Models\Convenio::ESTADOS as $k => $l)<option value="{{ $k }}" @selected($o('ver_estado', $ver->estado) === $k)>{{ $l }}</option>@endforeach</select></label>
+          </div>
+          <span class="hint muted">Las nóminas de cada mes usan la versión <b>aprobada</b> cuyos efectos económicos cubren ese mes. Si no hay ninguna aprobada, usan la vigente en borrador o revisión y lo indican.</span>
+        </div>
+        @endif
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:6px;border-top:1px solid #F1F1EC"><span style="font-size:15px;font-weight:700">Tablas salariales</span><button type="button" class="btn soft" data-lb-add="cats">+ Categoría</button></div>
-        <div class="lb-cat lb-head" style="padding:0"><span>Categoría</span><span>Grupo</span><span>Salario</span><span>Base €</span><span>Plus €/mes</span><span></span></div>
+        <div class="lb-cat lb-head" style="padding:0"><span>Categoría</span><span>Grupo profesional</span><span>Nivel</span><span>Grupo cot.</span><span>Salario</span><span>Base €</span><span>Plus €/mes</span><span></span></div>
         <div data-lb-list="cats" data-n="{{ count($cats) }}" style="display:flex;flex-direction:column;gap:8px">
           @foreach($cats as $i => $ct)
-            <div class="lb-cat"><input class="inp lb-in" name="cats[{{ $i }}][cat]" value="{{ $ct['cat'] ?? '' }}" title="{{ $ct['art'] ?? '' }}"><input type="hidden" name="cats[{{ $i }}][art]" value="{{ $ct['art'] ?? '' }}"><select class="sel lb-in" name="cats[{{ $i }}][grupo]">@foreach(range(1, 11) as $g)<option @selected((string) ($ct['grupo'] ?? '7') === (string) $g)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[{{ $i }}][unidad]"><option value="mes" @selected(($ct['unidad'] ?? 'mes') === 'mes')>Mensual</option><option value="dia" @selected(($ct['unidad'] ?? 'mes') === 'dia')>Diario</option></select><input class="inp lb-in mono" name="cats[{{ $i }}][base]" value="{{ is_numeric($ct['base'] ?? null) ? Formato::num($ct['base']) : ($ct['base'] ?? '') }}" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[{{ $i }}][plus]" value="{{ is_numeric($ct['plus'] ?? null) ? Formato::num($ct['plus']) : ($ct['plus'] ?? '') }}" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div>
+            <div class="lb-cat"><input class="inp lb-in" name="cats[{{ $i }}][cat]" value="{{ $ct['cat'] ?? '' }}" title="{{ $ct['art'] ?? '' }}" aria-label="Categoría"><input type="hidden" name="cats[{{ $i }}][art]" value="{{ $ct['art'] ?? '' }}"><input class="inp lb-in" name="cats[{{ $i }}][grupo_profesional]" value="{{ $ct['grupo_profesional'] ?? '' }}" aria-label="Grupo profesional del convenio"><input class="inp lb-in" name="cats[{{ $i }}][nivel]" value="{{ $ct['nivel'] ?? '' }}" aria-label="Nivel"><select class="sel lb-in" name="cats[{{ $i }}][grupo]" aria-label="Grupo de cotización">@foreach(range(1, 11) as $g)<option @selected((string) ($ct['grupo'] ?? '7') === (string) $g)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[{{ $i }}][unidad]" aria-label="Unidad del salario"><option value="mes" @selected(($ct['unidad'] ?? 'mes') === 'mes')>Mensual</option><option value="dia" @selected(($ct['unidad'] ?? 'mes') === 'dia')>Diario</option></select><input class="inp lb-in mono" name="cats[{{ $i }}][base]" value="{{ is_numeric($ct['base'] ?? null) ? Formato::num($ct['base']) : ($ct['base'] ?? '') }}" inputmode="decimal" style="text-align:right" placeholder="No localizado" aria-label="Salario base"><input class="inp lb-in mono" name="cats[{{ $i }}][plus]" value="{{ is_numeric($ct['plus'] ?? null) ? Formato::num($ct['plus']) : ($ct['plus'] ?? '') }}" inputmode="decimal" style="text-align:right" aria-label="Plus de convenio"><button type="button" class="lb-del" data-lb-del aria-label="Quitar categoría">×</button></div>
           @endforeach
         </div>
-        <template data-lb-tpl="cats"><div class="lb-cat"><input class="inp lb-in" name="cats[__][cat]" value="Nueva categoría"><select class="sel lb-in" name="cats[__][grupo]">@foreach(range(1, 11) as $g)<option @selected($g === 7)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[__][unidad]"><option value="mes">Mensual</option><option value="dia">Diario</option></select><input class="inp lb-in mono" name="cats[__][base]" value="1.221,00" inputmode="decimal" style="text-align:right"><input class="inp lb-in mono" name="cats[__][plus]" value="0,00" inputmode="decimal" style="text-align:right"><button type="button" class="lb-del" data-lb-del aria-label="Quitar">×</button></div></template>
-        <span class="hint muted">«Diario»: la base es € por día natural y en cada nómina se multiplica por los días del mes.</span>
+        <template data-lb-tpl="cats"><div class="lb-cat"><input class="inp lb-in" name="cats[__][cat]" value="Nueva categoría" aria-label="Categoría"><input class="inp lb-in" name="cats[__][grupo_profesional]" aria-label="Grupo profesional del convenio"><input class="inp lb-in" name="cats[__][nivel]" aria-label="Nivel"><select class="sel lb-in" name="cats[__][grupo]" aria-label="Grupo de cotización">@foreach(range(1, 11) as $g)<option @selected($g === 7)>{{ $g }}</option>@endforeach</select><select class="sel lb-in" name="cats[__][unidad]" aria-label="Unidad del salario"><option value="mes">Mensual</option><option value="dia">Diario</option></select><input class="inp lb-in mono" name="cats[__][base]" inputmode="decimal" style="text-align:right" placeholder="No localizado" aria-label="Salario base"><input class="inp lb-in mono" name="cats[__][plus]" value="0,00" inputmode="decimal" style="text-align:right" aria-label="Plus de convenio"><button type="button" class="lb-del" data-lb-del aria-label="Quitar categoría">×</button></div></template>
+        <span class="hint muted">«Grupo profesional» y «Nivel» son los del convenio; el «Grupo cot.» es el de cotización a la Seguridad Social. «Diario»: la base es € por día natural y en cada nómina se multiplica por los días en alta. Un salario vacío queda como «no localizado» (no se toma como cero).</span>
       </div>
 
       @php

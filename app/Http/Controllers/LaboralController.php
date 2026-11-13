@@ -575,7 +575,7 @@ class LaboralController extends Controller
         $ipAuto = (float) $this->nomina->tipoIrpf($w, $anio, $mes, $inc)['tipo'];
         [$pd, $ph, $pdias, $pmes] = Nomina::periodo($w, $anio, $mes);
         $doc = ['lineas' => $L, 'deducciones' => $D, 'tipos' => $tipos, 'recibo' => $recibo, 'dias' => $pdias, 'diasMes' => $pmes, 'desde' => $pd, 'hasta' => $ph];
-        $calc = Nomina::computar($w, $doc, isset($tipos['irpf']) ? (float) $tipos['irpf'] : $ipAuto, (float) $P['at']);
+        $calc = Nomina::computar(Nomina::paraPeriodo($w, $anio, $mes), $doc, isset($tipos['irpf']) ? (float) $tipos['irpf'] : $ipAuto, (float) $P['at']);
         $doc['retenido'] = collect($calc['deducciones'])->filter(fn ($d) => ! empty($d['ref']))->mapWithKeys(fn ($d) => [$d['ref'] => $d['importe']])->all();
         $fp = (string) $request->input('fecha_pago');
         $g ??= new NominaMes(['cliente_id' => $c->id, 'trabajador_id' => $trabajador->id, 'anio' => $anio, 'mes' => $mes, 'recibo' => $recibo]);
@@ -585,6 +585,8 @@ class LaboralController extends Controller
         if ($accion === 'emitir') {
             $g->estado = 'Emitida';
             $g->emitida_at = now();
+            // Foto del cálculo emitido: no cambia aunque después se edite el convenio, la ficha o los parámetros
+            $g->datos = $doc + ['calc' => $calc];
         }
         $g->save();
         Nomina::olvidarGuardadas();

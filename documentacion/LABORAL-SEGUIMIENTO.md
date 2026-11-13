@@ -1,6 +1,6 @@
 # Laboral · seguimiento del módulo (convenios, nóminas y procesos posteriores)
 
-Documento vivo. Se actualiza al cerrar cada fase. Última actualización: 13/11/2026 (fase 1).
+Documento vivo. Se actualiza al cerrar cada fase. Última actualización: 13/11/2026 (fase 2).
 
 ## 1. Diagnóstico del código real (antes de la fase 1)
 
@@ -33,10 +33,21 @@ Documento vivo. Se actualiza al cerrar cada fase. Última actualización: 13/11/
 
 Pruebas: `tests/Feature/LaboralPeriodoTest.php` (alta y baja a mitad de mes, meses de 28 a 31 días, diario y mensual, base mínima explicada, convenio sin categorías, categoría inexistente).
 
-## 3. Plan por fases (pendiente)
+## 3. Fase 2 · Modelo de datos de convenios con versiones (hecha)
 
-2. **Modelo de datos de convenios con versiones**: tablas propias (convenio, versión, tramo de vigencia, categoría con grupo profesional y grupo de cotización separados, concepto retributivo con naturaleza, unidad, base, tratamiento de cotización e IRPF y fuente), documentos vinculados, estados (borrador, revisión, aprobado, sustituido). Migración del JSON actual sin perder datos.
-3. **Editor manual completo** por secciones, con guardado parcial, validaciones de solapamientos y huecos, y avisos de cambios sin guardar.
+- **Tablas** (migración `2026_11_19_000260_convenios_versionados`, reversible): `convenios` (del despacho, se introduce una vez), `convenio_versiones` (vigencia del texto y efectos económicos por separado, estado, fuente, reglas), `convenio_categorias` (grupo profesional y nivel del convenio separados del grupo de cotización; salario `decimal(12,4)` que puede quedar vacío = no localizado), `convenio_conceptos` (naturaleza, cálculo, unidad, base, automático, proporcionalidad, en pagas, cotiza/tributa con límite, referencia, redondeo), `convenio_concepto_importes` (importe por concepto y categoría), `convenio_documentos` (PDF en el gestor documental cifrado del despacho), `empresa_convenios` (asignación a la empresa con fechas).
+- **Migración de datos**: copia el convenio de cada empresa desde `laboral_config.datos.conv`; el «plus» por categoría pasa a concepto «Plus de convenio» con importe por categoría. El JSON antiguo no se borra (`down()` vuelve atrás) pero ya no se lee.
+- **Única fuente**: `App\Services\Convenios`. `Nomina::config($c, $fecha)` toma el convenio de la versión aplicable en la fecha. Cada nómina usa la versión de **su mes** (`Nomina::paraPeriodo`) y guarda qué versión y categoría usó.
+- **Prioridad de versiones**: aprobada cuyos efectos cubren la fecha; si no hay, la vigente en borrador o revisión (la pantalla lo indica).
+- **Validaciones** (`Convenios::validar`): solapamientos (error), huecos (advertencia), versión sin efectos (advertencia), fechas incoherentes (error), versión sin categorías o categoría sin salario (error), sin grupo de cotización (advertencia).
+- **Pantalla**: asignar convenio del despacho o crear uno nuevo (si cambia, el anterior queda para los meses pasados); lista de versiones; nueva versión copiando tablas, conceptos e importes y cerrando la anterior; identificación y publicación; campos de la versión; grupo profesional y nivel; documentos PDF; aviso si lo usan varias empresas.
+- **Nómina emitida congelada**: al emitir se guarda la foto del cálculo; editar después el convenio, la ficha o los parámetros no la cambia.
+
+Pruebas: `tests/Feature/ConveniosVersionesTest.php` (9).
+
+## 4. Plan por fases (pendiente)
+
+3. **Editor manual completo** (los conceptos ya tienen todos los campos en base de datos, pero el formulario solo edita nombre, valor, unidad, automático, cotiza y tributa; los importes por categoría de conceptos distintos del plus de convenio y las fórmulas todavía no se editan ni se calculan) por secciones, con guardado parcial, validaciones de solapamientos y huecos, y avisos de cambios sin guardar.
 4. **Motor de conceptos y fórmulas**: decimales con redondeo explícito, expresiones controladas (sin `eval`), dependencias y ciclos, explicación por línea.
 5. **Contrato, calendario e incidencias**: histórico con fecha de efecto, festivos, vacaciones, permisos, IT, horas por cantidad; propuesta desde el control horario con revisión.
 6. **Cálculo y emisión protegida**: tramos dentro del mes, extras con periodo de devengo, atrasos, finiquito con lo ya abonado, rectificación, motivo y usuario, sin dobles emisiones.
@@ -44,10 +55,10 @@ Pruebas: `tests/Feature/LaboralPeriodoTest.php` (alta y baja a mitad de mes, mes
 8. **Procesos posteriores**: CRA, cotización, 111/190 y asiento coherentes con rectificaciones.
 9. **Verificación** completa con los 18 casos de prueba pedidos.
 
-## 4. Parámetros normativos pendientes de verificar
+## 5. Parámetros normativos pendientes de verificar
 
 Constantes de `App\Services\Nomina` con valores de 2026 tomados del prototipo, **sin fuente oficial contrastada**: tipos de cotización (`TIPOS`), bases mínimas por grupo (`BASE_MIN`, `BASE_MIN_DIA` = mensual/30), base máxima (`BASE_MAX`), SMI (`SMI_ANUAL`), escala y límites de IRPF. Deben pasar a una tabla de parámetros con fecha de efecto y fuente (Orden de cotización, Real Decreto del SMI, Reglamento del IRPF).
 
-## 5. Alcance no soportado (hoy)
+## 6. Alcance no soportado (hoy)
 
 IT y sus mejoras; tramos con cambio de condiciones dentro del mes; extras con periodo de devengo distinto del año; atrasos y revisiones retroactivas automáticas; regímenes especiales (agrario por jornadas, hogar, artistas…); contratos de formación con reglas propias de cotización; presentación de ficheros a TGSS, SEPE o AEAT.

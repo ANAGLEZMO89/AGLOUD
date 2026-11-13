@@ -166,7 +166,7 @@ class Nomina
             'claus' => ['conf', 'datos', 'desc', 'reg'], 'docs' => [], 'nombre' => '', 'cat' => '',
             'regimen' => 'General', 'autTipo' => self::TIPOS_AUTONOMO[0], 'autBase' => 0, 'autCuota' => 0, 'autRend' => 0, 'autMutua' => '', 'autCese' => true,
             'autTarifa' => false, 'autTarifaFin' => '', 'iae' => '', 'fAntig' => '',
-        ], $w, ['_conv' => self::reglas($c)], ($w['convCat'] ?? '') === self::SIN_CAT ? ['convCat' => ''] : [], ($w['cat'] ?? '') === self::SIN_CAT ? ['cat' => ''] : []);
+        ], $w, ['_conv' => self::reglas($c), '_cid' => $c->id], ($w['convCat'] ?? '') === self::SIN_CAT ? ['convCat' => ''] : [], ($w['cat'] ?? '') === self::SIN_CAT ? ['cat' => ''] : []);
     }
 
     /** Retribución por día trabajado (salario diario) en vez de mensual */
@@ -195,16 +195,17 @@ class Nomina
         self::$reglasCache = [];
     }
 
-    /** Reglas del convenio de la empresa que se aplican solas en la nómina (leídas del PDF o escritas a mano) */
-    public static function reglas(Cliente $c): array
+    /** Reglas del convenio de la empresa que se aplican solas en la nómina, de la versión aplicable en la fecha */
+    public static function reglas(Cliente $c, ?string $fecha = null): array
     {
         $cache = &self::$reglasCache;
-        if (! isset($cache[$c->id]) || app()->runningUnitTests()) {
-            $conv = self::config($c)['conv'];
-            $cache[$c->id] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null, 'cats' => $conv['cats'] ?? []];
+        $k = $c->id.'|'.($fecha ?? 'hoy');
+        if (! isset($cache[$k]) || app()->runningUnitTests()) {
+            $conv = self::config($c, $fecha)['conv'];
+            $cache[$k] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null, 'cats' => $conv['cats'] ?? [], 'version_id' => $conv['version_id'] ?? null, 'version' => $conv['version'] ?? null];
         }
 
-        return $cache[$c->id];
+        return $cache[$k];
     }
 
     /**
@@ -227,6 +228,16 @@ class Nomina
             ['Horas extraordinarias', ($conv['hx'] ?? null) ? 'ok' : 'pendiente', ($conv['hx'] ?? null) ? 'Precio definido' : 'Sin precio'],
             ['Jornada y vacaciones', ($conv['jornada'] ?? '') !== '' && ($conv['vacaciones'] ?? '') !== '' ? 'ok' : 'pendiente', trim(($conv['jornada'] ?? '') !== '' ? $conv['jornada'].' h/año' : 'Sin jornada').' · '.(($conv['vacaciones'] ?? '') !== '' ? $conv['vacaciones'].' días de vacaciones' : 'sin vacaciones')],
         ];
+    }
+
+    /** Reglas del convenio de la versión aplicable en el mes de la nómina (no la de hoy) */
+    public static function paraPeriodo(array $w, ?int $anio, int $m): array
+    {
+        if (! empty($w['_cid']) && ($c = Cliente::find($w['_cid']))) {
+            $w['_conv'] = self::reglas($c, Carbon::create($anio ?: (int) now()->year, max(1, min(12, $m)), 1)->toDateString());
+        }
+
+        return $w;
     }
 
     /** Salario base mensual equivalente (si cobra por día, 30 días) */
@@ -375,14 +386,16 @@ class Nomina
             'cccs' => $cccs, 'cccsDet' => [], 'contratos' => [], 'clausExtra' => [], 'cra' => [], 'hab' => array_map(fn ($x) => self::codigo($x), self::CONTRATOS), 'claus' => ['conf', 'datos', 'desc', 'reg']];
     }
 
-    public static function config(Cliente $c): array
+    public static function config(Cliente $c, ?string $fecha = null): array
     {
         $d = LaboralConfig::where('cliente_id', $c->id)->first()?->datos ?? [];
         $def = self::defectoConfig($c);
         $P = array_replace($def, $d);
-        foreach (['conv', 'red', 'sepe'] as $k) {
+        foreach (['red', 'sepe'] as $k) {
             $P[$k] = array_replace($def[$k], $d[$k] ?? []);
         }
+        // El convenio sale siempre de las tablas de convenios (versión aplicable en la fecha); el JSON antiguo ya no se lee
+        $P['conv'] = array_replace($def['conv'], Convenios::conv($c, $fecha) ?? []);
         if ($P['cccsDet']) {
             $P['cccs'] = array_values(array_unique(array_column($P['cccsDet'], 'ccc')));
         }
@@ -428,6 +441,8 @@ class Nomina
     /** Nómina de un mes con el tipo de IRPF $ip, calculada con los conceptos automáticos */
     public static function calcular(array $w, int $m, array $inc, float $ip, float $at = 0): array
     {
+        $w = self::paraPeriodo($w, null, $m);
+
         return self::computar($w, self::conceptos($w, $m, $inc), $ip, $at);
     }
 
@@ -481,11 +496,12 @@ class Nomina
      */
     public static function conceptos(array $w, int $m, array $inc, ?array $P = null, ?int $anio = null, bool $sinPagas = false): array
     {
+        $w = self::paraPeriodo($w, $anio, $m);
         $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
         $pro = ! empty($w['prorr']) && $pagas === 14;
         $coef = (self::n($w['jor'] ?? 100) ?: 100) / 100;
         $cat = ($w['convCat'] ?? '') !== '' ? collect($P ? ($P['conv']['cats'] ?? []) : ($w['_conv']['cats'] ?? []))->firstWhere('cat', $w['convCat']) : null;
-        $convBase = $cat ? round((float) $cat['base'] * $coef, 2) : null;
+        $convBase = $cat && $cat['base'] !== null ? round((float) $cat['base'] * $coef, 2) : null;
         $convPlus = $cat ? round((float) ($cat['plus'] ?? 0) * $coef, 2) : null;
         [$desde, $hasta, $dias, $diasMes] = self::periodo($w, $anio, $m);
         $fr = self::fraccion($dias, $diasMes);
@@ -555,7 +571,8 @@ class Nomina
             $D[] = $e;
         }
 
-        return ['lineas' => $L, 'deducciones' => $D, 'tipos' => [], 'dias' => $dias, 'diasMes' => $diasMes, 'desde' => $desde, 'hasta' => $hasta];
+        return ['lineas' => $L, 'deducciones' => $D, 'tipos' => [], 'dias' => $dias, 'diasMes' => $diasMes, 'desde' => $desde, 'hasta' => $hasta,
+            'convenio' => ['version_id' => $w['_conv']['version_id'] ?? null, 'version' => $w['_conv']['version'] ?? null, 'categoria' => $cat['cat'] ?? null]];
     }
 
     /** Calcula la nómina (o el recibo) a partir de sus conceptos, automáticos o editados en el Integral de nóminas */
@@ -955,8 +972,12 @@ class Nomina
     /** Nómina (o recibo aparte) del mes: la editada en el Integral de nóminas si existe; si no, la automática */
     public function nomina(array $w, int $anio, int $m, array $incAnio, float $at, string $recibo = 'Nómina'): array
     {
+        $w = self::paraPeriodo($w, $anio, $m);
         $ip = (float) $this->tipoIrpf($w, $anio, $m, $incAnio)['tipo'];
         $g = ! empty($w['id']) ? self::guardada((int) $w['id'], $anio, $m, $recibo) : null;
+        if ($g && $g->emitida() && ! empty($g->datos['calc'])) {
+            return $g->datos['calc'] + ['estado' => $g->estado, 'ipAuto' => $ip];
+        }
         if ($g) {
             [$pd, $ph, $pdias, $pmes] = self::periodo($w, $anio, $m);
             // Una nómina emitida conserva los datos con los que se calculó; un borrador toma el periodo actual
@@ -1098,6 +1119,8 @@ class Nomina
             $l[] = [false, 'Falta la categoría del convenio'];
         } elseif (! $cat) {
             $l[] = [false, 'La categoría «'.$d['convCat'].'» no existe en el convenio'];
+        } elseif ($cat['base'] === null) {
+            $l[] = [false, 'La categoría «'.$cat['cat'].'» no tiene salario base en el convenio: no se puede comprobar el mínimo', 'aviso'];
         } else {
             $esDia = ($cat['unidad'] ?? 'mes') === 'dia';
             $mio = $esDia ? self::n($d['salDia'] ?? 0) : (self::diario($d) ? self::n($d['salDia'] ?? 0) * 30 : self::n($d['salBase']));
