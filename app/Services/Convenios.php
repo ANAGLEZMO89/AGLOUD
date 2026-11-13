@@ -9,6 +9,7 @@ use App\Models\ConvenioConcepto;
 use App\Models\ConvenioConceptoImporte;
 use App\Models\ConvenioVersion;
 use App\Models\EmpresaConvenio;
+use App\Support\Formato;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -141,6 +142,13 @@ class Convenios
             '_conv' => ['extras' => $conv['extras'], 'antig' => $conv['antig'], 'pluses' => $conv['pluses'], 'hx' => $conv['hx'], 'it' => $conv['it'], 'cats' => $conv['cats'],
                 'version_id' => $conv['version_id'], 'version' => $conv['version'], 'jornada' => $conv['jornada']]];
         $doc = Nomina::conceptos($w, $m, [], null, $anio);
+        // En la simulación el salario y el plus salen de la tabla, no de una ficha
+        foreach ($doc['lineas'] as &$l) {
+            if (in_array($l['id'] ?? '', ['sb', 'pl'], true)) {
+                $l['regla'] = 'Tabla salarial del convenio, categoría '.$cat['cat'].($jor < 100 ? ' × '.Formato::num($jor, 0).' % de jornada' : '');
+            }
+        }
+        unset($l);
         $n = Nomina::computar($w, $doc + ['recibo' => 'Nómina'], 0);
 
         return ['lineas' => $doc['lineas'], 'n' => $n, 'doc' => $doc, 'w' => $w, 'cat' => $cat, 'error' => null];

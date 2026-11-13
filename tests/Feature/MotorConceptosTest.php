@@ -170,7 +170,8 @@ class MotorConceptosTest extends TestCase
         $r = $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])
             ->get(route('laboral.convenios', ['sim' => ['cat' => 'Oficial de primera', 'mes' => '2026-11', 'jor' => '50', 'alta' => '2026-11-11']]));
         // 1.600 × 50 % = 800 €/mes; del 11 al 30: 20 días → 800 × 20 / 30 = 533,33
-        $r->assertOk()->assertSee('Simular una nómina con este convenio')->assertSee('533,33 €')->assertSee('20 de 30 días')->assertSee('Base de contingencias comunes');
+        $r->assertOk()->assertSee('Simular una nómina con este convenio')->assertSee('533,33 €')->assertSee('20 de 30 días')->assertSee('Base de contingencias comunes')
+            ->assertSee('Tabla salarial del convenio, categoría Oficial de primera × 50 % de jornada');
         $this->assertSame($antes, [ConvenioConcepto::count(), NominaMes::count()]);
         // Sin salario en la tabla no se inventa
         $this->get(route('laboral.convenios', ['sim' => ['cat' => 'Sin tabla', 'mes' => '2026-11', 'jor' => '100']]))
