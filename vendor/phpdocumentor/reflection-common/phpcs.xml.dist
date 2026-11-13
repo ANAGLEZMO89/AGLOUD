@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<ruleset name="ReflectionCommon">
+ <description>The coding standard for this library.</description>
+
+    <file>src</file>
+    <file>tests/unit</file>
+    <arg value="p"/>
+
+    <!-- Set the minimum PHP version for PHPCompatibility.
+         This should be kept in sync with the requirements in the composer.json file. -->
+    <config name="testVersion" value="7.4-"/>
+
+    <rule ref="phpDocumentor">
+    </rule>
+</ruleset>

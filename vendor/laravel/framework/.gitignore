@@ -1,0 +1,14 @@
+.DS_Store
+.phpunit.result.cache
+/tests/*.coverage
+/tests/**/*.coverage
+/.fleet
+/.idea
+/.phpunit.cache
+/phpunit.xml
+/.vscode
+/.amp/portals/*
+/vendor
+composer.phar
+composer.lock
+Thumbs.db

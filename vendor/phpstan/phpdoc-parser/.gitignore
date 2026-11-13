@@ -1,0 +1,9 @@
+/docs
+/temp
+/tools/phplrt/vendor
+/tests/tmp
+/build-cs
+/vendor
+/composer.lock
+.phpunit.result.cache
+/.amp/portals/*

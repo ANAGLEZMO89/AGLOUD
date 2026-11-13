@@ -1,0 +1,14 @@
+/.env
+/.env.*
+!/.env.example
+/storage/app/privado/
+/storage/app/backups/
+/storage/app/version-aplicada
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*.php
+/database/*.sqlite
+!/storage/**/.gitignore
+!/bootstrap/cache/.gitignore

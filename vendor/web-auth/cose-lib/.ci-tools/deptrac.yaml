@@ -1,0 +1,16 @@
+parameters:
+  paths:
+    - './../src'
+  layers:
+    - name: 'CoseLib'
+      collectors:
+        - type: 'classLike'
+          value: '^Cose\\'
+    - name: 'Vendors'
+      collectors:
+        - { type: 'classLike', value: '^CBOR\\' }
+        - { type: 'classLike', value: '^Brick\\' }
+        - { type: 'classLike', value: '^SpomkyLabs\\Pki\\' }
+  ruleset:
+    CoseLib:
+      - Vendors

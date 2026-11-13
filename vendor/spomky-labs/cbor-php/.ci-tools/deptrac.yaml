@@ -1,0 +1,14 @@
+parameters:
+  paths:
+    - '../src'
+  layers:
+    - name: 'CBOR'
+      collectors:
+        - type: 'classLike'
+          value: '^CBO\\'
+    - name: 'Vendors'
+      collectors:
+        - { type: 'classLike', value: '^Brick\\' }
+  ruleset:
+    CBOR:
+      - Vendors

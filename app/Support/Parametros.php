@@ -1,0 +1,139 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\Ajuste;
+use App\Models\Cliente;
+use Throwable;
+
+/**
+ * Parámetros de configuración de cada módulo (pestaña «Parámetros»).
+ * Valores por defecto en config/agcloud.php; lo que guarda la administración
+ * se conserva cifrado en la tabla ajustes, por empresa («param.<módulo>.e<id>»): el despacho y cada cliente tienen los suyos.
+ */
+class Parametros
+{
+    public const MODULOS = [
+        'clientes' => ['Ventas', 'Gestión', 'clientes.index'],
+        'expedientes' => ['Expedientes', 'Gestión', 'expedientes.index'],
+        'notificaciones' => ['Notificaciones', 'Comunicación', 'notificaciones.index'],
+        'documentos' => ['Documentos', 'Comunicación', 'documentos.index'],
+        'crm' => ['CRM', 'Áreas', 'crm.index'],
+        'proveedores' => ['Compras', 'Gestión', 'proveedores.index'],
+        'acreedores' => ['Gastos', 'Gestión', 'acreedores.index'],
+        'productos' => ['Productos', 'Gestión', 'productos.index'],
+        'calendario' => ['Calendario', 'Gestión', 'calendario'],
+        'tareas' => ['Tareas y horario', 'Gestión', 'tareas.index'],
+        'contabilidad' => ['Contabilidad', 'Áreas', 'contabilidad.index'],
+        'fiscal' => ['Fiscal', 'Áreas', 'fiscal.index'],
+    ];
+
+    /** Pestañas de cada módulo (además de «Parámetros») */
+    public const PESTANAS = [
+        'clientes' => [['Clientes', 'clientes.index'], ['Facturas de clientes', 'clientes.facturas'], ['Cobros', 'clientes.cobros']],
+        'proveedores' => [['Proveedores', 'proveedores.index'], ['Facturas de proveedores', 'proveedores.facturas'], ['Pagos', 'proveedores.pagos']],
+        'acreedores' => [['Acreedores', 'acreedores.index'], ['Facturas de acreedores', 'acreedores.facturas'], ['Pagos', 'acreedores.pagos'], ['Gastos no deducibles IVA', 'acreedores.nodeducibles']],
+        'tareas' => [['Tareas', 'tareas.index'], ['Horario', 'tareas.horario']],
+    ];
+
+    private static array $cache = [];
+
+    public const ANDALUCIA = ['Almería', 'Cádiz', 'Córdoba', 'Granada', 'Huelva', 'Jaén', 'Málaga', 'Sevilla'];
+
+    public static function defecto(string $m): array
+    {
+        $a = json_decode((string) json_encode(config('agcloud')), true);
+
+        return match ($m) {
+            'clientes' => ['periodicidad' => 'Mensual', 'iva' => 21, 'forma_cobro' => 'Domiciliación SEPA', 'concepto' => 'Honorarios de asesoría'],
+            'documentos' => ['cupo_mb' => (int) ($a['cupo_mb'] ?? 2048), 'aviso_caducidad' => 60],
+            'notificaciones' => ['email' => true, 'wa' => false, 'dias' => (int) ($a['avisar_dias'] ?? 3), 'comunidad' => (string) ($a['comunidad'] ?? 'AN'),
+                'festivos' => [], 'tipos' => $a['tipos_notificacion'] ?? []],
+            'expedientes' => ['portal_defecto' => true, 'plantillas' => $a['plantillas_expediente'] ?? []],
+            'crm' => ['origenes' => ['Web', 'Recomendación', 'Llamada', 'Feria', 'Cliente actual', 'Redes sociales'],
+                'probabilidades' => ['Nuevo' => 10, 'Contactado' => 25, 'Presupuesto enviado' => 50, 'Negociación' => 75, 'Ganado' => 100, 'Perdido' => 0],
+                'validez' => 30, 'pie_presupuesto' => 'Para aceptar el presupuesto, devuélvalo firmado o confírmelo por escrito antes de la fecha de validez.'],
+            'proveedores' => ['forma_pago' => 'Transferencia', 'pago_dias' => 30],
+            'acreedores' => ['forma_pago' => 'Domiciliación SEPA', 'pago_dias' => 0, 'tipo' => 'Servicios', 'retencion' => 0],
+            'calendario' => ['vista' => 'mes', 'notificaciones' => true, 'expedientes' => true, 'tareas' => true, 'festivos' => true, 'fiscal' => true],
+            'productos' => ['tipo' => 'Servicio', 'iva' => 21],
+            'tareas' => ['jornada_semanal' => 40, 'jornada_diaria' => 8, 'vacaciones' => 22, 'prioridad' => 'Media'],
+            'contabilidad' => ['ventas' => '705', 'compras' => '600', 'gasto_servicios' => '629', 'gasto_profesional' => '623', 'gasto_arrendamiento' => '621',
+                'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572', 'caja' => '570',
+                // Cuentas laborales (asiento de nómina); vacías = se eligen al hacer el asiento
+                'sueldos' => '640', 'especie' => '', 'dietas' => '', 'indemn' => '641', 'acr_irpf_nom' => '4751', 'acr_irpf_esp' => '', 'rem_pend' => '465',
+                'ss_acr' => '476', 'ss_emp' => '642', 'anticipos' => '', 'embargos' => '', 'ded_esp' => '', 'otras_ded' => ''],
+            'fiscal' => ['aviso_dias' => 10, 'umbral_347' => 3005.06, 'pct_130' => 20, 'pct_202_402' => 18, 'pct_202_403' => 17],
+            default => [],
+        };
+    }
+
+    /** Empresa cuyos parámetros se usan: la elegida en el Escritorio o, si no hay, el despacho */
+    public static function empresaId(): ?int
+    {
+        try {
+            $ctx = request()?->attributes->get('ctx');
+
+            return $ctx?->id ?? self::despachoId();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    public static function despachoId(): ?int
+    {
+        try {
+            return Cliente::where('es_despacho', true)->value('id');
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** Parámetros de un módulo de la empresa elegida (cada empresa tiene los suyos) */
+    public static function get(string $m, ?int $empresa = null): array
+    {
+        $empresa ??= self::empresaId();
+        $k = $m.'|'.$empresa;
+        if (isset(self::$cache[$k])) {
+            return self::$cache[$k];
+        }
+        $guardado = [];
+        try {
+            $guardado = $empresa ? (json_decode((string) Ajuste::get('param.'.$m.'.e'.$empresa, ''), true) ?: []) : [];
+            // El despacho conserva los parámetros que se guardaron antes de separarlos por empresa
+            if (! $guardado && (! $empresa || $empresa === self::despachoId())) {
+                $guardado = json_decode((string) Ajuste::get('param.'.$m, ''), true) ?: [];
+                if ($m === 'notificaciones' && ! $guardado) {
+                    $guardado = json_decode((string) Ajuste::get('avisos_notificaciones', ''), true) ?: [];
+                }
+            }
+        } catch (Throwable) {
+            // Sin base de datos (instalación): valores por defecto
+        }
+
+        $def = self::defecto($m);
+        // Un cliente sin parámetros propios de notificaciones: la comunidad autónoma sale de su provincia
+        if ($m === 'notificaciones' && ! $guardado && $empresa && $empresa !== self::despachoId()) {
+            try {
+                $prov = (string) Cliente::whereKey($empresa)->value('provincia');
+                $def['comunidad'] = in_array($prov, self::ANDALUCIA, true) ? 'AN' : '';
+            } catch (Throwable) {
+            }
+        }
+
+        return self::$cache[$k] = array_merge($def, array_intersect_key($guardado, $def));
+    }
+
+    public static function put(string $m, array $v, ?int $empresa = null): void
+    {
+        $empresa ??= self::empresaId();
+        Ajuste::put($empresa ? 'param.'.$m.'.e'.$empresa : 'param.'.$m, json_encode(array_intersect_key($v, self::defecto($m)), JSON_UNESCAPED_UNICODE));
+        self::$cache = [];
+        Plazos::limpiarCache();
+    }
+
+    public static function limpiar(): void
+    {
+        self::$cache = [];
+    }
+}

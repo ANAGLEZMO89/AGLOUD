@@ -1,0 +1,15 @@
+# SOLO para la opción B de la guía (sin SSH): renombra este archivo a «.htaccess»
+# y déjalo en la carpeta raíz del proyecto (la del subdominio).
+# Todo se redirige a /public y se bloquea el acceso directo al resto de carpetas.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|storage|tests|vendor|documentacion)(/.*)?$ - [F,L]
+    RewriteRule ^(\.env.*|composer\.(json|lock)|artisan|phpunit\.xml|VERSION|despliegue/.*|.*\.md)$ - [F,L]
+    RewriteRule ^$ public/ [L]
+    RewriteRule ^((?!public/).*)$ public/$1 [L]
+</IfModule>
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

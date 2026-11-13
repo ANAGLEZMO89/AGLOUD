@@ -1,0 +1,9 @@
+nbproject
+coverage
+phpunit.xml
+vendor
+composer.phar
+composer.lock
+.idea
+.php_cs.cache
+.phpunit.result.cache
