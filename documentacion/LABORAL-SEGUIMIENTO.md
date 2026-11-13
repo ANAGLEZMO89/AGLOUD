@@ -1,6 +1,6 @@
 # Laboral · seguimiento del módulo (convenios, nóminas y procesos posteriores)
 
-Documento vivo. Se actualiza al cerrar cada fase. Última actualización: 13/11/2026 (fase 2).
+Documento vivo. Se actualiza al cerrar cada fase. Última actualización: 13/11/2026 (fase 3).
 
 ## 1. Diagnóstico del código real (antes de la fase 1)
 
@@ -45,9 +45,18 @@ Pruebas: `tests/Feature/LaboralPeriodoTest.php` (alta y baja a mitad de mes, mes
 
 Pruebas: `tests/Feature/ConveniosVersionesTest.php` (9).
 
-## 4. Plan por fases (pendiente)
+## 4. Fase 3 · Editor manual completo por secciones (hecha)
 
-3. **Editor manual completo** (los conceptos ya tienen todos los campos en base de datos, pero el formulario solo edita nombre, valor, unidad, automático, cotiza y tributa; los importes por categoría de conceptos distintos del plus de convenio y las fórmulas todavía no se editan ni se calculan) por secciones, con guardado parcial, validaciones de solapamientos y huecos, y avisos de cambios sin guardar.
+- **9 secciones** en Laboral › Gestión › Convenios, cada una con su formulario, guardado propio, validación en el servidor y error junto al campo (`ConvenioEditorController`, ruta `laboral.convenios.seccion`): identificación y publicación; versión y vigencia; categorías y tablas (código, grupo profesional, nivel, grupo de cotización, salario mensual o diario, plus de convenio, artículo); conceptos retributivos (código, CRA, naturaleza, cálculo importe/porcentaje/fórmula, unidad, importe general o por categoría, base, cotiza/tributa sí/no/con límite y su descripción, redondeo, automático, proporcional a jornada y a días en alta, en pagas, artículo, descripción); pagas extraordinarias (cualquier número, mes de cobro, mensualidad/días/importe, plus y antigüedad incluidos, periodo de devengo, conceptos incluidos, artículo); antigüedad (periodo, € o %, base, tope, cómputo, congelación, «comprobado que no tiene»); jornada, vacaciones y horas (anual, semanal, distribución, vacaciones naturales o laborables, descansos, nocturnidad, festivos, permisos, horas extra con precio o recargo y compensación, complementarias); IT (tramos por contingencia, solo con hospitalización, base, pagas, condiciones); contratación (periodo de prueba, preavisos, cláusulas, extinción).
+- **Navegación con estado por sección** (configurada, pendiente, falta), aviso «Cambios sin guardar» por sección y aviso al salir de la página; el botón se bloquea mientras guarda.
+- **Validaciones**: nombres repetidos, grupo de cotización 1–11, fechas al revés, aprobar sin categorías con salario, porcentaje sin base, fórmula vacía, concepto sin importe general ni por categoría, límite sin describir, pagas por días o importe sin dato, devengo «otro» sin meses, antigüedad sin valor, horas extra sin precio, tramos de IT al revés.
+- **Conexión con la nómina**: importe por categoría, proporcionalidad a jornada y a días en alta, base de antigüedad (salario base o base + plus) y antigüedad congelada ya se calculan. **No se calculan todavía** (y se avisa en el concepto): fórmulas, unidades «día efectivo», «año» y «por pago», y conceptos con límite de cotización o IRPF. Tampoco el periodo de devengo de las pagas, la IT, el calendario ni las reglas de contratación.
+- Se mantiene el formulario antiguo (`laboral.convenios.guardar`) solo como vía de compatibilidad de las pruebas; la pantalla ya no lo usa.
+
+Pruebas: `tests/Feature/ConvenioEditorTest.php` (5).
+
+## 5. Plan por fases (pendiente)
+
 4. **Motor de conceptos y fórmulas**: decimales con redondeo explícito, expresiones controladas (sin `eval`), dependencias y ciclos, explicación por línea.
 5. **Contrato, calendario e incidencias**: histórico con fecha de efecto, festivos, vacaciones, permisos, IT, horas por cantidad; propuesta desde el control horario con revisión.
 6. **Cálculo y emisión protegida**: tramos dentro del mes, extras con periodo de devengo, atrasos, finiquito con lo ya abonado, rectificación, motivo y usuario, sin dobles emisiones.
@@ -55,10 +64,10 @@ Pruebas: `tests/Feature/ConveniosVersionesTest.php` (9).
 8. **Procesos posteriores**: CRA, cotización, 111/190 y asiento coherentes con rectificaciones.
 9. **Verificación** completa con los 18 casos de prueba pedidos.
 
-## 5. Parámetros normativos pendientes de verificar
+## 6. Parámetros normativos pendientes de verificar
 
 Constantes de `App\Services\Nomina` con valores de 2026 tomados del prototipo, **sin fuente oficial contrastada**: tipos de cotización (`TIPOS`), bases mínimas por grupo (`BASE_MIN`, `BASE_MIN_DIA` = mensual/30), base máxima (`BASE_MAX`), SMI (`SMI_ANUAL`), escala y límites de IRPF. Deben pasar a una tabla de parámetros con fecha de efecto y fuente (Orden de cotización, Real Decreto del SMI, Reglamento del IRPF).
 
-## 6. Alcance no soportado (hoy)
+## 7. Alcance no soportado (hoy)
 
 IT y sus mejoras; tramos con cambio de condiciones dentro del mes; extras con periodo de devengo distinto del año; atrasos y revisiones retroactivas automáticas; regímenes especiales (agrario por jornadas, hogar, artistas…); contratos de formación con reglas propias de cotización; presentación de ficheros a TGSS, SEPE o AEAT.

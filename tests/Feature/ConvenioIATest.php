@@ -111,7 +111,7 @@ class ConvenioIATest extends TestCase
         $t = Trabajador::create(['cliente_id' => $this->a->id, 'estado' => 'Alta', 'alta' => '2020-01-01', 'contrato' => '100', 'datos' => Nomina::rellenar(['nombre' => 'Peón Prueba', 'nif' => 'X1234567L',
             'naf' => '211234567890', 'contrato' => Nomina::CONTRATOS[0], 'alta' => '2020-01-01', 'convCat' => 'Peón', 'grupo' => 7, 'salBase' => 900, 'pagas' => 14, 'jor' => 100], $this->a)]);
         $en = fn () => $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id]);
-        $en()->get(route('laboral.convenios'))->assertOk()->assertSee('Pagas extraordinarias')->assertSee('Antigüedad')->assertSee('Complemento de incapacidad temporal')->assertSee('Horas extraordinarias');
+        $en()->get(route('laboral.convenios'))->assertOk()->assertSee('Identificación y publicación')->assertSee('Guarda primero la identificación');
         // Una paga por días sin indicar los días: no se guarda
         $en()->post(route('laboral.convenios.guardar'), ['_enviado' => 1, 'conv_nombre' => 'Convenio a mano', 'cats' => [['cat' => 'Peón', 'grupo' => '10', 'unidad' => 'dia', 'base' => '45,50', 'plus' => '0']],
             'extras' => [['nombre' => 'Verano', 'mes' => '7', 'calculo' => 'dias', 'dias' => '']]])->assertSessionHasErrors('conv');
@@ -134,8 +134,8 @@ class ConvenioIATest extends TestCase
         $this->assertEqualsWithDelta(30 * 45.5 + 60 + 68.25, Nomina::calcular($w, 11, [], 0)['dev'], 0.01);
         // Julio: + paga de verano de 30 días (sin antigüedad)
         $this->assertEqualsWithDelta(31 * 45.5 + 60 + 68.25 + 1365, Nomina::calcular($w, 7, [], 0)['dev'], 0.01);
-        // El formulario conserva lo guardado
-        $en()->get(route('laboral.convenios'))->assertSee('value="Plus de nocturnidad"', false)->assertSee('value="14,00"', false);
+        // El editor muestra lo guardado en sus secciones
+        $en()->get(route('laboral.convenios'))->assertSee('value="Plus de nocturnidad"', false)->assertSee('value="14,00"', false)->assertSee('Pagas extraordinarias')->assertSee('Incapacidad temporal · mejora del convenio');
         // La nocturnidad y las horas extra se ofrecen en el Integral con su precio
         $en()->get(route('laboral.integral', ['t' => $t->id, 'anio' => 2026, 'mes' => 11]))->assertOk()->assertSee('Convenio: 2,00 € por hora')->assertSee('Convenio: 14,00 € la hora');
     }

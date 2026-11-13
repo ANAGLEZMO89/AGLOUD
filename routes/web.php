@@ -15,6 +15,7 @@ use App\Http\Controllers\ConciliadorController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadListadosController;
 use App\Http\Controllers\ControlHorarioController;
+use App\Http\Controllers\ConvenioEditorController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentoController;
@@ -208,6 +209,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/gestion/convenios/asignar', [LaboralGestionController::class, 'asignarConvenio'])->name('convenios.asignar');
             Route::post('/gestion/convenios/version', [LaboralGestionController::class, 'nuevaVersion'])->name('convenios.version');
             Route::post('/gestion/convenios/documento', [LaboralGestionController::class, 'documentoConvenio'])->name('convenios.documento');
+            Route::post('/gestion/convenios/seccion/{seccion}', [ConvenioEditorController::class, 'guardar'])->name('convenios.seccion');
             Route::post('/gestion/convenios/ia-clave', [LaboralGestionController::class, 'claveIA'])->name('convenios.ia.clave');
             Route::get('/gestion/calculo', [LaboralGestionController::class, 'calculo'])->name('calculo');
             Route::get('/gestion/calculo/recibos', [LaboralGestionController::class, 'recibos'])->name('calculo.recibos');

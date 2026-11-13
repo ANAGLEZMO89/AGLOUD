@@ -572,7 +572,7 @@
       var row = div.firstElementChild; list.appendChild(row); var f = row.querySelector('input'); f && f.focus();
     });
   });
-  on(document, 'click', function (e) { var d = e.target.closest('[data-lb-del]'); if (d) { var r = d.parentElement; r && r.remove(); } });
+  on(document, 'click', function (e) { var d = e.target.closest('[data-lb-del]'); if (d) { var r = d.closest('[data-lb-row]') || d.parentElement; var f = r && r.closest('[data-cv-sec]'); r && r.remove(); if (f) f.dispatchEvent(new Event('change', { bubbles: true })); } });
   // Nombre del fichero elegido
   $$('input[data-lb-fname]').forEach(function (i) { on(i, 'change', function () { var t = i.parentElement.querySelector('[data-lb-fname-t]'); if (t && i.files[0]) t.textContent = i.files[0].name; }); });
   var mismo = $('[data-lb-mismo]'), sepeCert = $('[data-lb-sepecert]');
@@ -770,6 +770,22 @@
       navigator.clipboard.writeText(t.value).then(hecho, function () { t.classList.remove('hidden'); t.select(); document.execCommand('copy'); hecho(); });
     } else { t.classList.remove('hidden'); t.select(); document.execCommand('copy'); hecho(); }
   });
+
+  // ---------- Editor de convenios: cambios sin guardar por sección ----------
+  var cvSecs = $$('[data-cv-sec]'), cvEnviando = false;
+  cvSecs.forEach(function (f) {
+    var marca = function () { f.setAttribute('data-sucio', '1'); var b = $('[data-cv-dirty]', f); if (b) b.hidden = false; };
+    on(f, 'input', marca);
+    on(f, 'change', marca);
+    on(f, 'click', function (e) { if (e.target.closest('[data-lb-add]')) marca(); });
+    on(f, 'submit', function () { cvEnviando = true; var b = f.querySelector('button[type="submit"]'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; } });
+  });
+  if (cvSecs.length) {
+    window.addEventListener('beforeunload', function (e) {
+      if (cvEnviando) return;
+      if (cvSecs.some(function (f) { return f.getAttribute('data-sucio') === '1'; })) { e.preventDefault(); e.returnValue = ''; }
+    });
+  }
 
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {

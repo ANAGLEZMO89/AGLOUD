@@ -255,6 +255,10 @@ class Nomina
             return [0.0, 0, ''];
         }
         $ref = $m ? Carbon::create($anio ?: (int) now()->year, $m, 1)->endOfMonth() : Carbon::now();
+        // Antigüedad congelada por el convenio: no genera periodos nuevos desde esa fecha
+        if (! empty($a['congelada']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $a['congelada']) && $ref->gt(Carbon::parse($a['congelada']))) {
+            $ref = Carbon::parse($a['congelada']);
+        }
         $n = intdiv((int) Carbon::parse($desde)->diffInYears($ref), (int) $a['periodo']);
         if (! empty($a['tope'])) {
             $n = min($n, (int) $a['tope']);
@@ -262,7 +266,8 @@ class Nomina
         if ($n <= 0) {
             return [0.0, 0, ''];
         }
-        $imp = $a['tipo'] === 'porcentaje' ? round(self::salMes($w) * (float) $a['valor'] / 100 * $n, 2) : round((float) $a['valor'] * $n, 2);
+        $baseA = self::salMes($w) + (($a['base'] ?? 'salario_base') === 'salario_base_plus' ? self::n($w['plus'] ?? 0) : 0);
+        $imp = $a['tipo'] === 'porcentaje' ? round($baseA * (float) $a['valor'] / 100 * $n, 2) : round((float) $a['valor'] * $n, 2);
         $nom = [2 => 'bienios', 3 => 'trienios', 4 => 'cuatrienios', 5 => 'quinquenios'][(int) $a['periodo']] ?? 'periodos';
 
         return [$imp, $n, $n.' '.$nom];
@@ -303,20 +308,21 @@ class Nomina
         [$pd, $ph, $pdias, $pmes] = self::periodo($w, $anio, $m);
         $fr = self::fraccion($pdias, $pmes);
         foreach ($w['_conv']['pluses'] ?? [] as $i => $p) {
-            if (empty($p['auto'])) {
+            // Solo lo que el motor sabe calcular: fórmulas y unidades sin soporte se avisan en el convenio, nunca se aproximan
+            if (empty($p['auto']) || ($p['soportado'] ?? true) === false || ! in_array($p['unidad'], ['mes', 'dia_natural', 'dia_trabajado'], true)) {
                 continue;
             }
-            $v = $p['tipo'] === 'porcentaje_base' ? self::salMes($w) * (float) $p['valor'] / 100 : (float) $p['valor'];
+            $valor = isset($p['importes'][$w['convCat'] ?? '']) ? (float) $p['importes'][$w['convCat']] : (float) $p['valor'];
+            $v = $p['tipo'] === 'porcentaje_base' ? self::salMes($w) * $valor / 100 : $valor;
             [$cant, $precio] = match ($p['unidad']) {
                 'dia_natural' => [$pdias, $v],
                 'dia_trabajado' => [self::diasLaborables($anio, $m, $pd, $ph), $v],
                 'hora' => [null, null],
                 default => [null, null],
             };
-            if ($p['unidad'] === 'hora') {
-                continue;
-            }
-            $imp = $cant !== null ? round($cant * $precio, 2) : round($v * ($p['tipo'] === 'porcentaje_base' ? 1 : $coef) * $fr, 2);
+            $fj = ($p['prop_jornada'] ?? true) && $p['tipo'] !== 'porcentaje_base' ? $coef : 1;
+            $fp = ($p['prop_periodo'] ?? true) ? $fr : 1;
+            $imp = $cant !== null ? round($cant * $precio * $fj, 2) : round($v * $fj * $fp, 2);
             if ($imp == 0) {
                 continue;
             }

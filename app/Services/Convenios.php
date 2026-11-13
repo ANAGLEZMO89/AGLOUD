@@ -63,6 +63,7 @@ class Convenios
         $conceptos = $v ? ConvenioConcepto::withoutGlobalScopes()->with(['importes' => fn ($q) => $q->withoutGlobalScopes()])->where('version_id', $v->id)->orderBy('orden')->orderBy('id')->get() : collect();
         $plusConv = $conceptos->firstWhere('nombre', self::PLUS_CONVENIO);
         $plusPor = $plusConv ? $plusConv->importes->pluck('importe', 'categoria_id') : collect();
+        $catNom = $cats->pluck('nombre', 'id');
 
         return [
             'convenio_id' => $cv->id, 'version_id' => $v?->id, 'version' => $v?->nombre, 'estadoVersion' => $v?->estado, 'estadoConvenio' => $cv->estado,
@@ -72,12 +73,21 @@ class Convenios
             'cats' => $cats->map(fn ($x) => ['id' => $x->id, 'cat' => $x->nombre, 'grupo' => (string) ($x->grupo_cotizacion ?? ''), 'grupo_profesional' => (string) $x->grupo_profesional,
                 'nivel' => (string) $x->nivel, 'base' => $x->salario_base !== null ? (float) $x->salario_base : null, 'plus' => (float) ($plusPor[$x->id] ?? 0),
                 'unidad' => $x->unidad === 'dia' ? 'dia' : 'mes', 'art' => (string) $x->referencia])->values()->all(),
-            'pluses' => $conceptos->reject(fn ($p) => $p->nombre === self::PLUS_CONVENIO)->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->nombre,
-                'unidad' => in_array($p->unidad, ['mes', 'dia_trabajado', 'dia_natural', 'hora'], true) ? $p->unidad : 'mes', 'tipo' => $p->calculo === 'porcentaje' ? 'porcentaje_base' : 'importe',
+            'pluses' => $conceptos->reject(fn ($p) => $p->nombre === self::PLUS_CONVENIO)->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->nombre, 'codigo' => (string) $p->codigo,
+                'unidad' => $p->unidad, 'tipo' => $p->calculo === 'porcentaje' ? 'porcentaje_base' : 'importe', 'calculo' => $p->calculo,
                 'valor' => $p->valor !== null ? (float) $p->valor : 0.0, 'auto' => (bool) $p->automatico, 'cotiza' => $p->cotiza !== 'no', 'tributa' => $p->tributa !== 'no', 'art' => (string) $p->referencia,
-                'naturaleza' => $p->naturaleza, 'soportado' => in_array($p->unidad, ['mes', 'dia_trabajado', 'dia_natural', 'hora'], true) && $p->calculo !== 'formula'])->values()->all(),
+                'naturaleza' => $p->naturaleza, 'prop_jornada' => (bool) $p->prop_jornada, 'prop_periodo' => (bool) $p->prop_periodo, 'en_pagas' => (bool) $p->en_pagas, 'limite' => (string) $p->limite,
+                'cotizaModo' => $p->cotiza, 'tributaModo' => $p->tributa,
+                'importes' => $p->importes->mapWithKeys(fn ($im) => [(string) ($catNom[$im->categoria_id] ?? '') => (float) $im->importe])->filter(fn ($v, $k) => $k !== '')->all(),
+                'soportado' => self::soportado($p)])->values()->all(),
             'extras' => $r['extras'] ?? [], 'antig' => $r['antig'] ?? null, 'it' => $r['it'] ?? null, 'hx' => $r['hx'] ?? null, 'ia' => $r['ia'] ?? null,
         ];
+    }
+
+    /** ¿El motor de nóminas sabe calcular este concepto por sí solo? (fórmulas y algunas unidades llegan en la fase 4) */
+    public static function soportado(ConvenioConcepto $p): bool
+    {
+        return $p->calculo !== 'formula' && in_array($p->unidad, ['mes', 'dia_natural', 'dia_trabajado', 'hora'], true) && $p->cotiza !== 'limite' && $p->tributa !== 'limite';
     }
 
     /** Convenio de la empresa para editar: el asignado o uno nuevo (borrador) asignado desde siempre */
@@ -124,7 +134,7 @@ class Convenios
                         continue;
                     }
                     $cat = ConvenioCategoria::withoutGlobalScopes()->firstOrNew(['version_id' => $v->id, 'nombre' => $nom]);
-                    $cat->fill(['grupo_cotizacion' => ($x['grupo'] ?? '') !== '' ? max(1, min(11, (int) $x['grupo'])) : null, 'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes',
+                    $cat->fill(['codigo' => array_key_exists('codigo', $x) ? (mb_substr(trim((string) $x['codigo']), 0, 30) ?: null) : $cat->codigo, 'grupo_cotizacion' => ($x['grupo'] ?? '') !== '' ? max(1, min(11, (int) $x['grupo'])) : null, 'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes',
                         'salario_base' => is_numeric($x['base'] ?? null) ? round((float) $x['base'], 4) : null, 'referencia' => mb_substr((string) ($x['art'] ?? ''), 0, 120) ?: null,
                         'grupo_profesional' => mb_substr((string) ($x['grupo_profesional'] ?? ''), 0, 80) ?: null, 'nivel' => mb_substr((string) ($x['nivel'] ?? ''), 0, 40) ?: null, 'orden' => $i]);
                     $cat->save();
@@ -163,6 +173,43 @@ class Convenios
                 ConvenioConcepto::withoutGlobalScopes()->where('version_id', $v->id)->where('nombre', '!=', self::PLUS_CONVENIO)->whereNotIn('id', array_values($vivos) ?: [0])->delete();
             }
         });
+        Nomina::olvidarReglas();
+    }
+
+    /**
+     * Guarda los conceptos retributivos de una versión con todos sus campos e importes por categoría.
+     * Se identifican por nombre (no se duplican); los que no vienen se borran. El «Plus de convenio» se edita en las categorías.
+     *
+     * @param  array<int, array>  $filas  ya validadas
+     */
+    public static function guardarConceptos(ConvenioVersion $v, array $filas): void
+    {
+        DB::transaction(function () use ($v, $filas) {
+            $cats = ConvenioCategoria::withoutGlobalScopes()->where('version_id', $v->id)->pluck('id')->all();
+            $vivos = [];
+            foreach (array_values($filas) as $i => $f) {
+                $c = ConvenioConcepto::withoutGlobalScopes()->firstOrNew(['version_id' => $v->id, 'nombre' => $f['nombre']]);
+                $c->fill(array_intersect_key($f, array_flip(['codigo', 'descripcion', 'cra', 'naturaleza', 'calculo', 'unidad', 'valor', 'base', 'formula', 'automatico', 'prop_jornada',
+                    'prop_periodo', 'en_pagas', 'cotiza', 'tributa', 'limite', 'redondeo', 'referencia'])) + ['orden' => $i + 1]);
+                $c->save();
+                $vivos[] = $c->id;
+                ConvenioConceptoImporte::withoutGlobalScopes()->where('concepto_id', $c->id)->delete();
+                foreach ($f['importes'] ?? [] as $catId => $imp) {
+                    if ($imp !== null && in_array((int) $catId, $cats, true)) {
+                        ConvenioConceptoImporte::create(['concepto_id' => $c->id, 'categoria_id' => (int) $catId, 'importe' => $imp]);
+                    }
+                }
+            }
+            ConvenioConcepto::withoutGlobalScopes()->where('version_id', $v->id)->where('nombre', '!=', self::PLUS_CONVENIO)->whereNotIn('id', $vivos ?: [0])->delete();
+        });
+        Nomina::olvidarReglas();
+    }
+
+    /** Guarda un bloque de reglas de la versión (pagas, antigüedad, jornada, IT, horas extra, contratación) */
+    public static function guardarReglas(ConvenioVersion $v, array $parche): void
+    {
+        $v->reglas = array_replace($v->reglas ?? [], $parche);
+        $v->save();
         Nomina::olvidarReglas();
     }
 

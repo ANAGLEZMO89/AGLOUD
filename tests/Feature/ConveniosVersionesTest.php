@@ -142,7 +142,7 @@ class ConveniosVersionesTest extends TestCase
         $this->assertSame('Plus de festivos especiales del art. 30', $cv->fresh()->no_soportado);
         // Fechas incoherentes: no se guarda
         $this->en()->post(route('laboral.convenios.guardar'), array_merge($datos, ['ver_efectos_hasta' => '2025-01-01']))->assertSessionHasErrors('conv');
-        $this->en()->get(route('laboral.convenios', ['version' => $v1->id]))->assertOk()->assertSee('Versión que estás editando')->assertSee('2026 S2')->assertSee('value="Grupo IV"', false);
+        $this->en()->get(route('laboral.convenios', ['version' => $v1->id]))->assertOk()->assertSee('Versión y vigencia')->assertSee('2026 S2')->assertSee('value="Grupo IV"', false);
     }
 
     public function test_asignar_convenio_compartido_conserva_el_anterior_para_meses_pasados(): void
