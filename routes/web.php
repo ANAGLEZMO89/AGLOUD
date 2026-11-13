@@ -202,6 +202,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/gestion/comunica', [LaboralGestionController::class, 'comunica'])->name('comunica');
             Route::get('/gestion/convenios', [LaboralGestionController::class, 'convenios'])->name('convenios');
             Route::post('/gestion/convenios', [LaboralGestionController::class, 'guardarConvenios'])->name('convenios.guardar');
+            Route::post('/gestion/convenios/ia', [LaboralGestionController::class, 'leerConvenioIA'])->name('convenios.ia');
+            Route::post('/gestion/convenios/ia-clave', [LaboralGestionController::class, 'claveIA'])->name('convenios.ia.clave');
             Route::get('/gestion/calculo', [LaboralGestionController::class, 'calculo'])->name('calculo');
             Route::get('/gestion/calculo/recibos', [LaboralGestionController::class, 'recibos'])->name('calculo.recibos');
             Route::get('/modelos/145', [LaboralGestionController::class, 'm145'])->name('m145');

@@ -23,7 +23,11 @@
   $fechas = [];
   for ($d = $ini->copy()->day(min(25, $ult->day)); $d->lte($ult->copy()->addDays(10)); $d->addDay()) { $fechas[$d->toDateString()] = $d->day.' de '.mb_strtolower(Nomina::MESES[$d->month - 1]).' de '.$d->year; }
   if (! isset($fechas[$fpSel])) { $f = Carbon::parse($fpSel); $fechas = [$fpSel => $f->day.' de '.mb_strtolower(Nomina::MESES[$f->month - 1]).' de '.$f->year] + $fechas; }
-  $cat = collect(Nomina::CATALOGO)->mapWithKeys(fn ($x) => [$x[1] => [$x[0], $x[2]]])->all();
+  // Catálogo general + pluses del convenio que dependen de horas o días concretos (nocturnidad, festivos…)
+  $convCat = collect($w['_conv']['pluses'] ?? [])->reject(fn ($p) => ! empty($p['auto']))->map(fn ($p) => ['06', $p['nombre'], $p['cotiza'] ? 'salarial' : ($p['tributa'] ? 'tributa' : 'no_salarial'),
+      'Convenio: '.($p['tipo'] === 'porcentaje_base' ? Formato::num($p['valor']).' % del salario base' : Formato::eur($p['valor'])).' por '.['mes' => 'mes', 'dia_trabajado' => 'día', 'dia_natural' => 'día', 'hora' => 'hora'][$p['unidad']]]);
+  if ($h = $w['_conv']['hx'] ?? null) { $convCat->push(['10', 'Horas extraordinarias', 'hx', 'Convenio: '.($h['tipo'] === 'importe' ? Formato::eur($h['valor']).' la hora' : 'recargo del '.Formato::num($h['valor'], 0).' %')]); }
+  $cat = collect(Nomina::CATALOGO)->mapWithKeys(fn ($x) => [$x[1] => [$x[0], $x[2]]])->merge($convCat->mapWithKeys(fn ($x) => [$x[1] => [$x[0], $x[2]]]))->all();
   $embImp = collect($n['deducciones'])->filter(fn ($d) => ! empty($d['ref']))->keyBy('ref');
   $claseSel = fn ($name, $val, $dis = false) => '<select class="sel lb-in" name="'.$name.'" title="Cómo cotiza y tributa"'.($dis ? ' disabled' : '').' data-ne-clase>'.collect(Nomina::CLASES)->map(fn ($t, $k) => '<option value="'.$k.'"'.($val === $k ? ' selected' : '').'>'.e($t).'</option>')->implode('').'</select>';
 @endphp
@@ -38,7 +42,7 @@
   @endforeach
 </div>
 
-<datalist id="ne-cat">@foreach(Nomina::CATALOGO as [$cc, $cn, $ck])<option value="{{ $cn }}">[{{ $cc }}] {{ Nomina::CLASES[$ck] }}</option>@endforeach</datalist>
+<datalist id="ne-cat">@foreach($convCat as [$cc, $cn, $ck, $ct])<option value="{{ $cn }}">{{ $ct }}</option>@endforeach @foreach(Nomina::CATALOGO as [$cc, $cn, $ck])<option value="{{ $cn }}">[{{ $cc }}] {{ Nomina::CLASES[$ck] }}</option>@endforeach</datalist>
 <datalist id="ne-ded">@foreach(Nomina::CATALOGO_DED as $x)<option value="{{ $x }}"></option>@endforeach</datalist>
 
 @if($ed['tab'] === 'borrador')

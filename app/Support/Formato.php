@@ -103,4 +103,10 @@ class Formato
 
         return $h < 14 ? 'Buenos días' : ($h < 21 ? 'Buenas tardes' : 'Buenas noches');
     }
+
+    /** Nombre del mes en minúscula: 6 → junio */
+    public static function mesNombre(int $m): string
+    {
+        return ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][max(1, min(12, $m)) - 1];
+    }
 }

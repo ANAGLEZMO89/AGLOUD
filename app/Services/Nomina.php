@@ -159,8 +159,8 @@ class Nomina
             'm145' => ['sit' => '3', 'nifCony' => '', 'movil' => false, 'pension' => '', 'alimentos' => '', 'vivienda' => false, 'fecha' => '', 'hijos' => [], 'asc' => []],
             'claus' => ['conf', 'datos', 'desc', 'reg'], 'docs' => [], 'nombre' => '', 'cat' => '',
             'regimen' => 'General', 'autTipo' => self::TIPOS_AUTONOMO[0], 'autBase' => 0, 'autCuota' => 0, 'autRend' => 0, 'autMutua' => '', 'autCese' => true,
-            'autTarifa' => false, 'autTarifaFin' => '', 'iae' => '',
-        ], $w);
+            'autTarifa' => false, 'autTarifaFin' => '', 'iae' => '', 'fAntig' => '',
+        ], $w, ['_conv' => self::reglas($c)]);
     }
 
     /** Retribución por día trabajado (salario diario) en vez de mensual */
@@ -181,15 +181,123 @@ class Nomina
         return Carbon::create($anio ?: (int) now()->year, max(1, min(12, $m)), 1)->daysInMonth;
     }
 
-    public static function anual(array $w): float
+    /** Reglas del convenio de la empresa que se aplican solas en la nómina (leídas del PDF o escritas a mano) */
+    public static function reglas(Cliente $c): array
     {
-        if (self::diario($w)) {
-            $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
-
-            return round(self::n($w['salDia'] ?? 0) * 365 + ($pagas - 12) * self::pagaExtra($w) + self::n($w['plus'] ?? 0) * 12, 2);
+        static $cache = [];
+        if (! isset($cache[$c->id]) || app()->runningUnitTests()) {
+            $conv = self::config($c)['conv'];
+            $cache[$c->id] = ['extras' => $conv['extras'] ?? [], 'antig' => $conv['antig'] ?? null, 'pluses' => $conv['pluses'] ?? [], 'hx' => $conv['hx'] ?? null, 'it' => $conv['it'] ?? null];
         }
 
-        return self::n($w['salBase'] ?? 0) * ((int) ($w['pagas'] ?? 14) ?: 14) + self::n($w['plus'] ?? 0) * 12;
+        return $cache[$c->id];
+    }
+
+    /** Salario base mensual equivalente (si cobra por día, 30 días) */
+    private static function salMes(array $w): float
+    {
+        return self::diario($w) ? round(self::n($w['salDia'] ?? 0) * 30, 2) : self::n($w['salBase'] ?? 0);
+    }
+
+    /** Antigüedad del mes según el convenio: [importe, nº de periodos, texto] */
+    public static function antiguedad(array $w, ?int $anio = null, int $m = 0): array
+    {
+        $a = $w['_conv']['antig'] ?? null;
+        $desde = (string) (($w['fAntig'] ?? '') ?: ($w['alta'] ?? ''));
+        if (! $a || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde) || (int) $a['periodo'] <= 0) {
+            return [0.0, 0, ''];
+        }
+        $ref = $m ? Carbon::create($anio ?: (int) now()->year, $m, 1)->endOfMonth() : Carbon::now();
+        $n = intdiv((int) Carbon::parse($desde)->diffInYears($ref), (int) $a['periodo']);
+        if (! empty($a['tope'])) {
+            $n = min($n, (int) $a['tope']);
+        }
+        if ($n <= 0) {
+            return [0.0, 0, ''];
+        }
+        $imp = $a['tipo'] === 'porcentaje' ? round(self::salMes($w) * (float) $a['valor'] / 100 * $n, 2) : round((float) $a['valor'] * $n, 2);
+        $nom = [2 => 'bienios', 3 => 'trienios', 4 => 'cuatrienios', 5 => 'quinquenios'][(int) $a['periodo']] ?? 'periodos';
+
+        return [$imp, $n, $n.' '.$nom];
+    }
+
+    /** Pagas extraordinarias del trabajador: las del convenio si las tiene, si no verano y Navidad. [[id, cod, nombre, mes, importe]] */
+    public static function extras(array $w, ?int $anio = null, int $m = 0): array
+    {
+        if ((int) ($w['pagas'] ?? 14) === 12) {
+            return [];
+        }
+        $conv = $w['_conv']['extras'] ?? [];
+        if (! $conv) {
+            return array_map(fn ($x) => [$x[0], $x[1], $x[2], $x[3], self::pagaExtra($w)], self::PAGAS_EXTRA);
+        }
+        $mes = self::salMes($w);
+        $dia = self::diario($w) ? self::n($w['salDia'] ?? 0) : round($mes / 30, 4);
+        $pl = self::n($w['plus'] ?? 0);
+        $ant = self::antiguedad($w, $anio, $m)[0];
+        $out = [];
+        foreach (array_values($conv) as $i => $x) {
+            $imp = match ($x['calculo'] ?? 'mensualidad') {
+                'importe' => (float) ($x['importe'] ?? 0),
+                'dias' => $dia * (float) ($x['dias'] ?? 30) + (! empty($x['plus']) ? $pl / 30 * (float) ($x['dias'] ?? 30) : 0) + (! empty($x['antig']) ? $ant / 30 * (float) ($x['dias'] ?? 30) : 0),
+                default => $mes + (! empty($x['plus']) ? $pl : 0) + (! empty($x['antig']) ? $ant : 0),
+            };
+            $out[] = [$i === 0 ? 'pv' : ($i === 1 ? 'pn' : 'px'.$i), (string) (90 + $i), (string) $x['nombre'], (int) $x['mes'], round($imp, 2)];
+        }
+
+        return $out;
+    }
+
+    /** Pluses del convenio que se cobran solos todos los meses */
+    private static function plusesAuto(array $w, ?int $anio, int $m): array
+    {
+        $L = [];
+        $coef = (self::n($w['jor'] ?? 100) ?: 100) / 100;
+        foreach ($w['_conv']['pluses'] ?? [] as $i => $p) {
+            if (empty($p['auto'])) {
+                continue;
+            }
+            $v = $p['tipo'] === 'porcentaje_base' ? self::salMes($w) * (float) $p['valor'] / 100 : (float) $p['valor'];
+            [$cant, $precio] = match ($p['unidad']) {
+                'dia_natural' => [self::diasMes($anio, $m), $v],
+                'dia_trabajado' => [self::diasLaborables($anio, $m), $v],
+                'hora' => [null, null],
+                default => [null, null],
+            };
+            if ($p['unidad'] === 'hora') {
+                continue;
+            }
+            $imp = $cant !== null ? round($cant * $precio, 2) : round($v * ($p['tipo'] === 'porcentaje_base' ? 1 : $coef), 2);
+            if ($imp == 0) {
+                continue;
+            }
+            $L[] = ['id' => 'cp'.$i, 'cod' => '06', 'concepto' => $p['nombre'], 'cant' => $cant, 'precio' => $cant !== null ? round($precio, 4) : null, 'importe' => $imp,
+                'clase' => $p['cotiza'] ? 'salarial' : ($p['tributa'] ? 'tributa' : 'no_salarial'), 'origen' => 'convenio', 'conv' => null];
+        }
+
+        return $L;
+    }
+
+    /** Días de lunes a viernes del mes (aproximación de los días trabajados sin calendario laboral) */
+    public static function diasLaborables(?int $anio, int $m): int
+    {
+        $d = Carbon::create($anio ?: (int) now()->year, max(1, min(12, $m)), 1);
+        $n = 0;
+        for ($i = 0, $t = $d->daysInMonth; $i < $t; $i++) {
+            $n += $d->copy()->addDays($i)->isWeekday() ? 1 : 0;
+        }
+
+        return $n;
+    }
+
+    public static function anual(array $w): float
+    {
+        $ext = array_sum(array_column(self::extras($w), 4));
+        $ant = self::antiguedad($w)[0];
+        $auto = array_sum(array_map(fn ($p) => ! empty($p['auto']) && $p['unidad'] === 'mes' ? ($p['tipo'] === 'porcentaje_base' ? self::salMes($w) * (float) $p['valor'] / 100 : (float) $p['valor']) : 0, $w['_conv']['pluses'] ?? []));
+        $fijo = (self::diario($w) ? self::n($w['salDia'] ?? 0) * 365 / 12 : self::n($w['salBase'] ?? 0)) + self::n($w['plus'] ?? 0) + $ant + $auto;
+
+        return round($fijo * 12 + $ext, 2);
     }
 
     // ------------------------------------------------------------- parámetros
@@ -329,13 +437,19 @@ class Nomina
         if ($pl || $convPlus) {
             $L[] = ['id' => 'pl', 'cod' => '02', 'concepto' => 'Plus de convenio y complementos', 'importe' => round($pl, 2), 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => $convPlus];
         }
-        if ($pagas === 14) {
-            foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mesCobro]) {
-                if ($pro) {
-                    $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($sb / 12, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => $convBase !== null ? round($convBase / 12, 2) : null];
-                } elseif ($m === $mesCobro && ! $sinPagas) {
-                    $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($sb, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => $convBase];
-                }
+        [$ant, , $antTxt] = self::antiguedad($w, $anio, $m);
+        if ($ant) {
+            $L[] = ['id' => 'ant', 'cod' => '03', 'concepto' => 'Antigüedad ('.$antTxt.')', 'importe' => $ant, 'clase' => 'salarial', 'origen' => 'convenio', 'conv' => null];
+        }
+        foreach (self::plusesAuto($w, $anio, $m) as $x) {
+            $L[] = $x;
+        }
+        $pro = ! empty($w['prorr']) && $pagas !== 12;
+        foreach (self::extras($w, $anio, $m) as [$id, $cod, $nom, $mesCobro, $imp]) {
+            if ($pro) {
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp / 12, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => null];
+            } elseif ($m === $mesCobro && ! $sinPagas) {
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => null];
             }
         }
         $g = fn ($k) => round(self::n($inc[$k] ?? 0), 2);
@@ -398,8 +512,9 @@ class Nomina
         $prorrateadas = ! empty($w['prorr']) && $pagas === 14;
         if ($recibo === 'Nómina') {
             // Prorrata de las pagas que se cobran en su mes: entra en la base de cotización todos los meses
-            $pe = self::diario($w) ? self::pagaExtra($w) : ($sb ?: self::n($w['salBase'] ?? 0));
-            $prorB = $pagas === 14 ? ($prorrateadas ? $pror : round($pe * 2 / 12, 2)) : 0;
+            $ex = self::extras($w);
+            $prorrateadas = ! empty($w['prorr']) && $ex;
+            $prorB = $ex ? ($prorrateadas ? $pror : round(array_sum(array_column($ex, 4)) / 12, 2)) : 0;
             $jor = self::n($w['jor'] ?? 100) ?: 100;
             $g = (int) ($w['grupo'] ?? 7);
             $minB = (isset(self::BASE_MIN_DIA[$g]) ? self::BASE_MIN_DIA[$g] * ((int) ($doc['dias'] ?? 30) ?: 30) : (self::BASE_MIN[$g] ?? self::BASE_MIN[7])) * $jor / 100;
@@ -518,10 +633,8 @@ class Nomina
         $pl = self::n($w['plus'] ?? 0);
         $L = [];
         if ($recibo === 'Extra') {
-            foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mc]) {
-                if (! $pro && $pagas === 14) {
-                    $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $m === $mc ? round($sb, 2) : 0, 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
-                }
+            foreach (empty($w['prorr']) ? self::extras($w, $anio, $m) : [] as [$id, $cod, $nom, $mc, $imp]) {
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $m === $mc ? round($imp, 2) : 0, 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
             }
         } elseif ($recibo === 'Atrasos') {
             $L[] = ['id' => 'atr', 'cod' => '23', 'concepto' => 'Atrasos de convenio', 'importe' => 0, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
@@ -556,8 +669,8 @@ class Nomina
         $pend = round(max(0, $devengadas - $disfrutadas), 2);
         $L[] = ['id' => 'vac', 'cod' => '22', 'concepto' => 'Vacaciones no disfrutadas', 'cant' => $pend, 'precio' => $diario, 'importe' => round($pend * $diario, 2), 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
         // Partes proporcionales de las pagas que no se cobran prorrateadas (devengo anual hasta su mes de cobro)
-        if ($pagas === 14 && ! $pro) {
-            foreach (self::PAGAS_EXTRA as [$id, $cod, $nom, $mc]) {
+        if (empty($w['prorr'])) {
+            foreach (self::extras($w, $fin->year, $fin->month) as [$id, $cod, $nom, $mc, $sb]) {
                 $desde = Carbon::create($fin->month > $mc ? $fin->year : $fin->year - 1, $mc, 1)->addMonthNoOverflow()->startOfMonth();
                 $desde = $alta->greaterThan($desde) ? $alta->copy() : $desde;
                 $dias = $fin->greaterThanOrEqualTo($desde) ? $desde->diffInDays($fin) + 1 : 0;

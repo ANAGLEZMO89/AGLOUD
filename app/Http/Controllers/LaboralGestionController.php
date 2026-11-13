@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Ajuste;
 use App\Models\Cliente;
 use App\Models\LaboralMes;
 use App\Models\Trabajador;
 use App\Services\Auditoria;
+use App\Services\ConvenioIA;
 use App\Services\Nomina;
 use App\Support\Formato;
 use App\Support\Plazos;
@@ -308,13 +310,91 @@ class LaboralGestionController extends LaboralController
                 continue;
             }
             $cats[] = ['cat' => mb_substr(trim($x['cat']), 0, 120), 'grupo' => (string) max(1, min(11, (int) ($x['grupo'] ?? 7))),
-                'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2)];
+                'base' => round(Formato::parseNum((string) ($x['base'] ?? 0)), 2), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? 0)), 2),
+                'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes', 'art' => mb_substr((string) ($x['art'] ?? ''), 0, 80)];
         }
-        $this->guardarConfig($c, ['conv' => ['nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
-            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14', 'cats' => $cats]]);
+        $this->guardarConfig($c, ['conv' => array_replace(Nomina::config($c)['conv'], ['nombre' => $s('conv_nombre', 200), 'codigo' => $s('conv_codigo', 40), 'ambito' => $s('conv_ambito'), 'vigencia' => $s('conv_vigencia', 60),
+            'jornada' => $s('conv_jornada', 10), 'vacaciones' => $s('conv_vacaciones', 10), 'pagas' => in_array($request->input('conv_pagas'), ['12', '14', '15', '16'], true) ? $request->input('conv_pagas') : '14', 'cats' => $cats])]);
         Auditoria::registrar('laboral.convenio', 'Convenio de '.$c->nombre.' guardado', null, $c->id);
 
         return redirect()->route('laboral.convenios')->with('ok', 'Convenio y tablas salariales guardados.');
+    }
+
+    /** Lee el PDF del convenio con IA y aplica sus tablas y reglas a la empresa y a su plantilla */
+    public function leerConvenioIA(Request $request, ConvenioIA $ia)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
+        }
+        $request->validate(['pdf' => ['required', 'file', 'mimes:pdf', 'max:30000']], ['pdf.mimes' => 'El convenio debe ser un PDF.', 'pdf.max' => 'El PDF no puede pasar de 30 MB.']);
+        try {
+            $r = $ia->leer((string) file_get_contents($request->file('pdf')->getRealPath()));
+        } catch (\Throwable $e) {
+            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se ha podido leer el convenio: '.$e->getMessage()]);
+        }
+        if (! $r['cats']) {
+            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'La IA no ha encontrado tablas salariales en el PDF. Comprueba que el archivo es el convenio completo (con sus anexos) y no solo la resolución de publicación.']);
+        }
+        $P = Nomina::config($c);
+        $conv = array_replace($P['conv'], array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
+            'jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== ''), [
+                'cats' => $r['cats'], 'extras' => $r['extras'], 'antig' => $r['antig'], 'pluses' => $r['pluses'], 'it' => $r['it'], 'hx' => $r['hx'],
+                'pagas' => (string) (12 + count($r['extras'])),
+                'ia' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($request->file('pdf')->getClientOriginalName(), 0, 160), 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos']],
+            ]);
+        $this->guardarConfig($c, ['conv' => $conv]);
+
+        // Plantilla: nadie cobra por debajo de su categoría del convenio (nunca se baja un salario)
+        $cambios = [];
+        $porCat = collect($r['cats'])->keyBy('cat');
+        foreach (Trabajador::where('cliente_id', $c->id)->where('estado', 'Alta')->get() as $t) {
+            $d = $t->datos ?? [];
+            $ct = $porCat[$d['convCat'] ?? ''] ?? null;
+            if (! $ct || Nomina::esAutonomo($d)) {
+                continue;
+            }
+            $antes = Nomina::anual(Nomina::rellenar($t->ficha(), $c));
+            $d['grupo'] = (int) $ct['grupo'];
+            if ($ct['unidad'] === 'dia') {
+                $d['salTipo'] = 'Diario';
+                $d['salDia'] = max(Nomina::n($d['salDia'] ?? 0), (float) $ct['base']);
+            } else {
+                $d['salTipo'] = 'Mensual';
+                $d['salBase'] = max(Nomina::n($d['salBase'] ?? 0), (float) $ct['base']);
+            }
+            $d['plus'] = max(Nomina::n($d['plus'] ?? 0), (float) $ct['plus']);
+            $d['pagas'] = $r['extras'] ? 14 : 12;
+            $t->update(['datos' => $d]);
+            $d['sal'] = Nomina::anual(Nomina::rellenar($t->fresh()->ficha(), $c));
+            $t->update(['datos' => $d]);
+            if (abs($d['sal'] - $antes) > 0.005) {
+                $cambios[] = ($d['nombre'] ?? 'Trabajador').': '.Formato::eur($antes).' → '.Formato::eur($d['sal']);
+            }
+        }
+        Auditoria::registrar('laboral.convenio.ia', 'Convenio leído con IA para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
+
+        return redirect()->route('laboral.convenios')->with('ok', 'Convenio leído y aplicado: '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra'
+            .($r['antig'] ? ', antigüedad' : '').', '.count($r['pluses']).' pluses.'.($cambios ? ' Salarios actualizados al convenio: '.implode(' · ', $cambios).'.' : ''));
+    }
+
+    /** Clave de la API de Anthropic para leer convenios (solo la administración del despacho) */
+    public function claveIA(Request $request)
+    {
+        abort_unless($request->user()->esAdmin(), 403);
+        if ($request->boolean('quitar')) {
+            Ajuste::where('clave', ConvenioIA::CLAVE)->delete();
+
+            return back()->with('ok', 'Clave eliminada.');
+        }
+        $k = trim((string) $request->input('clave'));
+        if (! preg_match('/^sk-ant-[A-Za-z0-9_\-]{20,}$/', $k)) {
+            return back()->withErrors(['conv' => 'La clave no tiene el formato de una clave de la API de Anthropic (empieza por sk-ant-).']);
+        }
+        Ajuste::put(ConvenioIA::CLAVE, $k);
+        Auditoria::registrar('laboral.ia.clave', 'Clave de la API de Anthropic configurada');
+
+        return back()->with('ok', 'Clave guardada (cifrada). Ya puedes leer convenios con IA.');
     }
 
     // ---------------------------------------------------- cálculo de nóminas

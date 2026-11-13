@@ -21,6 +21,18 @@ class Trabajador extends Model
         return ['datos' => 'encrypted:array', 'alta' => 'date', 'baja' => 'date'];
     }
 
+    protected static function booted(): void
+    {
+        // Las reglas del convenio se leen siempre de la configuración de la empresa: no se copian en la ficha
+        static::saving(function (self $t) {
+            $d = $t->datos ?? [];
+            if (array_key_exists('_conv', $d)) {
+                unset($d['_conv']);
+                $t->datos = $d;
+            }
+        });
+    }
+
     public function movimientos(): HasMany
     {
         return $this->hasMany(LaboralMovimiento::class);
