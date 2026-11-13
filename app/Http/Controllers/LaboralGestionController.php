@@ -333,15 +333,38 @@ class LaboralGestionController extends LaboralController
         } catch (\Throwable $e) {
             return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se ha podido leer el convenio: '.$e->getMessage()]);
         }
+
+        return $this->aplicarConvenio($c, $r, $request->file('pdf')->getClientOriginalName());
+    }
+
+    /** Lectura gratuita: el convenio se lee en claude.ai con la suscripción del despacho y aquí se pega la respuesta */
+    public function pegarConvenioIA(Request $request)
+    {
+        $c = $this->ctx($request);
+        if (! $c) {
+            return $this->sinEmpresa();
+        }
+        $request->validate(['respuesta' => ['required', 'string', 'max:500000']], ['respuesta.required' => 'Pega la respuesta de Claude.']);
+        try {
+            $r = ConvenioIA::desdeTexto((string) $request->input('respuesta'));
+        } catch (\Throwable $e) {
+            return redirect()->route('laboral.convenios', ['ia' => 1])->withInput()->withErrors(['conv' => $e->getMessage()]);
+        }
+
+        return $this->aplicarConvenio($c, $r, 'Leído con Claude (claude.ai)');
+    }
+
+    private function aplicarConvenio(Cliente $c, array $r, string $archivo)
+    {
         if (! $r['cats']) {
-            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'La IA no ha encontrado tablas salariales en el PDF. Comprueba que el archivo es el convenio completo (con sus anexos) y no solo la resolución de publicación.']);
+            return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se han encontrado tablas salariales. Comprueba que el PDF es el convenio completo (con sus anexos) y no solo la resolución de publicación.']);
         }
         $P = Nomina::config($c);
         $conv = array_replace($P['conv'], array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
             'jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== ''), [
                 'cats' => $r['cats'], 'extras' => $r['extras'], 'antig' => $r['antig'], 'pluses' => $r['pluses'], 'it' => $r['it'], 'hx' => $r['hx'],
                 'pagas' => (string) (12 + count($r['extras'])),
-                'ia' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($request->file('pdf')->getClientOriginalName(), 0, 160), 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos']],
+                'ia' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos']],
             ]);
         $this->guardarConfig($c, ['conv' => $conv]);
 

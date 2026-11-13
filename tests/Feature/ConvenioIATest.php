@@ -97,10 +97,25 @@ class ConvenioIATest extends TestCase
             ->assertSee('días 21 en adelante al 100 %')->assertSee('El grupo de cotización del peón');
     }
 
+    public function test_lectura_gratuita_pegando_la_respuesta_de_claude(): void
+    {
+        $this->assertStringContainsString('"pagas_extra"', ConvenioIA::instrucciones());
+        $en = fn () => $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id]);
+        $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => 'Aquí tienes { "nombre": "x" }'])->assertSessionHasErrors('conv');
+        $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
+        // Respuesta de claude.ai con texto y bloque de código alrededor del JSON
+        $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => "Aquí está:\n```json\n".json_encode($this->respuesta(), JSON_UNESCAPED_UNICODE)."\n```"])
+            ->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+        $P = Nomina::config($this->a);
+        $this->assertCount(2, $P['conv']['cats']);
+        $this->assertSame(3, $P['conv']['antig']['periodo']);
+        $en()->get(route('laboral.convenios'))->assertSee('Leído con Claude (claude.ai)');
+    }
+
     public function test_sin_clave_no_hay_lectura_y_solo_el_admin_la_configura(): void
     {
         $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id])->get(route('laboral.convenios'))->assertOk()
-            ->assertDontSee('Subir PDF y leer con IA')->assertSee('tiene que configurar la clave');
+            ->assertDontSee('Subir PDF y leer con IA')->assertSee('Copiar instrucciones')->assertSee('Sin coste, con tu suscripción de Claude');
         $this->actingAs($this->as)->post(route('laboral.convenios.ia.clave'), ['clave' => 'sk-ant-'.str_repeat('a', 30)])->assertForbidden();
         $admin = $this->usuario(User::ADMIN);
         $this->actingAs($admin)->post(route('laboral.convenios.ia.clave'), ['clave' => 'no-vale'])->assertSessionHasErrors('conv');

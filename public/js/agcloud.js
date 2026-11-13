@@ -760,6 +760,17 @@
     on(s, 'change', upd); upd();
   });
 
+  // ---------- Convenio: copiar las instrucciones para claude.ai ----------
+  var lbCop = $('[data-lb-copiar]');
+  on(lbCop, 'click', function () {
+    var t = $('[data-lb-instr]'), ok = $('[data-lb-copiado]');
+    if (!t) return;
+    var hecho = function () { if (ok) ok.hidden = false; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t.value).then(hecho, function () { t.classList.remove('hidden'); t.select(); document.execCommand('copy'); hecho(); });
+    } else { t.classList.remove('hidden'); t.select(); document.execCommand('copy'); hecho(); }
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

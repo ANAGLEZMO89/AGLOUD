@@ -50,6 +50,27 @@ class ConvenioIA
         return self::normalizar($d);
     }
 
+    /** Instrucciones para leer el convenio con la suscripción de Claude del despacho (claude.ai), sin coste de API */
+    public static function instrucciones(): string
+    {
+        return trim(self::PROMPT)."\n\nDevuelve ÚNICAMENTE un bloque JSON (sin texto antes ni después) que cumpla exactamente este esquema JSON:\n"
+            .json_encode(self::esquema(), JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Lee lo que devolvió Claude en claude.ai (texto pegado) */
+    public static function desdeTexto(string $txt): array
+    {
+        $txt = trim($txt);
+        $i = strpos($txt, '{');
+        $j = strrpos($txt, '}');
+        $d = $i !== false && $j > $i ? json_decode(substr($txt, $i, $j - $i + 1), true) : null;
+        if (! is_array($d) || ! array_key_exists('tablas', $d) || ! array_key_exists('pagas_extra', $d)) {
+            throw new RuntimeException('El texto pegado no es la respuesta completa de Claude. Copia todo el bloque que empieza por { y termina por } y vuelve a pegarlo.');
+        }
+
+        return self::normalizar($d);
+    }
+
     private function api(string $b64): string
     {
         $key = self::clave();
@@ -89,7 +110,7 @@ class ConvenioIA
         return $txt;
     }
 
-    private const PROMPT = <<<'TXT'
+    public const PROMPT = <<<'TXT'
         Eres un asesor laboral español experto en nóminas. Lee el convenio colectivo adjunto completo (incluidos anexos y tablas salariales) y extrae lo necesario para calcular nóminas.
 
         Reglas:

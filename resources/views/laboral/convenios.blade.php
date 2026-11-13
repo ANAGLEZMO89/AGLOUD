@@ -13,7 +13,7 @@
   <div class="card" style="gap:12px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
       <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 300px"><span style="font-size:15px;font-weight:700">Leer el convenio con IA</span>
-        <span style="font-size:12.5px;color:#6A6A65;line-height:1.45">Sube el PDF completo del convenio (con sus anexos y tablas). La IA lee las tablas salariales, las pagas extra, la antigüedad, los pluses, el complemento de IT y las horas extra, y se aplican solas a las nóminas de esta empresa. Los trabajadores que cobren menos que su categoría se suben al mínimo del convenio; nunca se baja un salario. Solo se envía el texto del convenio, no datos de trabajadores.</span></div>
+        <span style="font-size:12.5px;color:#6A6A65;line-height:1.45">La IA lee el convenio completo (con sus anexos y tablas): las tablas salariales, las pagas extra, la antigüedad, los pluses, el complemento de IT y las horas extra, y se aplican solas a las nóminas de esta empresa. Los trabajadores que cobren menos que su categoría se suben al mínimo del convenio; nunca se baja un salario. Solo se envía el texto del convenio, no datos de trabajadores.</span></div>
       @if($iaOk)
         <form method="POST" action="{{ route('laboral.convenios.ia') }}" enctype="multipart/form-data" data-lb-ia>@csrf
           <label class="btn lime" style="cursor:pointer">Subir PDF y leer con IA<input type="file" name="pdf" accept=".pdf,application/pdf" class="hidden" data-autoupload></label>
@@ -21,20 +21,21 @@
         </form>
       @endif
     </div>
-    @if(! $iaOk)
-      @if(auth()->user()->esAdmin())
-        <form method="POST" action="{{ route('laboral.convenios.ia.clave') }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">@csrf
-          <label class="lbl-s" style="flex:1 1 280px">Clave de la API de Anthropic (se guarda cifrada)<input class="inp mono" type="password" name="clave" autocomplete="off" placeholder="sk-ant-…" required></label>
-          <button class="btn sm" type="submit">Guardar clave</button>
-        </form>
-        <span class="hint muted">Se crea en console.anthropic.com › API Keys. Cada convenio cuesta unos céntimos.</span>
-      @else
-        <span class="hint muted">La administración del despacho tiene que configurar la clave de la API para leer convenios con IA.</span>
-      @endif
-    @endif
+    <form method="POST" action="{{ route('laboral.convenios.ia.pegar') }}" style="display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px solid #F1F1EC">@csrf
+      <span style="font-size:13px;font-weight:700">Sin coste, con tu suscripción de Claude</span>
+      <ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#3C3C3C">
+        <li>Pulsa «Copiar instrucciones».</li>
+        <li>Abre <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">claude.ai ↗</a>, adjunta el PDF completo del convenio y pega las instrucciones.</li>
+        <li>Copia toda la respuesta de Claude (el bloque que empieza por <span class="mono">{</span> y termina por <span class="mono">}</span>), pégala aquí y pulsa «Aplicar convenio».</li>
+      </ol>
+      <textarea class="hidden" data-lb-instr readonly>{{ \App\Services\ConvenioIA::instrucciones() }}</textarea>
+      <div><button type="button" class="btn soft sm" data-lb-copiar>Copiar instrucciones</button> <span class="hint muted" data-lb-copiado hidden>Copiadas. Pégalas en claude.ai junto con el PDF.</span></div>
+      <textarea class="txa mono" name="respuesta" rows="5" placeholder="Pega aquí la respuesta de Claude" style="font-size:12px">{{ old('respuesta') }}</textarea>
+      <div style="display:flex;justify-content:flex-end"><button class="btn lime" type="submit">Aplicar convenio</button></div>
+    </form>
     @if($ia)
       <div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid #F1F1EC;font-size:13px;line-height:1.5">
-        <span style="font-size:12.5px;color:#6A6A65">Leído con IA el {{ \App\Support\Formato::fecha(substr($ia['fecha'], 0, 10)) }} de «{{ $ia['archivo'] }}»{{ ! empty($ia['anioTablas']) ? ' · tablas de '.$ia['anioTablas'] : '' }}</span>
+        <span style="font-size:12.5px;color:#6A6A65">Leído con IA el {{ \App\Support\Formato::fecha(substr($ia['fecha'], 0, 10)) }} · {{ $ia['archivo'] }}{{ ! empty($ia['anioTablas']) ? ' · tablas de '.$ia['anioTablas'] : '' }}</span>
         <span><b>Pagas extra:</b> {{ $conv['extras'] ?? [] ? collect($conv['extras'])->map(fn ($x) => $x['nombre'].' en '.\App\Support\Formato::mesNombre($x['mes']).' · '.($x['calculo'] === 'dias' ? \App\Support\Formato::num($x['dias'], 0).' días' : ($x['calculo'] === 'importe' ? \App\Support\Formato::eur($x['importe']) : 'una mensualidad')).($x['plus'] ? ' + plus' : '').($x['antig'] ? ' + antigüedad' : '').$art($x['art']))->implode(' · ') : 'no fija pagas extra' }}</span>
         <span><b>Antigüedad:</b> {{ ($a = $conv['antig'] ?? null) ? ($a['tipo'] === 'porcentaje' ? \App\Support\Formato::num($a['valor']).' % del salario base' : \App\Support\Formato::eur($a['valor']).' al mes').' por cada '.$a['periodo'].' años'.($a['tope'] ? ', máximo '.$a['tope'].' periodos' : '').$art($a['art']) : 'no consta' }}</span>
         <span><b>Pluses:</b> {{ ($conv['pluses'] ?? []) ? collect($conv['pluses'])->map(fn ($p) => $p['nombre'].' '.($p['tipo'] === 'porcentaje_base' ? \App\Support\Formato::num($p['valor']).' %' : \App\Support\Formato::eur($p['valor'])).' por '.['mes' => 'mes', 'dia_trabajado' => 'día trabajado', 'dia_natural' => 'día natural', 'hora' => 'hora'][$p['unidad']].($p['auto'] ? ' (automático)' : ' (se añade en la nómina cuando corresponda)').($p['cotiza'] ? '' : ' · no cotiza').$art($p['art']))->implode(' · ') : 'ninguno' }}</span>
