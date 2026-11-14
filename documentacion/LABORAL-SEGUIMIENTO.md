@@ -124,8 +124,30 @@ Pruebas: `tests/Feature/ConvenioIATest.php` (5; una nueva con estados, contradic
 
 Pruebas: `tests/Feature/PosterioresTest.php` (4) y `LaboralTest` actualizado (contabilizar y remesa exigen emitir).
 
-## 5. Plan por fases (pendiente)
-9. **Verificación** completa con los 18 casos de prueba pedidos.
+## 5. Fase 9 · Verificación: los 18 casos (hecha)
+
+Batería completa: 183 pruebas, 2.120 comprobaciones, todas correctas. Cada caso comprueba importes, estados y persistencia, no solo que la página cargue.
+
+| # | Caso | Pruebas |
+|---|------|---------|
+| 1 | Alta y baja a mitad de mes | `LaboralPeriodoTest::test_alta_a_mitad_de_mes_con_salario_diario`, `::test_meses_de_28_29_30_y_31_dias_y_baja_a_mitad_de_mes`, `VerificacionLaboralTest::test_caso_3…` |
+| 2 | Meses de 28, 29, 30 y 31 días | `LaboralPeriodoTest::test_meses_de_28_29_30_y_31_dias…`, `CalendarioLaboralTest::test_calendario_con_dias_de_trabajo…` |
+| 3 | Salario diario y mensual | `VerificacionLaboralTest::test_caso_3_salario_diario_y_mensual`, `LaboralTest::test_grupo_10_y_salario_diario` |
+| 4 | Jornada parcial y cambio de jornada en el periodo | `CalendarioLaboralTest::test_cambio_de_condiciones…` (tramos), `::test_horas_extra_complementarias…`, `MotorConceptosTest` (media jornada) |
+| 5 | Convenio sin categorías | `VerificacionLaboralTest::test_caso_5_convenio_sin_categorias`, `LaboralPeriodoTest::test_convenio_sin_categorias_no_da_falsos_positivos` |
+| 6 | Extras prorrateadas y no prorrateadas | `LaboralTest::test_calculo_de_la_nomina…`, `PosterioresTest` (prorrata), `EmisionNominaTest::test_pagas_extra…` |
+| 7 | Periodos y fórmulas de devengo de extras | `EmisionNominaTest::test_pagas_extra_segun_su_periodo_de_devengo` |
+| 8 | Pluses por días trabajados | `CalendarioLaboralTest::test_plus_por_dia_efectivo_y_por_dia_trabajado`, `ConvenioEditorTest` |
+| 9 | Vacaciones, ausencias e IT | `CalendarioLaboralTest` (vacaciones, no retribuidas, IT con prestación y mejora, IT sin base reguladora) |
+| 10 | Antigüedad por tramos | `VerificacionLaboralTest::test_caso_10_antiguedad_por_tramos`, `ConvenioIATest` |
+| 11 | Ajustes de bases con explicación | `VerificacionLaboralTest::test_caso_11…`, `LaboralPeriodoTest::test_base_minima_prorrateada_y_explicada`, `CalendarioLaboralTest` (IT) |
+| 12 | Revisión retroactiva y atrasos | `EmisionNominaTest::test_atrasos_por_revision_salarial_retroactiva`, `PosterioresTest` (complementaria) |
+| 13 | Finiquito y cantidades ya abonadas | `EmisionNominaTest::test_finiquito_con_lo_ya_pagado` |
+| 14 | Importación de IA incompleta, contradictoria o duplicada | `VerificacionLaboralTest::test_caso_14…`, `ConvenioIATest::test_revision_de_la_propuesta…`, `::test_lectura_gratuita…` |
+| 15 | Nómina emitida inalterada al cambiar el convenio | `ConveniosVersionesTest::test_nomina_emitida_no_cambia_al_editar_el_convenio` |
+| 16 | Sin emisiones ni asientos duplicados | `EmisionNominaTest::test_emision_sin_duplicados…`, `::test_emision_del_mes_en_bloque…`, `PosterioresTest::test_asiento_solo_de_lo_emitido…` |
+| 17 | Aislamiento entre empresas | `LaboralTest::test_aislamiento_entre_empresas_y_portal`, `CalendarioLaboralTest::test_pantalla_y_bloqueo…`, `ConveniosVersionesTest::test_documento_del_convenio_y_aislamiento` |
+| 18 | Coincidencia entre cálculo, PDF y exportaciones | `VerificacionLaboralTest::test_caso_18…` (recibo, editor, exportaciones, RNT, remesa, asiento y 111) |
 
 ## 6. Parámetros normativos pendientes de verificar
 
@@ -133,4 +155,10 @@ Constantes de `App\Services\Nomina` con valores de 2026 tomados del prototipo, *
 
 ## 7. Alcance no soportado (hoy)
 
-IT y sus mejoras; tramos con cambio de condiciones dentro del mes; extras con periodo de devengo distinto del año; atrasos y revisiones retroactivas automáticas; regímenes especiales (agrario por jornadas, hogar, artistas…); contratos de formación con reglas propias de cotización; presentación de ficheros a TGSS, SEPE o AEAT.
+- Regímenes y sistemas especiales (agrario por jornadas, empleados de hogar, artistas, mar…) y contratos formativos con reglas propias de cotización: se calculan como contrato ordinario; hay que revisarlos.
+- IT: recaídas, regímenes especiales y prórrogas; devengo de pagas durante la IT según convenio (aviso).
+- Cotización de permisos no retribuidos y huelga (aviso); base mínima con cambio de grupo o jornada dentro del mes (aviso).
+- Festivos propios del centro de trabajo (se usan los de la empresa); inactividad de fijos discontinuos.
+- Unidades «por año» y «por pago» de los conceptos del convenio (se añaden a mano).
+- Atrasos de años anteriores (solo los del mismo año).
+- Generación de ficheros oficiales y presentación en TGSS (RED/SLD, CRA, afiliación), SEPE (Contrat@, Certific@2), AEAT (111, 190) y DEHú: no se hace desde AG Cloud; las pantallas dicen qué parte es de AG Cloud y qué parte se hace en la sede.
