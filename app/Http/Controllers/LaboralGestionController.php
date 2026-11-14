@@ -18,6 +18,7 @@ use App\Services\Convenios;
 use App\Services\Nomina;
 use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
+use App\Support\PdfInfo;
 use App\Support\Plazos;
 use App\Support\Validacion;
 use Illuminate\Http\Request;
@@ -509,15 +510,16 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
         $request->validate(['pdf' => ['required', 'file', 'mimes:pdf', 'max:30000']], ['pdf.mimes' => 'El convenio debe ser un PDF.', 'pdf.max' => 'El PDF no puede pasar de 30 MB.']);
+        $bytes = (string) file_get_contents($request->file('pdf')->getRealPath());
         try {
-            $r = $ia->leer((string) file_get_contents($request->file('pdf')->getRealPath()));
+            $r = $ia->leer($bytes);
         } catch (\Throwable $e) {
             return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se ha podido leer el convenio: '.$e->getMessage()]);
         }
 
         $doc = Cliente::where('es_despacho', true)->exists() ? self::guardarPdf(app(AlmacenDocumentos::class), $request->file('pdf'), $request->user()->id) : null;
 
-        return $this->aplicarConvenio($c, $r, $request->file('pdf')->getClientOriginalName(), $doc?->id);
+        return $this->aplicarConvenio($c, $r, $request->file('pdf')->getClientOriginalName(), $doc?->id, PdfInfo::analizar($bytes));
     }
 
     /** Lectura gratuita: el convenio se lee en claude.ai con la suscripción del despacho y aquí se pega la respuesta */
@@ -527,23 +529,36 @@ class LaboralGestionController extends LaboralController
         if (! $c) {
             return $this->sinEmpresa();
         }
-        $request->validate(['respuesta' => ['required', 'string', 'max:500000']], ['respuesta.required' => 'Pega la respuesta de Claude.']);
+        $request->validate(['respuesta' => ['required', 'string', 'max:500000'], 'pdf' => ['nullable', 'file', 'mimes:pdf', 'max:30000']],
+            ['respuesta.required' => 'Pega la respuesta de Claude.', 'pdf.mimes' => 'Adjunta el PDF del convenio.', 'pdf.max' => 'El PDF no puede pasar de 30 MB.']);
         try {
             $r = ConvenioIA::desdeTexto((string) $request->input('respuesta'));
         } catch (\Throwable $e) {
             return redirect()->route('laboral.convenios', ['ia' => 1])->withInput()->withErrors(['conv' => $e->getMessage()]);
         }
+        // El PDF que se leyó en claude.ai queda como documento del convenio (procedencia de la propuesta)
+        $doc = null;
+        $info = null;
+        if ($f = $request->file('pdf')) {
+            $info = PdfInfo::analizar((string) file_get_contents($f->getRealPath()));
+            $doc = Cliente::where('es_despacho', true)->exists() ? self::guardarPdf(app(AlmacenDocumentos::class), $f, $request->user()->id) : null;
+        }
 
-        return $this->aplicarConvenio($c, $r, 'Leído con Claude (claude.ai)');
+        return $this->aplicarConvenio($c, $r, 'Leído con Claude (claude.ai)'.($f ? ' · '.$f->getClientOriginalName() : ''), $doc?->id, $info);
     }
 
     /** La lectura del PDF (con IA o pegada desde claude.ai) queda como PROPUESTA: no toca el convenio ni la plantilla hasta que se aprueba */
-    private function aplicarConvenio(Cliente $c, array $r, string $archivo, ?int $docId = null)
+    private function aplicarConvenio(Cliente $c, array $r, string $archivo, ?int $docId = null, ?array $pdf = null)
     {
         if (! $r['cats']) {
             return redirect()->route('laboral.convenios')->withErrors(['conv' => 'No se han encontrado tablas salariales. Comprueba que el PDF es el convenio completo (con sus anexos) y no solo la resolución de publicación. No se ha guardado nada.']);
         }
-        $this->guardarConfig($c, ['convPropuesta' => $r + ['_meta' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'usuario' => auth()->id(), 'documento_id' => $docId]]]);
+        if ($pdf && $pdf['escaneado']) {
+            $r['revision'][] = ['ambiguo', 'El PDF parece escaneado (solo imágenes, sin texto seleccionable): la lectura puede tener errores de reconocimiento. Comprueba las cifras una a una con el PDF.'];
+        } elseif ($pdf && $pdf['cifrado']) {
+            $r['revision'][] = ['ambiguo', 'El PDF está protegido: no se ha podido comprobar si tiene texto. Revisa las cifras con el PDF.'];
+        }
+        $this->guardarConfig($c, ['convPropuesta' => $r + ['_meta' => ['fecha' => now()->toDateTimeString(), 'archivo' => mb_substr($archivo, 0, 160), 'usuario' => auth()->id(), 'documento_id' => $docId, 'pdf' => $pdf]]]);
         Auditoria::registrar('laboral.convenio.propuesta', 'Propuesta de convenio leída ('.$archivo.') para '.$c->nombre.': '.count($r['cats']).' categorías', null, $c->id);
 
         return redirect()->route('laboral.convenios', ['revisar' => 1])->with('ok', 'Propuesta lista para revisar: todavía no se ha aplicado nada al convenio ni a las nóminas.');
@@ -568,26 +583,113 @@ class LaboralGestionController extends LaboralController
             return redirect()->route('laboral.convenios')->with('ok', 'Propuesta descartada. El convenio no ha cambiado.');
         }
         $m = $r['_meta'] ?? [];
+        // Lo que se aplica: los apartados marcados y las categorías tal como se han revisado (corregidas a mano si hacía falta)
+        $sec = array_flip((array) $request->input('apartados', array_keys(ConvenioIA::APARTADOS)));
+        $cats = [];
+        $errs = [];
+        foreach ((array) $request->input('cats', []) as $i => $x) {
+            if (! is_array($x) || empty($x['incluir'])) {
+                continue;
+            }
+            $nom = mb_substr(trim((string) ($x['cat'] ?? '')), 0, 120);
+            $base = trim((string) ($x['base'] ?? '')) === '' ? null : Formato::parseNum((string) $x['base']);
+            $g = (int) ($x['grupo'] ?? 0);
+            if ($nom === '') {
+                $errs["cats.$i.cat"] = 'Falta el nombre de la categoría.';
+            } elseif (isset($cats[$nom])) {
+                $errs["cats.$i.cat"] = 'Categoría repetida: «'.$nom.'».';
+            }
+            if ($base === null || $base <= 0) {
+                $errs["cats.$i.base"] = 'Salario de «'.$nom.'» vacío o no válido (no se pone a cero).';
+            }
+            if ($g < 1 || $g > 11) {
+                $errs["cats.$i.grupo"] = 'Grupo de cotización de «'.$nom.'» del 1 al 11.';
+            }
+            $orig = collect($r['cats'])->firstWhere('cat', (string) ($x['orig'] ?? '')) ?? [];
+            $cats[$nom] = ['cat' => $nom, 'grupo' => (string) $g, 'base' => round((float) $base, 4), 'plus' => round(Formato::parseNum((string) ($x['plus'] ?? '0')), 4),
+                'unidad' => ($x['unidad'] ?? 'mes') === 'dia' ? 'dia' : 'mes', 'art' => $orig['art'] ?? '', 'pag' => $orig['pag'] ?? null];
+        }
+        if (! $request->has('cats')) {
+            // Sin revisión de la tabla (aprobación directa): la propuesta tal cual
+            $cats = collect($r['cats'])->keyBy('cat')->all();
+        }
+        if (isset($sec['tablas']) && ! $cats) {
+            $errs['cats'] = 'No hay ninguna categoría marcada para aplicar.';
+        }
         $cv = Convenios::deEmpresa($c, $request->user()->id);
-        $ver = Convenios::editable($cv, $request->integer('version_id') ?: null);
-        $conv = array_replace(Convenios::forma($cv, $ver), array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia'],
-            'jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== ''), [
-                'cats' => $r['cats'], 'extras' => $r['extras'], 'antig' => $r['antig'], 'pluses' => $r['pluses'], 'it' => $r['it'], 'hx' => $r['hx'],
-                'pagas' => $r['extras'] ? (string) (12 + count($r['extras'])) : ($P['conv']['pagas'] ?? '14'),
-                'ia' => ['fecha' => $m['fecha'] ?? now()->toDateTimeString(), 'archivo' => $m['archivo'] ?? '', 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos'],
-                    'aprobado' => now()->toDateTimeString(), 'aprobadoPor' => $request->user()->id],
-            ]);
-        Convenios::guardar($ver, $conv);
+        $destino = (string) $request->input('destino', 'actual');
+        $verDestino = null;
+        if ($destino === 'nueva') {
+            if (trim((string) $request->input('nueva_nombre')) === '') {
+                $errs['nueva_nombre'] = 'Pon nombre a la versión nueva.';
+            }
+            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->input('nueva_efectos'))) {
+                $errs['nueva_efectos'] = 'Indica desde cuándo tiene efectos la versión nueva.';
+            }
+        } else {
+            $verDestino = Convenios::editable($cv, $request->integer('version_id') ?: null);
+            if ($verDestino->estado === 'aprobado' && $request->has('destino')) {
+                $errs['destino'] = 'La versión «'.$verDestino->nombre.'» está aprobada: la lectura se guarda en una versión nueva o en una que esté en borrador.';
+            }
+        }
+        if ($errs) {
+            return redirect()->route('laboral.convenios', ['revisar' => 1])->withInput()->withErrors($errs + ['conv' => 'No se ha aplicado nada: revisa los datos marcados.']);
+        }
+        if ($destino === 'nueva') {
+            $base = Convenios::version($cv);
+            $verDestino = $base ? Convenios::nuevaVersion($base, ['nombre' => mb_substr(trim((string) $request->input('nueva_nombre')), 0, 120), 'efectos_desde' => $request->input('nueva_efectos')])
+                : ConvenioVersion::create(['convenio_id' => $cv->id, 'nombre' => mb_substr(trim((string) $request->input('nueva_nombre')), 0, 120), 'efectos_desde' => $request->input('nueva_efectos'), 'estado' => 'borrador', 'reglas' => []]);
+        }
+        $ver = $verDestino;
+        $actual = Convenios::forma($cv, $ver);
+        $conv = ['ia' => ['fecha' => $m['fecha'] ?? now()->toDateTimeString(), 'archivo' => $m['archivo'] ?? '', 'anioTablas' => $r['anioTablas'], 'avisos' => $r['avisos'],
+            'aprobado' => now()->toDateTimeString(), 'aprobadoPor' => $request->user()->id, 'revision' => $r['revision'] ?? [], 'estados' => $r['estados'] ?? []]];
+        if (isset($sec['identificacion'])) {
+            $conv += array_filter(['nombre' => $r['nombre'], 'codigo' => $r['codigo'], 'ambito' => $r['ambito'], 'vigencia' => $r['vigencia']], fn ($v) => $v !== '');
+        }
+        if (isset($sec['jornada'])) {
+            $conv += array_filter(['jornada' => $r['jornada'], 'vacaciones' => $r['vacaciones']], fn ($v) => $v !== '');
+        }
+        if (isset($sec['tablas'])) {
+            // Las categorías que ya estaban y no vienen en la lectura se conservan salvo que se marquen para quitar
+            $quitar = array_flip((array) $request->input('quitar', []));
+            $conv['cats'] = array_values(array_merge(collect($actual['cats'])->reject(fn ($x) => isset($quitar[$x['cat']]) || isset($cats[$x['cat']]))->all(), $cats));
+        }
+        if (isset($sec['pagas_extra'])) {
+            $conv['extras'] = $r['extras'];
+            $conv['pagas'] = $r['extras'] ? (string) (12 + count($r['extras'])) : ($actual['pagas'] ?? '14');
+        }
+        if (isset($sec['antiguedad'])) {
+            $conv['antig'] = $r['antig'];
+        }
+        if (isset($sec['it'])) {
+            $conv['it'] = array_replace($actual['it'] ?? [], $r['it']);
+        }
+        if (isset($sec['horas_extra'])) {
+            $conv['hx'] = $r['hx'];
+        }
+        if (isset($sec['pluses'])) {
+            // Los pluses leídos se añaden o actualizan por nombre; los conceptos creados a mano no se borran
+            $conv['pluses'] = $r['pluses'];
+        }
+        Convenios::guardar($ver, $conv, conservarConceptos: true);
         $ver->fuente = 'ia';
+        // Procedencia: documento, fecha, usuario y artículo/página de cada dato
+        $ver->referencias = array_replace($ver->referencias ?? [], ['ia' => ['documento_id' => $m['documento_id'] ?? null, 'archivo' => $m['archivo'] ?? '', 'fecha' => $m['fecha'] ?? null,
+            'aprobado_por' => $request->user()->name, 'pdf' => $m['pdf'] ?? null, 'apartados' => array_keys($sec),
+            'cats' => collect($cats)->map(fn ($x) => ['art' => $x['art'], 'pag' => $x['pag']])->all(),
+            'pagas' => collect($r['extras'])->mapWithKeys(fn ($x) => [$x['nombre'] => ['art' => $x['art'], 'pag' => $x['pag'] ?? null]])->all(),
+            'pluses' => collect($r['pluses'])->mapWithKeys(fn ($x) => [$x['nombre'] => ['art' => $x['art'], 'pag' => $x['pag'] ?? null]])->all()] + ($r['refs'] ?? [])]);
         $ver->save();
         if (! empty($m['documento_id'])) {
             ConvenioDocumento::firstOrCreate(['convenio_id' => $cv->id, 'documento_id' => $m['documento_id']], ['version_id' => $ver->id, 'tipo' => 'texto', 'descripcion' => 'PDF leído con IA']);
         }
         $this->guardarConfig($c, ['convPropuesta' => null]);
-        Auditoria::registrar('laboral.convenio.ia', 'Propuesta aplicada a la versión «'.$ver->nombre.'». Aprobada por '.$request->user()->name.' para '.$c->nombre.': '.count($r['cats']).' categorías, '.count($r['extras']).' pagas extra, '.count($r['pluses']).' pluses', null, $c->id);
-        $bajo = self::bajoConvenio($c, $conv['cats']);
+        Auditoria::registrar('laboral.convenio.ia', 'Propuesta aplicada a la versión «'.$ver->nombre.'» ('.implode(', ', array_keys($sec)).'). Aprobada por '.$request->user()->name.' para '.$c->nombre.': '.count($cats).' categorías', null, $c->id);
+        $bajo = self::bajoConvenio($c, $conv['cats'] ?? $actual['cats']);
 
-        return redirect()->route('laboral.convenios')->with('ok', 'Convenio aplicado. Los salarios de la plantilla no se han modificado'.($bajo ? ': revisa los '.count($bajo).' trabajadores por debajo del convenio.' : '.'));
+        return redirect()->route('laboral.convenios', ['version' => $ver->id])->with('ok', 'Lectura guardada en la versión «'.$ver->nombre.'» ('.(Convenio::ESTADOS[$ver->estado] ?? $ver->estado).').'
+            .($ver->estado !== 'aprobado' ? ' Revísala y apruébala en «Versión y vigencia» para que la usen las nóminas con versión aprobada.' : '').' Los salarios de la plantilla no se han modificado'.($bajo ? ': revisa los '.count($bajo).' trabajadores por debajo del convenio.' : '.'));
     }
 
     /** Trabajadores en alta cuyo salario queda por debajo de su categoría (solo informa; nunca modifica fichas) */

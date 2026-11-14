@@ -100,8 +100,19 @@ Pruebas: `tests/Feature/EmisionNominaTest.php` (6), más casos en `CalendarioLab
 
 Pendiente de criterio jurídico (avisado en la nómina): devengo de las pagas durante la IT (por defecto no generan paga a cargo de la empresa salvo que el convenio diga otra cosa).
 
+## 4 quinquies. Fase 7 · PDF e IA con revisión previa (hecha)
+
+- Dos vías que rellenan la misma estructura: editor manual (fases 2-4) y lectura del PDF, con la API si hay clave configurada en el servidor o, sin coste, en claude.ai con la suscripción del despacho (copiar instrucciones, pegar la respuesta). Las dos pasan por la misma validación y la misma revisión.
+- **PDF guardado como documento del convenio** en las dos vías (en la de claude.ai, adjuntándolo al pegar la respuesta) y **análisis del PDF** (`App\Support\PdfInfo`): páginas, texto seleccionable o **escaneado** (solo imágenes: se avisa de revisar las cifras una a una) o protegido.
+- **Esquema ampliado**: estado de cada apartado (encontrado / **no localizado** / **no existe** / no aplicable) y **artículo y página** de cada dato. Las instrucciones dicen que el contenido del PDF son datos y que se ignore cualquier instrucción que contenga. No se envían datos de trabajadores.
+- **Revisión del servidor** antes de enseñarla: descarta filas sin salario (no las pone a cero), detecta categorías repetidas con importes distintos (contradicción), grupos de cotización no válidos, pagas sin cifra, estados que no cuadran con los datos y tablas de años anteriores.
+- **Pantalla de revisión**: por apartado, «ahora» frente a «propuesta» con su artículo y página y casilla para aplicarlo o no; **tabla salarial editable** (nombre, grupo, salario, unidad, plus) con comparación (nueva / cambia / igual) y **trabajadores afectados** («quedaría por debajo»); categorías actuales que no vienen en la lectura, que se conservan salvo que se marquen para quitar.
+- **Destino**: la versión en borrador o una **versión nueva** (copia de la vigente) con nombre y fecha de efectos. Una versión aprobada nunca se sobrescribe desde la lectura. La versión queda con `fuente = ia` y en `referencias` el documento, la fecha, quién la aprobó, el análisis del PDF y artículo/página por dato.
+- Reintentar no duplica (todo se actualiza por nombre) y **los conceptos creados a mano no se borran** al aplicar pluses leídos.
+
+Pruebas: `tests/Feature/ConvenioIATest.php` (5; una nueva con estados, contradicciones, PDF escaneado, corrección manual, destino y procedencia).
+
 ## 5. Plan por fases (pendiente)
-7. **PDF e IA con revisión previa**: ya hay propuesta y aprobación (fase 1). Falta: guardar el PDF como documento del convenio, detectar PDF escaneado (OCR), artículo y página por dato, comparación campo a campo y edición de la propuesta antes de aprobarla.
 8. **Procesos posteriores**: CRA, cotización, 111/190 y asiento coherentes con rectificaciones.
 9. **Verificación** completa con los 18 casos de prueba pedidos.
 

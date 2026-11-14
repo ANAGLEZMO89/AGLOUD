@@ -180,9 +180,9 @@ class Convenios
      * Guarda en una versión los datos en la forma del motor (formulario o propuesta aprobada).
      * Categorías y conceptos se actualizan por nombre: reintentar no duplica y quitar uno lo borra.
      */
-    public static function guardar(ConvenioVersion $v, array $conv): void
+    public static function guardar(ConvenioVersion $v, array $conv, bool $conservarConceptos = false): void
     {
-        DB::transaction(function () use ($v, $conv) {
+        DB::transaction(function () use ($v, $conv, $conservarConceptos) {
             $cv = Convenio::withoutGlobalScopes()->find($v->convenio_id);
             $cv->fill(array_filter(['nombre' => $conv['nombre'] ?? null, 'codigo' => $conv['codigo'] ?? null, 'ambito_territorial' => $conv['ambito'] ?? null], fn ($x) => $x !== null && $x !== ''));
             $cv->save();
@@ -234,7 +234,9 @@ class Convenios
                     $c->save();
                     $vivos[$nom] = $c->id;
                 }
-                ConvenioConcepto::withoutGlobalScopes()->where('version_id', $v->id)->where('nombre', '!=', self::PLUS_CONVENIO)->whereNotIn('id', array_values($vivos) ?: [0])->delete();
+                if (! $conservarConceptos) {
+                    ConvenioConcepto::withoutGlobalScopes()->where('version_id', $v->id)->where('nombre', '!=', self::PLUS_CONVENIO)->whereNotIn('id', array_values($vivos) ?: [0])->delete();
+                }
             }
         });
         Nomina::olvidarReglas();

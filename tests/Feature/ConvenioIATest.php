@@ -3,9 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\Cliente;
+use App\Models\Convenio;
+use App\Models\ConvenioCategoria;
+use App\Models\ConvenioConcepto;
+use App\Models\ConvenioDocumento;
+use App\Models\ConvenioVersion;
+use App\Models\EmpresaConvenio;
 use App\Models\Trabajador;
 use App\Models\User;
 use App\Services\ConvenioIA;
+use App\Services\Convenios;
 use App\Services\Nomina;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -76,8 +83,9 @@ class ConvenioIATest extends TestCase
         $en()->post(route('laboral.convenios.ia'), ['pdf' => $pdf])->assertRedirect(route('laboral.convenios', ['revisar' => 1]))->assertSessionHas('ok');
         // Solo es una propuesta: ni el convenio ni la plantilla cambian todavía
         $this->assertSame([], Nomina::config($this->a)['conv']['cats']);
-        $en()->get(route('laboral.convenios'))->assertSee('Propuesta pendiente de revisar')->assertSee('Nuevas: Peón ordinario, Administrativo')->assertSee('Paga de beneficios (marzo)');
-        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar'])->assertRedirect(route('laboral.convenios'))->assertSessionHas('ok');
+        $en()->get(route('laboral.convenios'))->assertSee('Propuesta pendiente de revisar')->assertSee('value="Peón ordinario"', false)->assertSee('Nueva')->assertSee('Paga de beneficios (marzo, 300,00 €)')
+            ->assertSee('Beka Prueba · quedaría por debajo');
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar'])->assertRedirect()->assertSessionHas('ok');
         $this->assertNull(Nomina::config($this->a)['convPropuesta']);
 
         $P = Nomina::config($this->a);
@@ -161,6 +169,66 @@ class ConvenioIATest extends TestCase
         $this->assertCount(2, $P['conv']['cats']);
         $this->assertSame(3, $P['conv']['antig']['periodo']);
         $en()->get(route('laboral.convenios'))->assertSee('Leído con Claude (claude.ai)');
+    }
+
+    public function test_revision_de_la_propuesta_con_estados_correcciones_y_procedencia(): void
+    {
+        $en = fn () => $this->actingAs($this->as)->withSession(['cliente_activo' => $this->a->id]);
+        $r = $this->respuesta();
+        // La lectura: una categoría sin salario, otra repetida con otro importe, la antigüedad «no existe» y las horas extra no localizadas
+        $r['tablas'][] = ['categoria' => 'Encargado', 'grupo_cotizacion' => 3, 'salario_base' => null, 'unidad' => 'mes', 'plus_convenio' => 0, 'articulo' => 'Anexo I', 'pagina' => 41];
+        $r['tablas'][] = ['categoria' => 'Administrativo', 'grupo_cotizacion' => 5, 'salario_base' => 1550, 'unidad' => 'mes', 'plus_convenio' => 0, 'articulo' => 'Anexo II', 'pagina' => 44];
+        $r['tablas'][0]['pagina'] = 40;
+        $r['antiguedad'] = ['existe' => false, 'periodo_anios' => null, 'tipo' => 'importe', 'valor' => null, 'tope_periodos' => null, 'articulo' => 'Art. 48', 'pagina' => 12];
+        $r['horas_extra'] = ['tipo' => 'no_consta', 'valor' => null, 'articulo' => '', 'pagina' => null];
+        $r['estados'] = ['identificacion' => 'encontrado', 'tablas' => 'encontrado', 'pagas_extra' => 'encontrado', 'antiguedad' => 'no_existe', 'pluses' => 'encontrado', 'it' => 'encontrado',
+            'horas_extra' => 'no_localizado', 'jornada' => 'encontrado'];
+        $p = ConvenioIA::normalizar($r);
+        $this->assertSame(['no_existe', 'no_localizado'], [$p['estados']['antiguedad'], $p['estados']['horas_extra']]);
+        $rev = collect($p['revision']);
+        $this->assertTrue($rev->contains(fn ($x) => $x[0] === 'descartado' && str_contains($x[1], 'Encargado')));
+        $this->assertTrue($rev->contains(fn ($x) => $x[0] === 'contradictorio' && str_contains($x[1], 'Administrativo')));
+        $this->assertSame(40, $p['cats'][0]['pag']);
+
+        // Ya hay una versión aprobada con una categoría propia y un concepto creado a mano: no se sobrescribe ni se pierde
+        $cv = Convenio::create(['nombre' => 'Construcción', 'estado' => 'aprobado']);
+        EmpresaConvenio::create(['cliente_id' => $this->a->id, 'convenio_id' => $cv->id]);
+        $v = ConvenioVersion::create(['convenio_id' => $cv->id, 'nombre' => '2025', 'estado' => 'aprobado', 'efectos_desde' => '2025-01-01', 'reglas' => []]);
+        Convenios::guardar($v, ['cats' => [['cat' => 'Vigilante', 'grupo' => '9', 'base' => 1400, 'plus' => 0, 'unidad' => 'mes']]]);
+        $v->conceptos()->create(['nombre' => 'Plus de festivos', 'naturaleza' => 'salarial', 'calculo' => 'formula', 'formula' => 'salario_base / 30', 'unidad' => 'mes', 'cotiza' => 'si', 'tributa' => 'si', 'redondeo' => '2d']);
+        // Pegar la respuesta con el PDF (escaneado: solo una imagen)
+        $pdf = UploadedFile::fake()->createWithContent('convenio.pdf', "%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n2 0 obj << /Subtype /Image /Width 9 >>\nstream\nxx\nendstream\nendobj");
+        Cliente::where('es_despacho', true)->exists() || $this->cliente('Despacho de pruebas', 'B99999990', ['es_despacho' => true]);
+        $en()->post(route('laboral.convenios.ia.pegar'), ['respuesta' => json_encode($r), 'pdf' => $pdf])->assertSessionHas('ok');
+        $prop = Nomina::config($this->a)['convPropuesta'];
+        $this->assertTrue($prop['_meta']['pdf']['escaneado']);
+        $this->assertNotNull($prop['_meta']['documento_id']);
+        $en()->get(route('laboral.convenios'))->assertOk()->assertSee('No existe en el convenio')->assertSee('No localizado')->assertSee('parece escaneado')
+            ->assertSee('Contradicciones')->assertSee('Quitar «Vigilante»')->assertSee('Anexo I · pág. 40')->assertSee('está aprobada, no se sobrescribe');
+
+        // Guardar en la versión aprobada: no se permite
+        $cats = [['orig' => 'Peón ordinario', 'incluir' => '1', 'cat' => 'Peón ordinario', 'grupo' => '10', 'base' => '50,00', 'unidad' => 'dia', 'plus' => '0'],
+            ['orig' => 'Administrativo', 'incluir' => '1', 'cat' => 'Administrativo', 'grupo' => '5', 'base' => '', 'unidad' => 'mes', 'plus' => '100']];
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar', 'version_id' => $v->id, 'destino' => 'actual', 'apartados' => ['tablas'], 'cats' => $cats])
+            ->assertSessionHasErrors(['destino', 'cats.1.base']);
+        // Corregida a mano (salario del administrativo) y en una versión nueva; sin antigüedad ni horas extra
+        $cats[1]['base'] = '1.525,00';
+        $en()->post(route('laboral.convenios.propuesta'), ['accion' => 'aplicar', 'version_id' => $v->id, 'destino' => 'nueva', 'nueva_nombre' => 'Tablas 2026', 'nueva_efectos' => '2026-01-01',
+            'apartados' => ['identificacion', 'tablas', 'pagas_extra', 'pluses'], 'cats' => $cats])->assertSessionHasNoErrors()->assertSessionHas('ok');
+        $n = ConvenioVersion::where('nombre', 'Tablas 2026')->firstOrFail();
+        $this->assertSame(['borrador', 'ia'], [$n->estado, $n->fuente]);
+        $cs = ConvenioCategoria::where('version_id', $n->id)->pluck('salario_base', 'nombre')->map(fn ($x) => (float) $x)->all();
+        $this->assertEqualsCanonicalizing(['Vigilante' => 1400.0, 'Peón ordinario' => 50.0, 'Administrativo' => 1525.0], $cs);
+        // El concepto hecho a mano sigue; los pluses leídos se añaden
+        $this->assertEqualsCanonicalizing(['Plus de festivos', 'Plus de transporte', 'Plus de nocturnidad', 'Plus de convenio'], ConvenioConcepto::where('version_id', $n->id)->pluck('nombre')->all());
+        // La versión aprobada no ha cambiado
+        $this->assertSame(['Vigilante'], ConvenioCategoria::where('version_id', $v->id)->pluck('nombre')->all());
+        // Procedencia: documento, artículo y página
+        $this->assertSame(['art' => 'Anexo I', 'pag' => 40], $n->referencias['ia']['cats']['Peón ordinario']);
+        $this->assertTrue($n->referencias['ia']['pdf']['escaneado']);
+        $this->assertSame(1, ConvenioDocumento::where('version_id', $n->id)->count());
+        $this->assertNull($n->reglas['antig'] ?? null);
+        $this->assertNull(Nomina::config($this->a)['convPropuesta']);
     }
 
     public function test_sin_clave_no_hay_lectura_y_solo_el_admin_la_configura(): void
