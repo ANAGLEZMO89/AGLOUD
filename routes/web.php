@@ -26,6 +26,7 @@ use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\LaboralCalendarioController;
 use App\Http\Controllers\LaboralController;
 use App\Http\Controllers\LaboralGestionController;
+use App\Http\Controllers\NormativaController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ParametrosController;
 use App\Http\Controllers\Portal\PortalController;
@@ -228,6 +229,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/parametros-contrato', [LaboralGestionController::class, 'guardarContratos'])->name('contratos.guardar');
             Route::get('/trabajador/{trabajador}/texto-contrato', [LaboralGestionController::class, 'textoContrato'])->whereNumber('trabajador')->name('contrato.texto');
             Route::post('/trabajador/{trabajador}/texto-contrato', [LaboralGestionController::class, 'guardarTextoContrato'])->whereNumber('trabajador')->name('contrato.texto.guardar');
+            Route::get('/normativa', [NormativaController::class, 'lista'])->name('normativa');
+            Route::post('/normativa', [NormativaController::class, 'nuevo'])->name('normativa.nuevo');
+            Route::post('/normativa/{parametro}', [NormativaController::class, 'guardarParametro'])->whereNumber('parametro')->name('normativa.guardar');
             Route::get('/parametros', [LaboralController::class, 'parametros'])->name('parametros');
             Route::post('/parametros', [LaboralController::class, 'guardarParametros'])->name('parametros.guardar');
         });

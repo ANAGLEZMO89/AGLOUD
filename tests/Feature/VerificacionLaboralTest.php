@@ -142,12 +142,12 @@ class VerificacionLaboralTest extends TestCase
     {
         $w = Nomina::rellenar(['id' => 0, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => 1, 'salBase' => 900, 'pagas' => 14, 'jor' => 100, 'alta' => '2020-01-01', 'prorr' => true], $this->a);
         $n = Nomina::calcular($w, 11, [], 0);
-        $this->assertSame(Nomina::BASE_MIN[1], (float) $n['base']);
+        $this->assertSame(1989.30, (float) $n['base']);
         $this->assertStringContainsString('inferior a la base mínima del grupo 1', implode(' ', $n['baseExpl']));
         $alto = Nomina::calcular(array_merge($w, ['salBase' => 7000, 'grupo' => 3]), 11, [], 0);
-        $this->assertSame(Nomina::BASE_MAX, (float) $alto['base']);
+        $this->assertSame(5101.20, (float) $alto['base']);
         $this->assertStringContainsString('Supera la base máxima', implode(' ', $alto['baseExpl']));
-        $this->assertStringContainsString('pendientes de contrastar', implode(' ', $alto['baseExpl']));
+        $this->assertStringContainsString('Orden PJC/297/2026', implode(' ', $alto['baseExpl']));
         // Ni mínima ni máxima: la suma explicada coincide con la base
         $med = Nomina::calcular(array_merge($w, ['salBase' => 1800, 'grupo' => 3]), 11, [], 0);
         $this->assertSame(round(1800 + 1800 * 2 / 12, 2), (float) $med['base']);

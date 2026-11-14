@@ -26,9 +26,11 @@
   // Devengos de la nómina (las líneas, calculadas o editadas en el Integral)
   $lin = $n['lineas'] ?? [];
   $tag = fn ($l) => $l['concepto'].(($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') === 'prorrateada' ? ' (prorrata)' : '');
-  $desP = Formato::num(($n['desT'] ?? ($n['tmp'] ? 0.016 : 0.0155)) * 100);
+  $TPr = $n['par']['tipos'] ?? \App\Services\Normativa::v('cotizacion', \Illuminate\Support\Carbon::create($anio ?? now()->year, $mes ?? now()->month, 1))['tipos'];
+  $pc = fn ($x) => Formato::num($x * 100);
+  $desP = Formato::num(($n['desT'] ?? ($n['tmp'] ? $TPr['des_tmp'][0] : $TPr['des_ind'][0])) * 100);
   // Deducciones del trabajador
-  $ss = array_values(array_filter([['Contingencias comunes', '4,70', $n['T']['cc']], ['Desempleo', $desP, $n['T']['des']], ['Formación profesional', '0,10', $n['T']['fp']], ['Horas extraordinarias', '4,70', $n['T']['hx'] ?? 0], ['MEI', '0,15', $n['T']['mei']]], fn ($r) => (float) $r[2] != 0));
+  $ss = array_values(array_filter([['Contingencias comunes', $pc($TPr['cc'][0]), $n['T']['cc']], ['Desempleo', $desP, $n['T']['des']], ['Formación profesional', $pc($TPr['fp'][0]), $n['T']['fp']], ['Horas extraordinarias', $pc($TPr['cc'][0]), $n['T']['hx'] ?? 0], ['MEI', $pc($TPr['mei'][0]), $n['T']['mei']], ['Cotización adicional de solidaridad', '', $n['T']['sol'] ?? 0]], fn ($r) => (float) $r[2] != 0));
   $otras = array_map(fn ($d) => [$d['concepto'], $d['importe']], $n['deducciones'] ?? []);
   if (($n['esp'] ?? 0) > 0) { $otras[] = ['Valor de la retribución en especie', $n['esp']]; }
   $totDed = $n['ssT'] + $n['irpf'] + ($n['ded'] ?? 0) + ($n['esp'] ?? 0);

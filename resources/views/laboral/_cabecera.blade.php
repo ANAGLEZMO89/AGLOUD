@@ -17,6 +17,7 @@
       ['g-comunica', 'Comunic@', 'laboral.comunica', []],
       ['g-conv', 'Convenios', 'laboral.convenios', []],
       ['g-calc', 'Cálculo de nóminas', 'laboral.calculo', $q],
+      ['g-norm', 'Parámetros normativos (cotización, SMI, IRPF, IT)', 'laboral.normativa', []],
     ]],
     ['Modelos tributarios', [
       ['m-145', 'Modelo 145', 'laboral.m145', []],

@@ -13,7 +13,8 @@
   $nAv = count($av['lineas']) + count($av['generales']);
   $tabUrl = fn ($v) => route('laboral.integral', $qr + ['vista' => $v]);
   $ini = Carbon::create($anio, $mes, 1); $ult = $ini->copy()->endOfMonth();
-  $desLegal = ($n['tmp'] ? Nomina::TIPOS['des_tmp'][0] : Nomina::TIPOS['des_ind'][0]) * 100;
+  $TPv = $n['par']['tipos'] ?? \App\Services\Normativa::v('cotizacion', $ini->toDateString())['tipos'];
+  $desLegal = ($n['tmp'] ? $TPv['des_tmp'][0] : $TPv['des_ind'][0]) * 100;
   $irTxt = $ir['fijo'] ? 'Tipo fijo del '.Formato::num($ir['tipo']).' % indicado en la ficha del trabajador.'
     : 'Calculado con el algoritmo de la AEAT: '.Formato::num($ir['tipoAnual']).' % anual'.(abs($ir['tipo'] - $ir['tipoAnual']) > 0.001 ? ', regularizado al '.Formato::num($ir['tipo']).' % este mes' : '').'.';
   // Estado y origen reales: la tabla del convenio solo se usa si el trabajador tiene una categoría que existe en ella
@@ -142,7 +143,8 @@
 
   <div class="ne-sep"></div>
   @php
-    $filasDed = [['Contingencias comunes', Formato::num(Nomina::TIPOS['cc'][0] * 100).' %', $n['T']['cc'], null], ['Desempleo', null, $n['T']['des'], 'des_t'], ['Formación profesional', Formato::num(Nomina::TIPOS['fp'][0] * 100).' %', $n['T']['fp'], null], ['IRPF', null, $n['irpf'], 'irpf'], ['Mecanismo de Equidad Intergeneracional (MEI)', Formato::num(Nomina::TIPOS['mei'][0] * 100).' %', $n['T']['mei'], null]];
+    $filasDed = [['Contingencias comunes', Formato::num($TPv['cc'][0] * 100).' %', $n['T']['cc'], null], ['Desempleo', null, $n['T']['des'], 'des_t'], ['Formación profesional', Formato::num($TPv['fp'][0] * 100).' %', $n['T']['fp'], null], ['IRPF', null, $n['irpf'], 'irpf'], ['Mecanismo de Equidad Intergeneracional (MEI)', Formato::num($TPv['mei'][0] * 100).' %', $n['T']['mei'], null]];
+    if (($n['T']['sol'] ?? 0) > 0) { $filasDed[] = ['Cotización adicional de solidaridad', null, $n['T']['sol'], null]; }
     if ($aut || $rq === 'Extra') { $filasDed = array_values(array_filter($filasDed, fn ($f) => $f[3] === 'irpf')); }
   @endphp
   @foreach($filasDed as [$l, $pct, $v, $campo])
@@ -200,7 +202,7 @@
           <label class="ne-f"><span>Importe total a retener (€)</span><input class="inp lb-in mono" name="emb_new[total]" value="{{ old('emb_new.total') }}" inputmode="decimal" placeholder="0,00"></label>
           <label class="ne-f"><span>Cálculo</span><select class="sel lb-in" name="emb_new[modo]"><option value="lec">Escala del art. 607 LEC (automático)</option><option value="fijo" @selected(old('emb_new.modo') === 'fijo')>Cantidad fija mensual</option></select></label>
           <label class="ne-f"><span>Cantidad fija mensual (€)</span><input class="inp lb-in mono" name="emb_new[cuota]" value="{{ old('emb_new.cuota') }}" inputmode="decimal" placeholder="Solo si es cantidad fija"></label>
-          <span class="ne-note">Se retiene cada mes desde esta nómina hasta cubrir el total. Con la escala del art. 607 LEC el SMI ({{ Formato::eur(Nomina::SMI_ANUAL / 14) }} al mes) es inembargable; sobre el resto: 30 %, 50 %, 60 %, 75 % y 90 % por tramos. Las pensiones de alimentos (art. 608 LEC) las fija el juzgado: usa la cantidad fija. Pulsa «Guardar» para darlo de alta.</span>
+          <span class="ne-note">Se retiene cada mes desde esta nómina hasta cubrir el total. Con la escala del art. 607 LEC el SMI ({{ Formato::eur((float) \App\Services\Normativa::v('smi', $ini->toDateString())['anual'] / 14) }} al mes) es inembargable; sobre el resto: 30 %, 50 %, 60 %, 75 % y 90 % por tramos. Las pensiones de alimentos (art. 608 LEC) las fija el juzgado: usa la cantidad fija. Pulsa «Guardar» para darlo de alta.</span>
         </div>
       </details>
     </div>

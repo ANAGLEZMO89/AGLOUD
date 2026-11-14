@@ -149,9 +149,18 @@ Batería completa: 183 pruebas, 2.120 comprobaciones, todas correctas. Cada caso
 | 17 | Aislamiento entre empresas | `LaboralTest::test_aislamiento_entre_empresas_y_portal`, `CalendarioLaboralTest::test_pantalla_y_bloqueo…`, `ConveniosVersionesTest::test_documento_del_convenio_y_aislamiento` |
 | 18 | Coincidencia entre cálculo, PDF y exportaciones | `VerificacionLaboralTest::test_caso_18…` (recibo, editor, exportaciones, RNT, remesa, asiento y 111) |
 
-## 6. Parámetros normativos pendientes de verificar
+## 6. Parámetros normativos con fecha de efecto y fuente (hecho)
 
-Constantes de `App\Services\Nomina` con valores de 2026 tomados del prototipo, **sin fuente oficial contrastada**: tipos de cotización (`TIPOS`), bases mínimas por grupo (`BASE_MIN`, `BASE_MIN_DIA` = mensual/30), base máxima (`BASE_MAX`), SMI (`SMI_ANUAL`), escala y límites de IRPF. Deben pasar a una tabla de parámetros con fecha de efecto y fuente (Orden de cotización, Real Decreto del SMI, Reglamento del IRPF).
+- Tabla `parametros_normativos` (migración `2026_11_21_000290`) con un bloque por clave y periodo: **cotización** (base máxima, bases mínimas por grupo y diarias, tipos de trabajador y empresa, cotización adicional de solidaridad), **SMI**, **IRPF** (escala, límites excluyentes, reducción por rendimientos del trabajo, tipo mínimo de temporales) e **IT** (tramos y porcentajes). Ya no hay cifras anuales fijas en el código (`App\Services\Normativa`).
+- Cada nómina usa los vigentes en su periodo y lo cita en la explicación de la base (norma y estado). Si no hay parámetros para la fecha (p. ej. 2027 sin cargar) usa los últimos y **lo avisa**; nunca pone un cero.
+- **Cotización adicional de solidaridad** (art. 19 bis y DT 42.ª LGSS): nueva. Sobre la retribución que excede de la base máxima, por tramos (hasta el 10 %, del 10 % al 50 % y más del 50 %), repartida como las contingencias comunes; sale en el editor, en el recibo y en la explicación de la base.
+- Pantalla Laboral › Gestión › **Parámetros normativos**: consulta para todos; solo la administración crea un periodo nuevo (copia del anterior, «pendiente»), corrige cifras (sin campos vacíos) y marca «verificado en el BOE» con su nombre y la fecha. Todo queda en la auditoría.
+- **Valores de 2026 cargados** y contrastados con varios resúmenes publicados (estado «Contrastado con resúmenes»): Orden PJC/297/2026 (BOE 31/03/2026, BOE-A-2026-7296) y RDL 3/2026 para cotización; RD 126/2026 (BOE 19/02/2026, BOE-A-2026-3815) para el SMI (17.094 €/año, 1.221 €/mes, 40,70 €/día); LIRPF arts. 20 y 101, RIRPF arts. 80-86 (RD 142/2024) y algoritmo de la AEAT 2026 para el IRPF. Los tramos de IT, «pendiente» de comprobar. El BOE y la sede de la AEAT no eran accesibles desde el entorno de desarrollo: **hay que cotejarlos con el BOE y marcarlos como verificados**.
+- Coinciden con lo que ya usaba el motor: no cambia ninguna nómina, salvo las de salarios por encima de la base máxima, que ahora llevan la cotización de solidaridad.
+
+Pruebas: `tests/Feature/NormativaTest.php` (3).
+
+Sin soportar todavía: cotización adicional de los contratos de duración determinada inferiores a 30 días (art. 151 LGSS), tipos de AT y EP por CNAE (se indica el tipo de la empresa a mano) y mínimos personales y familiares del IRPF como parámetro (siguen en el código con los importes de la LIRPF, arts. 57 a 61).
 
 ## 7. Alcance no soportado (hoy)
 

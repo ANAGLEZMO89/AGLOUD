@@ -22,24 +22,10 @@ use Illuminate\Support\Collection;
 class Nomina
 {
     /** Bases mínimas mensuales por grupo de cotización y base máxima (2026) */
-    public const BASE_MIN = [1 => 1989.30, 2 => 1649.70, 3 => 1435.20, 4 => 1424.40, 5 => 1424.40, 6 => 1424.40, 7 => 1424.40];
-
-    /** Grupos 8 a 11: base mínima DIARIA (la mensual de los grupos 4-7 entre 30), por los días naturales del mes */
-    public const BASE_MIN_DIA = [8 => 47.48, 9 => 47.48, 10 => 47.48, 11 => 47.48];
-
-    public const BASE_MAX = 5101.20;
-
-    /** Año al que corresponden las bases y tipos fijos de este archivo (pendientes de pasar a parámetros con fecha de efecto) */
-    public const PARAM_ANIO = 2026;
+    // Bases, tipos de cotización, SMI y retenciones: tabla de parámetros normativos con fecha de efecto y fuente (App\Services\Normativa)
 
     /** Texto de relleno que versiones anteriores guardaban como si fuera una categoría */
     public const SIN_CAT = 'Sin categorías en el convenio';
-
-    /** SMI anual de 2026 (14 pagas) usado en la comprobación legal del contrato */
-    public const SMI_ANUAL = 17094.0;
-
-    /** Tipos de cotización 2026 en tanto por uno: [trabajador, empresa] */
-    public const TIPOS = ['cc' => [0.047, 0.236], 'mei' => [0.0015, 0.0075], 'des_ind' => [0.0155, 0.055], 'des_tmp' => [0.016, 0.067], 'fp' => [0.001, 0.006], 'fog' => [0, 0.002]];
 
     public const GRUPOS = ['1 · Ingenieros y licenciados', '2 · Ingenieros técnicos y peritos', '3 · Jefes administrativos y de taller', '4 · Ayudantes no titulados', '5 · Oficiales administrativos', '6 · Subalternos', '7 · Auxiliares administrativos', '8 · Oficiales de primera y segunda', '9 · Oficiales de tercera y especialistas', '10 · Peones', '11 · Trabajadores menores de 18 años'];
 
@@ -83,11 +69,6 @@ class Nomina
         'convenio' => 'Convenio colectivo', 'prueba' => 'Periodo de prueba', 'vacaciones' => 'Días de vacaciones', 'municipio' => 'Municipio de la empresa', 'contrato' => 'Modalidad del contrato'];
 
     public const ORDINALES = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta', 'Sexta', 'Séptima', 'Octava', 'Novena', 'Décima', 'Undécima', 'Duodécima', 'Decimotercera', 'Decimocuarta', 'Decimoquinta', 'Decimosexta', 'Decimoséptima', 'Decimoctava', 'Decimonovena', 'Vigésima', 'Vigesimoprimera', 'Vigesimosegunda', 'Vigesimotercera', 'Vigesimocuarta', 'Vigesimoquinta'];
-
-    /** Escala de retenciones y límites excluidos (situación 1, 2, 3 × 0, 1, 2+ hijos) */
-    private const ESCALA = [[12450, 19], [20200, 24], [35200, 30], [60000, 37], [300000, 45], [INF, 47]];
-
-    private const LIMITES = [1 => [0, 17644, 18694], 2 => [17197, 18130, 19262], 3 => [15876, 16342, 16867]];
 
     private array $memo = [];
 
@@ -827,6 +808,10 @@ class Nomina
     /** Calcula la nómina (o el recibo) a partir de sus conceptos, automáticos o editados en el Integral de nóminas */
     public static function computar(array $w, array $doc, float $ip, float $at = 0): array
     {
+        // Parámetros de cotización vigentes en el periodo de la nómina
+        $fPar = (string) ($doc['desde'] ?? '') ?: now()->toDateString();
+        $C = Normativa::v('cotizacion', $fPar);
+        $Bmax = (float) $C['base_max'];
         $recibo = $doc['recibo'] ?? 'Nómina';
         $L = array_values(array_filter($doc['lineas'] ?? [], fn ($l) => ($l['activo'] ?? true) && (float) ($l['importe'] ?? 0) != 0));
         $sum = fn ($f) => array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($L, $f)));
@@ -856,34 +841,60 @@ class Nomina
             $prorB = $ex ? ($prorrateadas ? $pror : round(array_sum(array_column($ex, 4)) / 12 * $frB, 2)) : 0;
             $jor = self::n($w['jor'] ?? 100) ?: 100;
             $g = (int) ($w['grupo'] ?? 7);
-            $minB = round((isset(self::BASE_MIN_DIA[$g]) ? self::BASE_MIN_DIA[$g] * $dC : (self::BASE_MIN[$g] ?? self::BASE_MIN[7]) * $frB) * $jor / 100, 2);
-            $maxB = round(self::BASE_MAX * $frB, 2);
+            $bmDia = $C['base_min_dia'][(string) $g] ?? null;
+            $bmMes = (float) ($C['base_min'][(string) $g] ?? $C['base_min']['7']);
+            $minB = round(($bmDia !== null ? (float) $bmDia * $dC : $bmMes * $frB) * $jor / 100, 2);
+            $maxB = round($Bmax * $frB, 2);
             // Base de contingencias comunes (sin horas extra) y base de AT y EP, desempleo, FP y FOGASA (con horas extra)
             $itCot = round((float) ($doc['itCot'] ?? 0), 2);
             $bruta = round($salarial + ($prorrateadas ? $pror : $prorB) + $itCot, 2);
             $base = min(max($bruta, $minB), $maxB);
-            $minTxt = isset(self::BASE_MIN_DIA[$g]) ? Formato::eur(self::BASE_MIN_DIA[$g]).' al día × '.$dC.' días' : Formato::eur(self::BASE_MIN[$g] ?? self::BASE_MIN[7]).' al mes'.($frB < 1 ? ' × '.$dC.'/30 días' : '');
+            $minTxt = $bmDia !== null ? Formato::eur((float) $bmDia).' al día × '.$dC.' días' : Formato::eur($bmMes).' al mes'.($frB < 1 ? ' × '.$dC.'/30 días' : '');
             $baseExpl = ['Remuneración computable '.Formato::eur($salarial).' + prorrata de pagas extra '.Formato::eur($prorrateadas ? $pror : $prorB)
                 .($itCot ? ' + base reguladora de los días de IT '.Formato::eur($itCot) : '').' = '.Formato::eur($bruta).'.'];
             if ($bruta < $minB) {
                 $baseExpl[] = 'Es inferior a la base mínima del grupo '.$g.' ('.$minTxt.($jor < 100 ? ' × '.Formato::num($jor, 0).' % de jornada' : '').' = '.Formato::eur($minB).'): se cotiza por la mínima.';
             } elseif ($bruta > $maxB) {
-                $baseExpl[] = 'Supera la base máxima ('.Formato::eur(self::BASE_MAX).($frB < 1 ? ' × '.$dC.'/30 días' : '').' = '.Formato::eur($maxB).'): se cotiza por la máxima.';
+                $baseExpl[] = 'Supera la base máxima ('.Formato::eur($Bmax).($frB < 1 ? ' × '.$dC.'/30 días' : '').' = '.Formato::eur($maxB).'): se cotiza por la máxima.';
             }
-            $baseExpl[] = 'Bases mínima y máxima: parámetros del sistema para '.self::PARAM_ANIO.' pendientes de contrastar con la Orden de cotización de ese año.';
+            $exceso = max(0, $bruta - $maxB);
+            $baseExpl[] = Normativa::cita('cotizacion', $fPar).'.';
         } else {
             // Recibos aparte: la paga extra ya cotiza con la prorrata mensual; atrasos, finiquito y salarios de tramitación
             // cotizan por sus conceptos salariales (en la liquidación complementaria o en la del mes de la baja)
             $prorB = 0;
-            $base = $recibo === 'Extra' ? 0 : min($salarial, self::BASE_MAX);
+            $base = $recibo === 'Extra' ? 0 : min($salarial, $Bmax);
+            $exceso = $recibo === 'Extra' ? 0 : max(0, $salarial - $Bmax);
+            $maxB = $Bmax;
             $baseExpl = [$recibo === 'Extra' ? 'La paga extra no cotiza en su mes: ya cotiza cada mes con la prorrata.' : 'Cotiza por sus conceptos salariales.'];
         }
-        $baseAT = $recibo === 'Extra' ? 0 : min($base + $hx, self::BASE_MAX);
+        $baseAT = $recibo === 'Extra' ? 0 : min($base + $hx, $Bmax);
         $tmp = self::temporal($w);
-        $des = $tmp ? self::TIPOS['des_tmp'] : self::TIPOS['des_ind'];
+        $TP = $C['tipos'];
+        $des = $tmp ? $TP['des_tmp'] : $TP['des_ind'];
         $desT = isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' ? (float) $doc['tipos']['des_t'] / 100 : $des[0];
-        $T = ['cc' => $base * self::TIPOS['cc'][0], 'mei' => $base * self::TIPOS['mei'][0], 'des' => $baseAT * $desT, 'fp' => $baseAT * self::TIPOS['fp'][0], 'hx' => $hx * self::TIPOS['cc'][0]];
-        $E = ['cc' => $base * self::TIPOS['cc'][1], 'mei' => $base * self::TIPOS['mei'][1], 'des' => $baseAT * $des[1], 'fog' => $baseAT * self::TIPOS['fog'][1], 'fp' => $baseAT * self::TIPOS['fp'][1], 'at' => $baseAT * $at / 100, 'hx' => $hx * self::TIPOS['cc'][1]];
+        $T = ['cc' => $base * $TP['cc'][0], 'mei' => $base * $TP['mei'][0], 'des' => $baseAT * $desT, 'fp' => $baseAT * $TP['fp'][0], 'hx' => $hx * $TP['cc'][0]];
+        $E = ['cc' => $base * $TP['cc'][1], 'mei' => $base * $TP['mei'][1], 'des' => $baseAT * $des[1], 'fog' => $baseAT * $TP['fog'][1], 'fp' => $baseAT * $TP['fp'][1], 'at' => $baseAT * $at / 100, 'hx' => $hx * $TP['cc'][1]];
+        // Cotización adicional de solidaridad sobre la retribución que excede de la base máxima, por tramos; se reparte como las contingencias comunes
+        $sol = 0.0;
+        if ($exceso > 0.004 && ! empty($C['solidaridad'])) {
+            $prev = 0.0;
+            $partes = [];
+            foreach ($C['solidaridad'] as [$hastaPct, $tipo]) {
+                $tope = $hastaPct === null ? INF : $maxB * (float) $hastaPct;
+                $tr = max(0, min($exceso, $tope) - $prev);
+                if ($tr > 0) {
+                    $sol += $tr * (float) $tipo / 100;
+                    $partes[] = Formato::eur($tr).' al '.Formato::num((float) $tipo).' %';
+                }
+                $prev = $tope;
+            }
+            $cc = $TP['cc'][0] + $TP['cc'][1];
+            $T['sol'] = $sol * $TP['cc'][0] / $cc;
+            $E['sol'] = $sol * $TP['cc'][1] / $cc;
+            $baseExpl[] = 'Cotización adicional de solidaridad sobre '.Formato::eur($exceso).' que exceden de la base máxima: '.implode(' + ', $partes).' = '.Formato::eur(round($sol, 2))
+                .' (empresa '.Formato::eur(round($E['sol'], 2)).', trabajador '.Formato::eur(round($T['sol'], 2)).').';
+        }
         if (self::esAutonomo($w) || $recibo === 'Extra') {
             // RETA: no cotiza al Régimen General por esta retribución. Paga extra en recibo aparte: cotizada con la prorrata.
             [$base, $baseAT, $prorB] = [0, 0, self::esAutonomo($w) ? 0 : $prorB];
@@ -897,7 +908,7 @@ class Nomina
         $irpf = round($baseIrpf * $ip / 100, 2);
         // Embargos: importe del art. 607 LEC sobre el salario neto, o importe fijo; nunca más que lo pendiente
         $neto = max(0, $dev - $die - $km - $exe - $esp - $ssT - $irpf);
-        $smi = self::SMI_ANUAL / ($prorrateadas || $pagas === 12 ? 12 : 14) * ($extra > 0 && $recibo === 'Nómina' ? 2 : 1) * ($recibo === 'Nómina' ? self::fraccion((int) ($doc['dias'] ?? 30), (int) ($doc['diasMes'] ?? 30)) : 1);
+        $smi = (float) Normativa::v('smi', $fPar)['anual'] / ($prorrateadas || $pagas === 12 ? 12 : 14) * ($extra > 0 && $recibo === 'Nómina' ? 2 : 1) * ($recibo === 'Nómina' ? self::fraccion((int) ($doc['dias'] ?? 30), (int) ($doc['diasMes'] ?? 30)) : 1);
         $libre = self::embargable($neto, $smi);
         $D = [];
         foreach ($doc['deducciones'] ?? [] as $d) {
@@ -922,7 +933,7 @@ class Nomina
         $baseExpl ??= [];
 
         return compact('baseExpl', 'sb', 'pl', 'extra', 'prorB', 'hx', 'otr', 'die', 'km', 'ant', 'emb', 'dev', 'base', 'baseAT', 'T', 'E', 'ssT', 'ip', 'baseIrpf', 'irpf', 'tmp', 'pror', 'desT', 'esp', 'trib', 'exe', 'recibo')
-            + ['deleg' => round($sum(fn ($l) => ! empty($l['delegado'])), 2), 'mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded - $esp, 2), 'ssE' => round(array_sum($E), 2), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
+            + ['par' => ['tipos' => $TP, 'cotizacion' => Normativa::get('cotizacion', $fPar)['id']], 'deleg' => round($sum(fn ($l) => ! empty($l['delegado'])), 2), 'mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded - $esp, 2), 'ssE' => round(array_sum($E), 2), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
     }
 
     /** Parte embargable de un salario neto mensual según la escala del art. 607 LEC (el SMI es inembargable) */
@@ -1151,7 +1162,8 @@ class Nomina
         $g = [];
         $errores = [];
         $calAv = [];
-        $des = (self::temporal($w) ? self::TIPOS['des_tmp'][0] : self::TIPOS['des_ind'][0]) * 100;
+        $TPa = Normativa::v('cotizacion', (string) ($doc['desde'] ?? '') ?: null)['tipos'];
+        $des = (self::temporal($w) ? $TPa['des_tmp'][0] : $TPa['des_ind'][0]) * 100;
         if (isset($doc['tipos']['des_t']) && $doc['tipos']['des_t'] !== null && $doc['tipos']['des_t'] !== '' && abs((float) $doc['tipos']['des_t'] - $des) > 0.0001) {
             $g[] = 'Desempleo al '.Formato::num((float) $doc['tipos']['des_t']).' %: el tipo legal es el '.Formato::num($des).' %.';
         }
@@ -1166,11 +1178,12 @@ class Nomina
         return ['lineas' => $out, 'generales' => $g, 'info' => $info, 'errores' => $errores, 'calendario' => $calAv];
     }
 
-    private static function escala(float $b): float
+    private static function escala(float $b, array $escala): float
     {
         $p = 0;
         $x = 0;
-        foreach (self::ESCALA as [$l, $r]) {
+        foreach ($escala as [$l, $r]) {
+            $l = $l === null ? INF : (float) $l;
             if ($b <= $p) {
                 break;
             }
@@ -1189,12 +1202,17 @@ class Nomina
         $asc = array_values(array_filter($M['asc'] ?? [], fn ($a) => (int) ($a['anio'] ?? 0) > 1900));
         $sit = (int) ($M['sit'] ?? 3) ?: 3;
         $nh = min(count($hijos), 2);
-        $lim = (self::LIMITES[$sit] ?? self::LIMITES[3])[$nh] ?: self::LIMITES[3][$nh];
+        // Parámetros de retención del año (escala, límites excluyentes y reducción por rendimientos del trabajo)
+        $I = Normativa::v('irpf', $anio.'-12-31');
+        $LIM = $I['limites'];
+        $lim = (float) (($LIM[(string) $sit] ?? $LIM['3'])[$nh] ?: $LIM['3'][$nh]);
+        $tmin = (float) ($I['tipo_min_temporal'] ?? 2);
         if ($RT <= $lim) {
-            return ['tipo' => $temporal && $RT > 0 ? 2 : 0, 'cuota' => 0, 'lim' => $lim, 'RN' => $RT - $SS, 'red' => 0, 'gastos' => 0, 'base' => 0, 'minimo' => 0, 'exento' => true];
+            return ['tipo' => $temporal && $RT > 0 ? $tmin : 0, 'cuota' => 0, 'lim' => $lim, 'RN' => $RT - $SS, 'red' => 0, 'gastos' => 0, 'base' => 0, 'minimo' => 0, 'exento' => true];
         }
         $RN = max(0, $RT - $SS);
-        $red = $RN <= 14852 ? 7302 : ($RN <= 17673.52 ? 7302 - 1.75 * ($RN - 14852) : ($RN <= 19747.5 ? 2364.34 - 1.14 * ($RN - 17673.52) : 0));
+        $Rd = $I['reduccion'];
+        $red = $RN <= $Rd['r1'] ? $Rd['max'] : ($RN <= $Rd['r2'] ? $Rd['max'] - $Rd['f1'] * ($RN - $Rd['r1']) : ($RN <= $Rd['r3'] ? $Rd['b2'] - $Rd['f2'] * ($RN - $Rd['r2']) : 0));
         $disc = $w['disc'] ?? 'Sin discapacidad';
         $gastos = 2000 + (! empty($M['movil']) ? 2000 : 0) + ($disc === '33 % a 64 %' ? 3500 : ($disc === '65 % o más' ? 7750 : 0));
         $base = max(0, $RN - $red - $gastos - self::n($M['pension'] ?? 0));
@@ -1221,14 +1239,14 @@ class Nomina
             $conv = (int) ($a['conv'] ?? 1) ?: 1;
             $minimo += $conv > 1 ? $v / $conv : $v;
         }
-        $cuota = max(0, self::escala($base) - self::escala($minimo));
+        $cuota = max(0, self::escala($base, $I['escala']) - self::escala($minimo, $I['escala']));
         $cuota = min($cuota, 0.43 * ($RT - $lim));
         if (! empty($M['vivienda']) && $RT < 33007.2) {
             $cuota = max(0, $cuota - $RT * 0.02);
         }
         $tipo = floor($cuota / $RT * 10000) / 100;
-        if ($temporal && $tipo < 2) {
-            $tipo = 2;
+        if ($temporal && $tipo < $tmin) {
+            $tipo = $tmin;
         }
 
         return compact('tipo', 'cuota', 'lim', 'RN', 'red', 'gastos', 'base', 'minimo') + ['exento' => false];
@@ -1468,7 +1486,8 @@ class Nomina
             $mio = $esDia ? self::n($d['salDia'] ?? 0) : (self::diario($d) ? self::n($d['salDia'] ?? 0) * 30 : self::n($d['salBase']));
             $l[] = [$mio + 0.001 >= (float) $cat['base'] * ($esDia ? 1 : self::n($d['jor']) / 100), 'Salario base igual o superior al del convenio para «'.$cat['cat'].'» ('.Formato::eur((float) $cat['base']).($esDia ? ' al día' : ' al mes a jornada completa').')'];
         }
-        $l[] = [$anual + 0.01 >= self::SMI_ANUAL * $jor / 100, 'Retribución anual igual o superior al SMI de 2026 proporcional a la jornada'];
+        $smiP = Normativa::get('smi', $hoy);
+        $l[] = [$anual + 0.01 >= (float) $smiP['valor']['anual'] * $jor / 100, 'Retribución anual igual o superior al SMI vigente ('.Formato::eur((float) $smiP['valor']['anual']).' al año) proporcional a la jornada'];
         $l[] = [$pruebaM <= $max, 'Periodo de prueba dentro del máximo legal ('.($max === 1 ? '1 mes' : $max.' meses').')'];
         $l[] = [! $tp || mb_strlen(trim((string) $d['horario'])) > 5, 'Distribución del horario indicada'];
         $l[] = [in_array($code, $P['hab'], true), 'Modalidad habilitada para la empresa'];

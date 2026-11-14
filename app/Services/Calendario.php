@@ -220,9 +220,19 @@ class Calendario
             $tr = [];
             foreach ($dias as $f) {
                 $n = (int) $a->desde->diffInDays(Carbon::parse($f)) + 1;
-                [$clave, $nom, $pct] = $cont === 'at' ? ['at', 'Prestación IT pago delegado (75 %, contingencia profesional)', 75]
-                    : ($n <= 3 ? ['c0', null, 0] : ($n <= 15 ? ['c1', 'Prestación IT a cargo de la empresa (60 %, días 4 a 15)', 60]
-                    : ($n <= 20 ? ['c2', 'Prestación IT pago delegado (60 %, días 16 a 20)', 60] : ['c3', 'Prestación IT pago delegado (75 %, desde el día 21)', 75])));
+                // Porcentajes de la tabla de parámetros normativos (vigentes en el día de baja)
+                $PI = Normativa::v('it', $f);
+                if ($cont === 'at') {
+                    $pa = (float) $PI['at'];
+                    [$clave, $nom, $pct] = ['at', 'Prestación IT pago delegado ('.Formato::num($pa, 0).' %, contingencia profesional)', $pa];
+                } else {
+                    [$clave, $nom, $pct] = ['c0', null, 0];
+                    foreach ($PI['cc'] as $j => [$d0, $d1, $pc, $quien]) {
+                        if ($n >= $d0 && ($d1 === null || $n <= $d1)) {
+                            [$clave, $nom, $pct] = ['c'.($j + 1), ($quien === 'empresa' ? 'Prestación IT a cargo de la empresa' : 'Prestación IT pago delegado').' ('.Formato::num((float) $pc, 0).' %, '.($d1 === null ? 'desde el día '.$d0 : 'días '.$d0.' a '.$d1).')', (float) $pc];
+                        }
+                    }
+                }
                 $mej = null;
                 foreach ((array) ($reglas[$cont] ?? []) as $t) {
                     if ($n >= (int) $t['desde'] && ($t['hasta'] === null || $n <= (int) $t['hasta']) && (empty($t['hosp']) || $a->hospitalizacion)) {
@@ -233,7 +243,7 @@ class Calendario
                 $tr[$clave.'|'.($mej ?? '-')]['dias']++;
                 $tr[$clave.'|'.($mej ?? '-')]['a'] = $n;
             }
-            $norma = 'Ley General de la Seguridad Social, arts. 169 a 173 (porcentajes generales del Régimen General)';
+            $norma = Normativa::cita('it', $a->desde->toDateString());
             foreach (array_values($tr) as $j => $t) {
                 $rango = 'días '.$t['de'].' a '.$t['a'].' de la baja';
                 if ($t['pct'] > 0) {

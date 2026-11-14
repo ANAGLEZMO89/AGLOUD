@@ -84,7 +84,8 @@ class LaboralPeriodoTest extends TestCase
         $txt = implode(' ', $n['baseExpl']);
         $this->assertStringContainsString('base mínima del grupo 10', $txt);
         $this->assertStringContainsString('21 días', $txt);
-        $this->assertStringContainsString('pendientes de contrastar', $txt);
+        $this->assertStringContainsString('Orden PJC/297/2026', $txt);
+        $this->assertStringContainsString('Contrastado con resúmenes', $txt);
     }
 
     public function test_convenio_sin_categorias_no_da_falsos_positivos(): void
