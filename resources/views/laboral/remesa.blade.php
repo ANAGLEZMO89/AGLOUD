@@ -9,6 +9,14 @@
 <div class="page" style="gap:16px">
   @include('laboral._cabecera')
   @include('laboral._meses', ['ruta' => 'laboral.remesa'])
+  @include('laboral._proceso', ['pasos' => [
+      'preparar' => ['aqui', 'líquidos de los recibos emitidos del mes'],
+      'fichero' => ['aqui', 'transferencias SEPA (pain.001) para la banca electrónica'],
+      'descargar' => ['aqui', 'el XML se descarga al generarlo'],
+      'presentar' => ['fuera', 'lo subes tú a la banca electrónica de la empresa'],
+      'respuesta' => ['fuera', 'la da el banco'],
+      'conciliar' => ['fuera', 'en Contabilidad › Conciliador bancario, con el extracto'],
+  ]])
   <form method="POST" action="{{ route('laboral.remesa.generar') }}" style="display:flex;flex-direction:column;gap:16px" data-lb-remesa>
     @csrf<input type="hidden" name="anio" value="{{ $anio }}"><input type="hidden" name="mes" value="{{ $mes }}">
     <div class="card">

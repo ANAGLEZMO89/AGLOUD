@@ -3,6 +3,14 @@
 @section('content')
 <div class="page" style="gap:16px">
   @include('laboral._cabecera')
+  @php $pendM = isset($porMes) ? collect($porMes)->flatMap(fn ($x, $mm) => collect($x['pend'])->map(fn ($p) => Nomina::MESES[$mm - 1].': '.$p))->all() : ($pend190 ?? []); @endphp
+  @include('laboral._proceso', ['pasos' => [
+      'preparar' => ['aqui', 'percepciones y retenciones de los recibos del año'],
+      'fichero' => ['no', 'el fichero oficial no se genera aquí; los importes se pasan al modelo en Fiscal o en la sede de la AEAT'],
+      'presentar' => ['fuera', 'en la sede electrónica de la AEAT'],
+      'respuesta' => ['fuera', 'el justificante lo da la AEAT'],
+  ]])
+  @if($pendM)<div class="note-amber"><b>Provisional:</b> hay recibos sin emitir que pueden cambiar las cifras: {{ implode(' · ', array_slice($pendM, 0, 12)) }}{{ count($pendM) > 12 ? ' …' : '' }}. Si rectificas una nómina de un periodo ya presentado, corresponde una declaración complementaria o sustitutiva.</div>@endif
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
     <select class="sel" style="width:auto;height:38px" data-nav aria-label="Año">@foreach(range(\App\Support\Plazos::hoy()->year, \App\Support\Plazos::hoy()->year - 4) as $y)<option value="{{ route('laboral.m190', ['anio' => $y]) }}" @selected($y === $anio)>Ejercicio {{ $y }}</option>@endforeach</select>
     <span style="font-size:13.5px;color:#3C3C3C;flex:1 1 300px">Resumen anual de retenciones del trabajo (clave A · empleados por cuenta ajena) a partir de las nóminas. Se presenta en enero en la Sede de la AEAT; aquí se prepara y se revisa.</span>

@@ -7,6 +7,14 @@
 @section('content')
 <div class="page" style="gap:16px">
   @include('laboral._cabecera')
+  @php $pendM = isset($porMes) ? collect($porMes)->flatMap(fn ($x, $mm) => collect($x['pend'])->map(fn ($p) => Nomina::MESES[$mm - 1].': '.$p))->all() : ($pend190 ?? []); @endphp
+  @include('laboral._proceso', ['pasos' => [
+      'preparar' => ['aqui', 'percepciones y retenciones de los recibos del trimestre'],
+      'fichero' => ['no', 'el fichero oficial no se genera aquí; los importes se pasan al modelo en Fiscal o en la sede de la AEAT'],
+      'presentar' => ['fuera', 'en la sede electrónica de la AEAT'],
+      'respuesta' => ['fuera', 'el justificante lo da la AEAT'],
+  ]])
+  @if($pendM)<div class="note-amber"><b>Provisional:</b> hay recibos sin emitir que pueden cambiar las cifras: {{ implode(' · ', array_slice($pendM, 0, 12)) }}{{ count($pendM) > 12 ? ' …' : '' }}. Si rectificas una nómina de un periodo ya presentado, corresponde una declaración complementaria o sustitutiva.</div>@endif
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
     <div class="chipbar" style="border-radius:11px">@foreach([1, 2, 3, 4] as $x)<a class="{{ $t === $x ? 'on' : '' }}" style="padding:7px 13px;border-radius:8px" href="{{ route('laboral.m111', ['anio' => $anio, 't' => $x]) }}">{{ $x }}T</a>@endforeach</div>
     <select class="sel" style="width:auto;height:38px" data-nav aria-label="Año">@foreach(range(\App\Support\Plazos::hoy()->year + 1, \App\Support\Plazos::hoy()->year - 4) as $y)<option value="{{ route('laboral.m111', ['anio' => $y, 't' => $t]) }}" @selected($y === $anio)>{{ $y }}</option>@endforeach</select>

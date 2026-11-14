@@ -16,6 +16,7 @@ use App\Services\Auditoria;
 use App\Services\ConvenioIA;
 use App\Services\Convenios;
 use App\Services\Nomina;
+use App\Services\Posteriores;
 use App\Support\ClasificadorDocumentos;
 use App\Support\Formato;
 use App\Support\PdfInfo;
@@ -52,21 +53,13 @@ class LaboralGestionController extends LaboralController
         }
         $b = $this->base($request, $c, 'ss-cra');
         $noms = array_values(array_filter($this->noms($c, $b['anio'], $b['mes'], $b['P']), fn ($x) => ! Nomina::esAutonomo($x['w'])));
-        $filas = [];
-        foreach ($noms as $x) {
-            foreach (Nomina::CRA as $k => $l) {
-                $v = (float) ($x['n'][$k] ?? 0);
-                if (abs($v) > 0.004) {
-                    $filas[] = ['w' => $x['w'], 'k' => $k, 'l' => $l, 'cod' => $b['P']['cra'][$k] ?? '', 'v' => $v];
-                }
-            }
-        }
+        $filas = Posteriores::cra($noms, $b['P']);
         if (in_array($request->query('exportar'), ['excel', 'csv'], true)) {
             return $this->csv($request->query('exportar'), 'cra-'.$b['anio'].'-'.str_pad((string) $b['mes'], 2, '0', STR_PAD_LEFT), 'CRA · Conceptos retributivos abonados · '.Nomina::MESES[$b['mes'] - 1].' '.$b['anio'],
                 ['NAF', 'Trabajador', 'Código CRA', 'Concepto', 'Importe'], array_map(fn ($f) => [$f['w']['naf'], $f['w']['nombre'], $f['cod'], $f['l'], Formato::num($f['v'])], $filas));
         }
 
-        return view('laboral.cra', $b + ['filas' => $filas, 'nTrab' => count($noms)]);
+        return view('laboral.cra', $b + ['filas' => $filas, 'nTrab' => count($noms), 'est' => Posteriores::estado($noms)]);
     }
 
     public function guardarCra(Request $request)
@@ -159,7 +152,9 @@ class LaboralGestionController extends LaboralController
         }
         $b = $this->base($request, $c, 'g-remesa');
 
-        return view('laboral.remesa', $b + ['noms' => $this->noms($c, $b['anio'], $b['mes'], $b['P']), 'bancos' => $c->seccion('bancos'),
+        $noms = $this->noms($c, $b['anio'], $b['mes'], $b['P']);
+
+        return view('laboral.remesa', $b + ['noms' => $noms, 'est' => Posteriores::estado($noms), 'bancos' => $c->seccion('bancos'),
             'ultima' => LaboralMes::where('cliente_id', $c->id)->where('anio', $b['anio'])->where('mes', $b['mes'])->first()?->remesa_at]);
     }
 
@@ -187,6 +182,10 @@ class LaboralGestionController extends LaboralController
         foreach ($this->noms($c, $anio, $mes, $P) as $x) {
             if (! in_array((int) $x['w']['id'], $sel, true)) {
                 continue;
+            }
+            // Solo se paga lo emitido: lo que está en borrador puede cambiar
+            if ($p = Posteriores::estado([$x])['pendientes']) {
+                return back()->withInput()->withErrors(['ficha' => 'Emite antes los recibos que vas a pagar: '.implode(', ', $p).'.']);
             }
             $wi = strtoupper(preg_replace('/\s/', '', (string) $x['w']['iban']));
             if (! Validacion::iban($wi)) {
@@ -813,12 +812,14 @@ class LaboralGestionController extends LaboralController
         $porMes = [];
         $porTrab = [];
         foreach ($meses as $m) {
-            $porMes[$m] = ['perc' => 0, 'ret' => 0, 'n' => 0];
+            $porMes[$m] = ['perc' => 0, 'ret' => 0, 'n' => 0, 'pend' => []];
             foreach ($plant as $w) {
                 if (! Nomina::activo($w, $anio, $m)) {
                     continue;
                 }
-                $n = $svc->recibosMes($w, $anio, $m, $inc, (float) $P['at'])['t'];
+                $rm = $svc->recibosMes($w, $anio, $m, $inc, (float) $P['at']);
+                $n = $rm['t'];
+                array_push($porMes[$m]['pend'], ...Posteriores::estado([['w' => $w] + $rm])['pendientes']);
                 $porMes[$m]['perc'] += $n['baseIrpf'];
                 $porMes[$m]['ret'] += $n['irpf'];
                 $porMes[$m]['n']++;
@@ -857,7 +858,8 @@ class LaboralGestionController extends LaboralController
             return $this->sinEmpresa();
         }
         $b = $this->base($request, $c, 'm-190');
-        [, $porTrab] = $this->anual($c, $b['anio'], range(1, 12), $b['P']);
+        [$pm190, $porTrab] = $this->anual($c, $b['anio'], range(1, 12), $b['P']);
+        $pend190 = collect($pm190)->flatMap(fn ($x, $mm) => collect($x['pend'])->map(fn ($p) => Nomina::MESES[$mm - 1].': '.$p))->all();
         if (in_array($request->query('exportar'), ['excel', 'csv'], true)) {
             return $this->csv($request->query('exportar'), 'modelo190-'.$b['anio'], 'Modelo 190 · resumen anual de retenciones del trabajo · '.$b['anio'],
                 ['NIF', 'Apellidos y nombre', 'Provincia', 'Clave', 'Percepción íntegra', 'Retenciones', 'Dietas exceptuadas', 'Gastos deducibles (SS)', 'Año de nacimiento', 'Situación familiar', 'NIF del cónyuge', 'Discapacidad', 'Contrato', 'Movilidad geográfica', 'Descendientes', 'Ascendientes'],
@@ -866,7 +868,7 @@ class LaboralGestionController extends LaboralController
                     ! empty($x['w']['m145']['movil']) ? 'Sí' : 'No', count($x['w']['m145']['hijos'] ?? []), count($x['w']['m145']['asc'] ?? [])], $porTrab));
         }
 
-        return view('laboral.m190', $b + ['porTrab' => $porTrab]);
+        return view('laboral.m190', $b + ['porTrab' => $porTrab, 'pend190' => $pend190]);
     }
 
     // -------------------------------------------------- parámetros de contrato

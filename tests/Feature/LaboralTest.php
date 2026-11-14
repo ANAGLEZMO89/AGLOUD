@@ -154,6 +154,10 @@ class LaboralTest extends TestCase
         $csv->assertOk();
         $this->assertStringContainsString('María López Ruiz', $csv->streamedContent());
 
+        // Solo se contabiliza lo emitido
+        $this->en()->post('/laboral/nominas/contabilizar', ['anio' => 2026, 'mes' => 11])->assertSessionHasErrors('ficha');
+        $this->assertSame(0, Asiento::where('origen', 'laboral')->count());
+        $this->en()->post(route('laboral.emitir.mes'), ['anio' => 2026, 'mes' => 11])->assertSessionHasNoErrors();
         $this->en()->post('/laboral/nominas/contabilizar', ['anio' => 2026, 'mes' => 11])->assertSessionHasNoErrors();
         $a = Asiento::where('origen', 'laboral')->firstOrFail();
         $this->assertSame('Nómina', $a->tipo);
@@ -248,7 +252,9 @@ class LaboralTest extends TestCase
         $this->assertSame(18, $afi['agr'][$t1->id]);
         $this->assertSame(30.0, (float) $afi['pp'][$t2->id]);
         $this->en()->get('/laboral/seguridad-social/agrario?anio=2026&mes=11')->assertSee('María López Ruiz')->assertDontSee('Juan López Ruiz');
-        // Remesa SEPA: el trabajador sin IBAN bloquea; con IBAN se genera el XML
+        // Remesa SEPA: solo lo emitido; el trabajador sin IBAN bloquea; con IBAN se genera el XML
+        $this->en()->post('/laboral/gestion/remesa', ['anio' => 2026, 'mes' => 11, 'cuenta' => 0, 'fecha' => '2026-11-30', 't' => [$t1->id]])->assertSessionHasErrors('ficha');
+        $this->en()->post(route('laboral.emitir.mes'), ['anio' => 2026, 'mes' => 11]);
         $this->en()->post('/laboral/gestion/remesa', ['anio' => 2026, 'mes' => 11, 'cuenta' => 0, 'fecha' => '2026-11-30', 't' => [$t2->id]])->assertSessionHasErrors('ficha');
         $r = $this->en()->post('/laboral/gestion/remesa', ['anio' => 2026, 'mes' => 11, 'cuenta' => 0, 'fecha' => '2026-11-30', 'concepto' => 'Nómina noviembre 2026', 't' => [$t1->id]]);
         $r->assertOk();

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\PerteneceACliente;
 use App\Models\Concerns\SoloDespacho;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** Nómina editada de un trabajador en un mes (borrador o emitida). */
 class NominaMes extends Model
@@ -23,5 +24,10 @@ class NominaMes extends Model
     public function emitida(): bool
     {
         return $this->estado === 'Emitida';
+    }
+
+    public function trabajador(): BelongsTo
+    {
+        return $this->belongsTo(Trabajador::class);
     }
 }

@@ -75,7 +75,7 @@ class Convenios
                 'nivel' => (string) $x->nivel, 'base' => $x->salario_base !== null ? (float) $x->salario_base : null, 'plus' => (float) ($plusPor[$x->id] ?? 0),
                 'unidad' => $x->unidad === 'dia' ? 'dia' : 'mes', 'art' => (string) $x->referencia])->values()->all(),
             'pluses' => $conceptos->reject(fn ($p) => $p->nombre === self::PLUS_CONVENIO)->map(fn ($p) => ['id' => $p->id, 'nombre' => $p->nombre, 'codigo' => (string) $p->codigo,
-                'unidad' => $p->unidad, 'tipo' => $p->calculo === 'porcentaje' ? 'porcentaje_base' : 'importe', 'calculo' => $p->calculo,
+                'unidad' => $p->unidad, 'tipo' => $p->calculo === 'porcentaje' ? 'porcentaje_base' : 'importe', 'calculo' => $p->calculo, 'cra' => (string) $p->cra,
                 'valor' => $p->valor !== null ? (float) $p->valor : 0.0, 'auto' => (bool) $p->automatico, 'cotiza' => $p->cotiza !== 'no', 'tributa' => $p->tributa !== 'no', 'art' => (string) $p->referencia,
                 'naturaleza' => $p->naturaleza, 'prop_jornada' => (bool) $p->prop_jornada, 'prop_periodo' => (bool) $p->prop_periodo, 'en_pagas' => (bool) $p->en_pagas, 'limite' => (string) $p->limite,
                 'cotizaModo' => $p->cotiza, 'tributaModo' => $p->tributa, 'formula' => (string) $p->formula, 'redondeo' => $p->redondeo,

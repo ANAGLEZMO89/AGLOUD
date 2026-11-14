@@ -145,7 +145,7 @@ class ParametrosController extends Controller
     private function datosContabilidad(Request $r): array
     {
         $claves = array_keys(Parametros::defecto('contabilidad'));
-        $opcionales = ['especie', 'dietas', 'acr_irpf_esp', 'anticipos', 'embargos', 'ded_esp', 'otras_ded'];
+        $opcionales = ['especie', 'dietas', 'acr_irpf_esp', 'anticipos', 'embargos', 'ded_esp', 'otras_ded', 'it_delegada'];
         $r->validate(collect($claves)->mapWithKeys(fn ($k) => [$k => [in_array($k, $opcionales, true) ? 'nullable' : 'required', 'regex:/^\d{3,9}$/']])->all(), ['*.regex' => 'Las cuentas tienen de 3 a 9 cifras.']);
         $out = [];
         foreach ($claves as $k) {

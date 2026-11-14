@@ -62,7 +62,7 @@ class Parametros
                 'iva_repercutido' => '477', 'iva_soportado' => '472', 'ret_soportada' => '473', 'ret_practicada' => '4751', 'suplidos' => '555', 'banco' => '572', 'caja' => '570',
                 // Cuentas laborales (asiento de nómina); vacías = se eligen al hacer el asiento
                 'sueldos' => '640', 'especie' => '', 'dietas' => '', 'indemn' => '641', 'acr_irpf_nom' => '4751', 'acr_irpf_esp' => '', 'rem_pend' => '465',
-                'ss_acr' => '476', 'ss_emp' => '642', 'anticipos' => '', 'embargos' => '', 'ded_esp' => '', 'otras_ded' => ''],
+                'ss_acr' => '476', 'ss_emp' => '642', 'anticipos' => '', 'embargos' => '', 'ded_esp' => '', 'otras_ded' => '', 'it_delegada' => '471'],
             'fiscal' => ['aviso_dias' => 10, 'umbral_347' => 3005.06, 'pct_130' => 20, 'pct_202_402' => 18, 'pct_202_403' => 17],
             default => [],
         };

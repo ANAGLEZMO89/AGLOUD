@@ -6,6 +6,8 @@ use App\Models\Cliente;
 use App\Models\Documento;
 use App\Models\User;
 use App\Services\AlmacenDocumentos;
+use App\Services\Calendario;
+use App\Services\Nomina;
 use App\Support\Parametros;
 use App\Support\Plazos;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -19,6 +21,10 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Cachés estáticas del motor de nóminas: en producción mueren con cada petición; entre pruebas, no
+        Nomina::olvidarGuardadas();
+        Nomina::olvidarReglas();
+        Calendario::olvidar();
         $this->docsDir = sys_get_temp_dir().'/agcloud-test-'.getmypid().'-'.uniqid();
         config(['agcloud.docs_path' => $this->docsDir]);
         Parametros::limpiar();

@@ -4,6 +4,12 @@
 <div class="page" style="gap:16px">
   @include('laboral._cabecera')
   @include('laboral._meses', ['ruta' => 'laboral.cra'])
+  @include('laboral._proceso', ['pasos' => [
+      'preparar' => ['aqui', 'conceptos de los recibos del mes con su código CRA (el del concepto del convenio o, si no tiene, el de esta tabla)'],
+      'fichero' => ['no', 'AG Cloud no genera el fichero CRA oficial; el Excel o CSV es de apoyo'],
+      'presentar' => ['fuera', 'en el Sistema RED'],
+      'respuesta' => ['fuera', 'la da el Sistema RED'],
+  ]])
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
     <span style="font-size:13.5px;color:#3C3C3C;flex:1 1 300px">Conceptos retributivos abonados en las nóminas de {{ mb_strtolower($mesL) }} ({{ $nTrab }} trabajadores). Se comunican a la TGSS por el Sistema RED.</span>
     @if($redOk)<a class="btn" href="{{ Nomina::URL['red'] }}" target="_blank" rel="noopener">Abrir el Sistema RED ↗</a>@endif
@@ -23,7 +29,7 @@
     <div style="min-width:700px">
       <div class="lb-grid lb-cra lb-head"><span>NAF</span><span>Trabajador</span><span>Código CRA</span><span>Concepto</span><span class="r">Importe</span></div>
       @forelse($filas as $f)
-        <div class="lb-grid lb-cra lb-row" style="cursor:default"><span class="mono12">{{ $f['w']['naf'] }}</span><span class="ell" style="font-weight:600">{{ $f['w']['nombre'] }}</span><span>@if($f['cod'])<span class="lb-code">{{ $f['cod'] }}</span>@else<span style="font-size:12px;color:#8A1C1C">Sin código</span>@endif</span><span class="ell">{{ $f['l'] }}</span><span class="r m">{{ Formato::eur($f['v']) }}</span></div>
+        <div class="lb-grid lb-cra lb-row" style="cursor:default"><span class="mono12">{{ $f['w']['naf'] }}</span><span class="ell" style="font-weight:600">{{ $f['w']['nombre'] }}</span><span>@if($f['cod'])<span class="lb-code">{{ $f['cod'] }}</span>@else<span style="font-size:12px;color:#8A1C1C">Sin código</span>@endif</span><span class="ell">{{ $f['l'] }}{{ $f['propio'] ? ' · código del convenio' : '' }}{{ $f['provisional'] ? ' · provisional' : '' }}</span><span class="r m">{{ Formato::eur($f['v']) }}</span></div>
       @empty
         <div style="padding:24px 0;text-align:center;font-size:14px;color:#6A6A65">No hay nóminas este mes.</div>
       @endforelse

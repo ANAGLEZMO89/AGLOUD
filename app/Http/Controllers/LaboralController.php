@@ -16,6 +16,7 @@ use App\Services\Auditoria;
 use App\Services\Calendario;
 use App\Services\Contabilidad;
 use App\Services\Nomina;
+use App\Services\Posteriores;
 use App\Support\Formato;
 use App\Support\Parametros;
 use App\Support\Plazos;
@@ -597,7 +598,9 @@ class LaboralController extends Controller
             $L[] = ['id' => $nueva || ! ($x['id'] ?? '') ? 'm'.count($L).Str::lower(Str::random(3)) : (string) $x['id'], 'cod' => $cod, 'concepto' => mb_substr(trim($x['concepto']), 0, 120),
                 'cant' => $cant, 'precio' => $precio, 'importe' => $imp, 'clase' => $clase,
                 'cobro' => $clase === 'extra' ? (($x['cobro'] ?? '') === 'prorrateada' ? 'prorrateada' : 'en_su_mes') : null,
-                'origen' => $origen, 'conv' => $a['conv'] ?? null, 'activo' => $nueva || ! empty($x['activo']), 'fijo' => $fijo];
+                'origen' => $origen, 'conv' => $a['conv'] ?? null, 'activo' => $nueva || ! empty($x['activo']), 'fijo' => $fijo]
+                // Lo que no se edita en pantalla viene del cálculo: código CRA, IT en pago delegado y explicación
+                + ($a && ($a['concepto'] ?? '') === trim($x['concepto']) ? array_filter(['cra' => $a['cra'] ?? '', 'delegado' => ! empty($a['delegado']), 'expl' => $a['expl'] ?? '', 'regla' => $a['regla'] ?? '']) : []);
         };
         foreach ((array) $request->input('l', []) as $x) {
             if (is_array($x) && trim((string) ($x['concepto'] ?? '')) !== '') {
@@ -837,36 +840,45 @@ class LaboralController extends Controller
         if (! $noms) {
             return $volver->withErrors(['ficha' => 'No hay trabajadores en alta este mes.']);
         }
-        $m = LaboralMes::firstOrNew(['cliente_id' => $c->id, 'anio' => $anio, 'mes' => $mes]);
-        if ($m->asiento_id && Asiento::find($m->asiento_id)) {
-            return $volver->withErrors(['ficha' => 'Las nóminas de este mes ya están contabilizadas.']);
+        // Solo se contabiliza lo emitido: la foto del cálculo de cada recibo (las rectificaciones se hacen antes, reabriendo y volviendo a emitir)
+        $est = Posteriores::estado($noms);
+        if ($est['pendientes']) {
+            return $volver->withErrors(['ficha' => 'Para contabilizar, emite antes todos los recibos del mes. Faltan: '.implode(', ', $est['pendientes']).'.']);
         }
-        $s = fn ($f) => round(array_sum(array_map($f, $noms)), 2);
-        $dev = $s(fn ($x) => $x['t']['dev']);
-        $sse = $s(fn ($x) => $x['t']['ssE']);
-        $sst = $s(fn ($x) => $x['t']['ssT']);
-        $irpf = $s(fn ($x) => $x['t']['irpf']);
-        $ant = $s(fn ($x) => $x['t']['ant']);
-        $emb = $s(fn ($x) => $x['t']['emb']);
-        $liq = round($dev - $sst - $irpf - $ant - $emb, 2);
+        $T = Nomina::sumar(array_map(fn ($x) => $x['t'], $noms));
         $cp = Parametros::get('contabilidad');
         $cta = fn ($k, $def) => Contabilidad::a9((string) (($cp[$k] ?? '') ?: $def));
-        $lineas = [[$cta('sueldos', '640'), $dev, 0], [$cta('ss_emp', '642'), $sse, 0], [$cta('ss_acr', '476'), 0, round($sse + $sst, 2)], [$cta('acr_irpf_nom', '4751'), 0, $irpf]];
-        if ($ant) {
-            $lineas[] = [$cta('anticipos', '460'), 0, $ant];
-        }
-        if ($emb) {
-            $lineas[] = [$cta('embargos', '460'), 0, $emb];
-        }
-        $lineas[] = [$cta('rem_pend', '465'), 0, $liq];
+        $r2 = fn ($v) => round((float) $v, 2);
+        $exe = $r2($T['exe']);
+        $deleg = $r2($T['deleg']);
+        $otras = $r2($T['ded'] - $T['ant'] - $T['emb']);
+        // Debe: sueldos (sin la IT en pago delegado ni las indemnizaciones), indemnizaciones, IT en pago delegado (a compensar con la Seguridad Social) y cuota de empresa
+        // Haber: Seguridad Social acreedora, retenciones, anticipos, embargos, otras deducciones, especie y líquido pendiente de pago
+        $lineas = array_values(array_filter([
+            [$cta('sueldos', '640'), $r2($T['dev'] - $deleg - $exe - $T['esp']), 0], [$cta('especie', '640'), $r2($T['esp']), 0], [$cta('indemn', '641'), $exe, 0], [$cta('it_delegada', '471'), $deleg, 0], [$cta('ss_emp', '642'), $r2($T['ssE']), 0],
+            [$cta('ss_acr', '476'), 0, $r2($T['ssE'] + $T['ssT'])], [$cta('acr_irpf_nom', '4751'), 0, $r2($T['irpf'])], [$cta('anticipos', '460'), 0, $r2($T['ant'])],
+            [$cta('embargos', '460'), 0, $r2($T['emb'])], [$cta('otras_ded', '555'), 0, $otras], [$cta('ded_esp', '755'), 0, $r2($T['esp'])], [$cta('rem_pend', '465'), 0, $r2($T['liq'])],
+        ], fn ($l) => abs($l[1]) >= 0.005 || abs($l[2]) >= 0.005));
         $mesL = mb_strtolower(Nomina::MESES[$mes - 1]);
         try {
-            $m->save();
-            $a = app(Contabilidad::class)->asentar($c, Carbon::create($anio, $mes, 1)->endOfMonth()->toDateString(), 'Nóminas '.$mesL.' '.$anio, $lineas, 'Nómina', 'laboral', $m->id, $request->user()->id);
+            // Bloqueo del mes: dos peticiones a la vez no crean dos asientos
+            $a = DB::transaction(function () use ($c, $anio, $mes, $lineas, $mesL, $request) {
+                $m = LaboralMes::firstOrCreate(['cliente_id' => $c->id, 'anio' => $anio, 'mes' => $mes]);
+                $m = LaboralMes::whereKey($m->id)->lockForUpdate()->first();
+                if ($m->asiento_id && Asiento::find($m->asiento_id)) {
+                    return null;
+                }
+                $a = app(Contabilidad::class)->asentar($c, Carbon::create($anio, $mes, 1)->endOfMonth()->toDateString(), 'Nóminas '.$mesL.' '.$anio, $lineas, 'Nómina', 'laboral', $m->id, $request->user()->id);
+                $m->update(['asiento_id' => $a->id]);
+
+                return $a;
+            });
         } catch (InvalidArgumentException $e) {
             return $volver->withErrors(['ficha' => $e->getMessage()]);
         }
-        $m->update(['asiento_id' => $a->id]);
+        if (! $a) {
+            return $volver->withErrors(['ficha' => 'Las nóminas de este mes ya están contabilizadas.']);
+        }
         Auditoria::registrar('laboral.contabilizar', 'Nóminas de '.$mesL.' '.$anio.' contabilizadas (asiento '.$a->numero.')', $a, $c->id);
 
         return $volver->with('ok', 'Asiento de nóminas de '.$mesL.' '.$anio.' creado en contabilidad (nº '.$a->numero.').');
@@ -881,7 +893,9 @@ class LaboralController extends Controller
         }
         $b = $this->base($request, $c, 'ss-cret');
         // Los trabajadores del RETA no van a la liquidación del Régimen General
-        $noms = array_values(array_filter($this->nomina->mes($c, $b['anio'], $b['mes'], null, null, (float) $b['P']['at']), fn ($x) => ! Nomina::esAutonomo($x['w'])));
+        $todas = $this->nomina->mes($c, $b['anio'], $b['mes'], null, null, (float) $b['P']['at']);
+        $noms = array_values(array_filter($todas, fn ($x) => ! Nomina::esAutonomo($x['w'])));
+        $ss = Posteriores::seguros($noms);
         $mesRow = LaboralMes::where('cliente_id', $c->id)->where('anio', $b['anio'])->where('mes', $b['mes'])->first();
         $ini = Carbon::create($b['anio'], $b['mes'], 1);
         $plazo = $ini->copy()->addMonthNoOverflow()->endOfMonth();
@@ -889,11 +903,12 @@ class LaboralController extends Controller
         $st = $mesRow?->ss_confirmada_at ? ['Confirmada', '#E6F6A8', '#2E3A00'] : ($ini->copy()->endOfMonth()->lt($hoy) ? ['Pendiente', '#FCEBCB', '#6E4300'] : ['Borrador', '#ECECE7', '#3C3C3C']);
         if (in_array($request->query('exportar'), ['excel', 'csv'], true)) {
             return $this->csv($request->query('exportar'), 'rnt-'.$b['anio'].'-'.str_pad((string) $b['mes'], 2, '0', STR_PAD_LEFT), 'Relación nominal de trabajadores (RNT) · '.Nomina::MESES[$b['mes'] - 1].' '.$b['anio'],
-                ['NAF', 'Trabajador', 'Contrato', 'Base CC', 'Cuota total'],
-                array_map(fn ($x) => [$x['w']['naf'], $x['w']['nombre'], Nomina::codigo($x['w']['contrato']), Formato::num($x['n']['base']), Formato::num($x['n']['ssE'] + $x['n']['ssT'])], $noms));
+                ['NAF', 'Trabajador', 'Contrato', 'Base CC', 'Base AT y EP', 'Cuota total', 'IT pago delegado a compensar', 'Provisional'],
+                array_map(fn ($f) => [$f['w']['naf'], $f['w']['nombre'], Nomina::codigo($f['w']['contrato']), Formato::num($f['base']), Formato::num($f['baseAT']), Formato::num($f['ssE'] + $f['ssT']), Formato::num($f['deleg']), $f['provisional'] ? 'Sí' : 'No'], $ss['filas']));
         }
 
-        return view('laboral.seguros', $b + ['noms' => $noms, 'st' => $st, 'plazo' => $plazo, 'confirmada' => (bool) $mesRow?->ss_confirmada_at,
+        return view('laboral.seguros', $b + ['noms' => $noms, 'ss' => $ss, 'est' => Posteriores::estado($noms), 'st' => $st, 'plazo' => $plazo, 'confirmada' => (bool) $mesRow?->ss_confirmada_at,
+            'confirmadaAt' => $mesRow?->ss_confirmada_at, 'cambiados' => Posteriores::cambiadosDesde($c->id, $b['anio'], $b['mes'], $mesRow?->ss_confirmada_at),
             'puedeConfirmar' => ! $mesRow?->ss_confirmada_at && $ini->lte($hoy) && $noms]);
     }
 
@@ -926,9 +941,9 @@ class LaboralController extends Controller
             return $volver->withErrors(['ficha' => 'Configura la conexión con el Sistema RED en Parámetros de laboral.']);
         }
         LaboralMes::updateOrCreate(['cliente_id' => $c->id, 'anio' => $anio, 'mes' => $mes], ['ss_confirmada_at' => now()]);
-        Auditoria::registrar('laboral.sld', 'Liquidación de '.Nomina::MESES[$mes - 1].' '.$anio.' confirmada en el SLD', null, $c->id);
+        Auditoria::registrar('laboral.sld', 'Liquidación de '.Nomina::MESES[$mes - 1].' '.$anio.' marcada como confirmada en el SLD por '.$request->user()->name.' (lo declara el usuario; AG Cloud no se conecta)', null, $c->id);
 
-        return $volver->with('ok', 'Liquidación de '.Nomina::MESES[$mes - 1].' '.$anio.' confirmada en el SLD para el CCC '.($P['cccs'][0] ?? '—').'.');
+        return $volver->with('ok', 'Anotado: la liquidación de '.Nomina::MESES[$mes - 1].' '.$anio.' se ha confirmado en el Sistema RED (lo has hecho tú en la sede; AG Cloud no envía nada ni recibe la respuesta).');
     }
 
     // ---------------------------------------------------------- altas y bajas

@@ -71,7 +71,8 @@ class Nomina
     public const INCIDENCIAS = ['hx' => 'Horas extraordinarias (€)', 'otros' => 'Otros devengos salariales (€)', 'dietas' => 'Dietas (€)', 'km' => 'Kilometraje (€)', 'anticipo' => 'Anticipos (€)', 'embargo' => 'Embargos (€)'];
 
     /** Conceptos retributivos abonados (CRA): concepto de la nómina => etiqueta. El código de la tabla CRA de la TGSS se asigna en la pantalla CRA. */
-    public const CRA = ['sb' => 'Salario base', 'pl' => 'Complementos salariales', 'extra' => 'Pagas extraordinarias', 'pror' => 'Prorrata de pagas extraordinarias', 'hx' => 'Horas extraordinarias', 'otr' => 'Otros devengos salariales', 'die' => 'Dietas', 'km' => 'Plus de distancia y kilometraje'];
+    public const CRA = ['sb' => 'Salario base', 'pl' => 'Complementos salariales', 'extra' => 'Pagas extraordinarias', 'pror' => 'Prorrata de pagas extraordinarias', 'hx' => 'Horas extraordinarias', 'otr' => 'Otros devengos salariales', 'die' => 'Dietas', 'km' => 'Plus de distancia y kilometraje',
+        'it' => 'Prestación y mejora de IT', 'esp' => 'Retribución en especie', 'ind' => 'Indemnizaciones y suplidos exentos'];
 
     /** Texto por defecto del cuerpo del contrato. **negrita** y marcadores {así} */
     public const PLANTILLA_CONTRATO = "**Primera.** El trabajador prestará sus servicios como {categoria} en el centro de trabajo {centro}.\n\n**Segunda.** {duracion}\n\n**Tercera.** La jornada será de {horas} horas semanales con la siguiente distribución: {horario}. Se llevará registro diario de la jornada.\n\n**Cuarta.** El trabajador percibirá una retribución bruta anual de {retribucion} distribuida en {pagas} pagas, conforme a {convenio}.\n\n**Quinta.** Se establece un periodo de prueba de {prueba} (art. 14 ET).\n\n**Sexta.** Las vacaciones serán de {vacaciones} días naturales por año trabajado.\n\n**Séptima.** En lo no previsto se estará a lo dispuesto en {convenio}, en el Estatuto de los Trabajadores y demás normativa aplicable.";
@@ -430,7 +431,7 @@ class Nomina
                 $ctx['c_'.strtoupper($p['codigo'])] = $imp;
             }
             $regla = 'Convenio'.($ver ? ' · '.$ver : '').' · '.$p['nombre'].($p['art'] ?? '' ? ' · '.$p['art'] : '');
-            $base = ['cod' => '06', 'cant' => $cant, 'precio' => $cant !== null ? $unit->redondear(4)->float() : null, 'origen' => 'convenio', 'conv' => null, 'regla' => $regla];
+            $base = ['cod' => '06', 'cant' => $cant, 'precio' => $cant !== null ? $unit->redondear(4)->float() : null, 'origen' => 'convenio', 'conv' => null, 'regla' => $regla, 'cra' => (string) ($p['cra'] ?? '')];
             $lims = self::partirLimite($p, $imp, $cant ?? $pdias);
             foreach ($lims as $k => [$parte, $clase, $suf]) {
                 $L[] = $base + ['id' => 'cp'.$i.($k ? 'x' : ''), 'concepto' => $p['nombre'].$suf, 'importe' => $parte->float(), 'clase' => $clase, 'expl' => $expl.($suf ? ' · '.trim($suf, ' ()') : '')];
@@ -915,12 +916,13 @@ class Nomina
         }
         $ded = round(array_sum(array_map(fn ($l) => (float) $l['importe'], $D)), 2);
         $ant = array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($D, fn ($l) => ($l['id'] ?? '') === 'ant')));
-        $emb = $ded - $ant;
+        // Embargos: los de la ficha (con referencia) y el importe de embargo de las variables del mes; el resto son otras deducciones
+        $emb = round(array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($D, fn ($l) => ! empty($l['ref']) || ($l['id'] ?? '') === 'emb'))), 2);
 
         $baseExpl ??= [];
 
         return compact('baseExpl', 'sb', 'pl', 'extra', 'prorB', 'hx', 'otr', 'die', 'km', 'ant', 'emb', 'dev', 'base', 'baseAT', 'T', 'E', 'ssT', 'ip', 'baseIrpf', 'irpf', 'tmp', 'pror', 'desT', 'esp', 'trib', 'exe', 'recibo')
-            + ['mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded - $esp, 2), 'ssE' => round(array_sum($E), 2), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
+            + ['deleg' => round($sum(fn ($l) => ! empty($l['delegado'])), 2), 'mensual' => $sb + $pl, 'liq' => round($dev - $ssT - $irpf - $ded - $esp, 2), 'ssE' => round(array_sum($E), 2), 'lineas' => $L, 'deducciones' => $D, 'ded' => $ded];
     }
 
     /** Parte embargable de un salario neto mensual según la escala del art. 607 LEC (el SMI es inembargable) */
@@ -1338,7 +1340,7 @@ class Nomina
     public static function sumar(array $ns): array
     {
         $t = [];
-        foreach (['dev', 'ssT', 'ssE', 'irpf', 'liq', 'baseIrpf', 'ded', 'ant', 'emb', 'die', 'km', 'base', 'baseAT', 'hx', 'esp', 'exe'] as $k) {
+        foreach (['dev', 'ssT', 'ssE', 'irpf', 'liq', 'baseIrpf', 'ded', 'ant', 'emb', 'die', 'km', 'base', 'baseAT', 'hx', 'esp', 'exe', 'deleg'] as $k) {
             $t[$k] = round(array_sum(array_map(fn ($n) => (float) ($n[$k] ?? 0), $ns)), 2);
         }
 

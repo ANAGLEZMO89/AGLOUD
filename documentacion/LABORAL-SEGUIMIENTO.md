@@ -112,8 +112,19 @@ Pendiente de criterio jurídico (avisado en la nómina): devengo de las pagas du
 
 Pruebas: `tests/Feature/ConvenioIATest.php` (5; una nueva con estados, contradicciones, PDF escaneado, corrección manual, destino y procedencia).
 
+## 4 sexies. Fase 8 · Procesos posteriores (hecha)
+
+- **Fuente única: lo emitido** (`App\Services\Posteriores`). Seguros sociales, CRA, remesa, asiento y modelos 111 y 190 toman la foto del cálculo de cada recibo emitido; lo no emitido aparece como **provisional** y se nombra. Una rectificación (reabrir con motivo y volver a emitir) cambia la foto y con ella todos los procesos.
+- **Asiento**: solo con todos los recibos del mes emitidos y bloqueando el mes (dos peticiones a la vez no crean dos asientos). Cuentas: 640 sueldos (sin la IT en pago delegado ni las indemnizaciones), cuenta de especie configurable, 641 indemnizaciones, **471 IT en pago delegado** (a compensar con la Seguridad Social), 642, 476 (cuotas de empresa y trabajador), 4751, 460 anticipos, embargos, **otras deducciones (555 por defecto)**, **especie en el haber (755 por defecto)** y 465 líquido. Antes la especie y las deducciones fijas descuadraban o se mezclaban con los embargos. Con el asiento hecho no se puede reabrir ni cambiar el mes.
+- **Seguros sociales**: suman la nómina, el **finiquito** y los salarios de tramitación del mes (antes solo la nómina); la paga extra en recibo aparte no (ya cotiza con la prorrata) y los **atrasos se listan aparte por mes de devengo** para su liquidación complementaria. Muestra la **IT en pago delegado a compensar** y lo que queda a ingresar. Si después de anotar la liquidación como confirmada se emiten o rectifican recibos, avisa para regularizar. El botón pasa a «Anotar que está confirmada en el SLD»: AG Cloud no se conecta ni recibe respuesta.
+- **CRA**: por línea; usa el **código CRA del concepto del convenio** y, si no tiene, el de la tabla de la empresa (ahora también para IT, especie e indemnizaciones).
+- **Remesa SEPA**: solo paga recibos emitidos.
+- **Modelos 111 y 190**: avisan de los recibos sin emitir y de que rectificar un periodo presentado exige complementaria o sustitutiva. El 111 de Fiscal sale de la contabilidad (cuenta 4751), que ahora solo recoge lo emitido.
+- **Estado real de cada proceso** en su pantalla: preparar datos, generar fichero, descargar, presentar, respuesta oficial y conciliar, diciendo qué hace AG Cloud y qué se hace en la sede o en el banco. No se envía nada a la AEAT, la TGSS, el SEPE ni la DEHú.
+
+Pruebas: `tests/Feature/PosterioresTest.php` (4) y `LaboralTest` actualizado (contabilizar y remesa exigen emitir).
+
 ## 5. Plan por fases (pendiente)
-8. **Procesos posteriores**: CRA, cotización, 111/190 y asiento coherentes con rectificaciones.
 9. **Verificación** completa con los 18 casos de prueba pedidos.
 
 ## 6. Parámetros normativos pendientes de verificar

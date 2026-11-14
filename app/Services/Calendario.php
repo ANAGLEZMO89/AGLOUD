@@ -240,7 +240,7 @@ class Calendario
                     $pd = $br->por($t['pct'])->entre(100);
                     $imp = $pd->por($t['dias'])->redondear();
                     $L[] = ['id' => 'it'.$k.'p'.$j, 'cod' => '40', 'concepto' => $t['nom'], 'cant' => $t['dias'], 'precio' => $pd->redondear(4)->float(), 'importe' => $imp->float(),
-                        'clase' => 'tributa', 'origen' => 'calendario', 'conv' => null, 'regla' => $norma,
+                        'clase' => 'tributa', 'origen' => 'calendario', 'conv' => null, 'regla' => $norma, 'delegado' => str_contains($t['nom'], 'pago delegado'),
                         'expl' => $t['dias'].' días × '.$br->txt(4).' € × '.$t['pct'].' % = '.$imp->txt().' € · '.$rango.' · '.$brTxt];
                 }
                 if ($t['mej'] !== null && $t['mej'] > $t['pct']) {
