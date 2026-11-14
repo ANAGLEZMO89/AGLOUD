@@ -8,6 +8,7 @@ use App\Models\LaboralConfig;
 use App\Models\LaboralMes;
 use App\Models\LaboralMovimiento;
 use App\Models\NominaMes;
+use App\Models\ParametroNormativo;
 use App\Models\Trabajador;
 use App\Support\Dec;
 use App\Support\Formato;
@@ -812,6 +813,8 @@ class Nomina
         $fPar = (string) ($doc['desde'] ?? '') ?: now()->toDateString();
         $C = Normativa::v('cotizacion', $fPar);
         $Bmax = (float) $C['base_max'];
+        // Tipo de AT y EP: tarifa por ocupación (cuadro II) o por CNAE (cuadro I); si no está cargada, el indicado a mano en la empresa
+        [$at, $atTxt] = self::tipoAT($w, $at, $fPar);
         $recibo = $doc['recibo'] ?? 'Nómina';
         $L = array_values(array_filter($doc['lineas'] ?? [], fn ($l) => ($l['activo'] ?? true) && (float) ($l['importe'] ?? 0) != 0));
         $sum = fn ($f) => array_sum(array_map(fn ($l) => (float) $l['importe'], array_filter($L, $f)));
@@ -859,6 +862,7 @@ class Nomina
             }
             $exceso = max(0, $bruta - $maxB);
             $baseExpl[] = Normativa::cita('cotizacion', $fPar).'.';
+            $baseExpl[] = 'AT y EP: '.$atTxt.'.';
         } else {
             // Recibos aparte: la paga extra ya cotiza con la prorrata mensual; atrasos, finiquito y salarios de tramitación
             // cotizan por sus conceptos salariales (en la liquidación complementaria o en la del mes de la baja)
@@ -894,6 +898,11 @@ class Nomina
             $E['sol'] = $sol * $TP['cc'][1] / $cc;
             $baseExpl[] = 'Cotización adicional de solidaridad sobre '.Formato::eur($exceso).' que exceden de la base máxima: '.implode(' + ', $partes).' = '.Formato::eur(round($sol, 2))
                 .' (empresa '.Formato::eur(round($E['sol'], 2)).', trabajador '.Formato::eur(round($T['sol'], 2)).').';
+        }
+        // Contratos de duración determinada inferiores a 30 días: cotización adicional a cargo de la empresa al terminar el contrato
+        if ($recibo === 'Nómina' && ($t30 = self::temporalCorto($w, $doc)) && ! empty($C['temporal_corto'])) {
+            $E['temp30'] = (float) $C['temporal_corto'];
+            $baseExpl[] = 'Contrato de duración determinada de '.$t30.' días que termina en este periodo: cotización adicional de '.Formato::eur((float) $C['temporal_corto']).' a cargo de la empresa (art. 151 LGSS y Orden de cotización).';
         }
         if (self::esAutonomo($w) || $recibo === 'Extra') {
             // RETA: no cotiza al Régimen General por esta retribución. Paga extra en recibo aparte: cotizada con la prorrata.
@@ -1124,6 +1133,79 @@ class Nomina
         return [$L, $av];
     }
 
+    /**
+     * Días de un contrato de duración determinada inferior a 30 días que termina dentro del periodo de la nómina (o null).
+     * No se aplica a sustitución (410, 510), formación en alternancia (421), Sistema Especial Agrario ni empleados de hogar.
+     */
+    public static function temporalCorto(array $w, array $doc): ?int
+    {
+        $cod = self::codigo((string) ($w['contrato'] ?? ''));
+        if (! self::temporal($w) || in_array($cod, ['410', '510', '421'], true) || ! empty($w['agrario']) || ($w['relEsp'] ?? 'Común') === 'Empleados de hogar') {
+            return null;
+        }
+        $fin = (string) (($w['baja'] ?? '') ?: ($w['fin'] ?? ''));
+        $alta = (string) ($w['alta'] ?? '');
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}/', $fin) || ! preg_match('/^\d{4}-\d{2}-\d{2}/', $alta)) {
+            return null;
+        }
+        $fin = substr($fin, 0, 10);
+        if (($doc['desde'] ?? '') !== '' && ($fin < $doc['desde'] || $fin > ($doc['hasta'] ?? $fin))) {
+            return null;
+        }
+        $dias = (int) Carbon::parse(substr($alta, 0, 10))->diffInDays(Carbon::parse($fin)) + 1;
+
+        return $dias < 30 ? $dias : null;
+    }
+
+    private static array $atCache = [];
+
+    /** Tipo de AT y EP del trabajador: [porcentaje, explicación] */
+    public static function tipoAT(array $w, float $manual, string $fecha): array
+    {
+        $T = Normativa::get('atep', $fecha);
+        $tab = $T['valor'];
+        $pct = fn ($x) => round((float) $x[1] + (float) $x[2], 2);
+        $ref = ' · tarifa de primas ('.(ParametroNormativo::ESTADOS[$T['estado']] ?? $T['estado']).')';
+        // Ocupación del cuadro II («a · Personal en trabajos exclusivos de oficina»…)
+        if (preg_match('/^([a-z])\s·/u', (string) ($w['epig'] ?? ''), $m) && ! empty($tab['ocupaciones'][$m[1]])) {
+            $o = $tab['ocupaciones'][$m[1]];
+
+            return [$pct($o), Formato::num($pct($o)).' % (IT '.Formato::num((float) $o[1]).' + IMS '.Formato::num((float) $o[2]).'), cuadro II, ocupación «'.$m[1].'» '.$o[0].$ref];
+        }
+        // CNAE del CCC del trabajador o de la actividad principal de la empresa
+        $cid = (int) ($w['_cid'] ?? 0);
+        self::$atCache[$cid] ??= (function () use ($cid) {
+            $c = $cid ? Cliente::find($cid) : null;
+            if (! $c) {
+                return [[], '', []];
+            }
+            $cfg = LaboralConfig::where('cliente_id', $cid)->first()?->datos ?? [];
+            $acts = collect($c->seccion('acts'));
+            $princ = $acts->firstWhere('principal', true) ?? $acts->first();
+
+            return [collect($cfg['cccsDet'] ?? [])->keyBy(fn ($x) => preg_replace('/\D/', '', (string) $x['ccc']))->all(), preg_replace('/\D/', '', (string) ($princ['cnae'] ?? '')), $cfg];
+        })();
+        [$cccs, $cnaeEmp] = self::$atCache[$cid];
+        $det = $cccs[preg_replace('/\D/', '', (string) ($w['ccc'] ?? ''))] ?? null;
+        $cnae = preg_replace('/\D/', '', (string) ($det['cnae'] ?? '')) ?: $cnaeEmp;
+        for ($n = strlen($cnae); $n >= 2; $n--) {
+            $k = substr($cnae, 0, $n);
+            if (! empty($tab['cnae'][$k])) {
+                $x = $tab['cnae'][$k];
+
+                return [$pct($x), Formato::num($pct($x)).' % (IT '.Formato::num((float) $x[1]).' + IMS '.Formato::num((float) $x[2]).'), cuadro I, CNAE '.$k.' '.$x[0].$ref];
+            }
+        }
+        $man = is_numeric(str_replace(',', '.', (string) ($det['at'] ?? ''))) ? (float) str_replace(',', '.', (string) $det['at']) : $manual;
+
+        return [$man, Formato::num($man).' % indicado a mano'.($cnae ? ' (el CNAE '.$cnae.' no está en la tarifa cargada en Parámetros normativos)' : ' (sin CNAE en la empresa: indícalo en el CCC o en la actividad principal)')];
+    }
+
+    public static function olvidarAT(): void
+    {
+        self::$atCache = [];
+    }
+
     /** Avisos del calendario del mes: cambios de condiciones dentro del mes, propuestas sin revisar y ausencias que afectan a la cotización */
     private static function avisosCalendario(array $w, array $cal): array
     {
@@ -1213,36 +1295,49 @@ class Nomina
         $RN = max(0, $RT - $SS);
         $Rd = $I['reduccion'];
         $red = $RN <= $Rd['r1'] ? $Rd['max'] : ($RN <= $Rd['r2'] ? $Rd['max'] - $Rd['f1'] * ($RN - $Rd['r1']) : ($RN <= $Rd['r3'] ? $Rd['b2'] - $Rd['f2'] * ($RN - $Rd['r2']) : 0));
+        // Mínimos personales y familiares, gastos deducibles y límites: tabla de parámetros del año (algoritmo de la AEAT)
+        $Mi = $I['minimos'];
+        $Ga = $I['gastos'];
         $disc = $w['disc'] ?? 'Sin discapacidad';
-        $gastos = 2000 + (! empty($M['movil']) ? 2000 : 0) + ($disc === '33 % a 64 %' ? 3500 : ($disc === '65 % o más' ? 7750 : 0));
+        $d65 = $disc === '65 % o más';
+        $d33 = $disc === '33 % a 64 %';
+        // Movilidad reducida o ayuda de terceros (33 % a 64 %): gastos y asistencia como con el 65 %
+        $movRed = ! empty($M['movRed']);
+        $gastos = $Ga['general'] + (! empty($M['movil']) ? $Ga['movilidad'] : 0) + ($d65 || ($d33 && $movRed) ? $Ga['disc65'] : ($d33 ? $Ga['disc33'] : 0));
         $base = max(0, $RN - $red - $gastos - self::n($M['pension'] ?? 0));
         $edad = ! empty($w['fnac']) ? $anio - (int) substr($w['fnac'], 0, 4) : 40;
-        $minimo = 5550 + ($edad >= 65 ? 1150 : 0) + ($edad >= 75 ? 1400 : 0) + ($disc === '33 % a 64 %' ? 3000 : ($disc === '65 % o más' ? 12000 : 0));
+        $minimo = $Mi['personal'] + ($edad >= 65 ? $Mi['edad65'] : 0) + ($edad >= 75 ? $Mi['edad75'] : 0)
+            + ($d65 ? $Mi['disc65'] : ($d33 ? $Mi['disc33'] : 0)) + ($d65 || ($d33 && $movRed) ? $Mi['asistencia'] : 0);
         usort($hijos, fn ($a, $b) => (int) $a['anio'] <=> (int) $b['anio']);
         foreach ($hijos as $i => $h) {
-            $v = [2400, 2700, 4000][$i] ?? 4500;
+            $v = $Mi['desc'][$i] ?? end($Mi['desc']);
             if ($anio - (int) $h['anio'] < 3) {
-                $v += 2800;
+                $v += $Mi['desc3'];
             }
             $hd = $h['disc'] ?? 'No';
-            $v += $hd === '33 % a 64 %' ? 3000 : ($hd === '65 % o más' ? 9000 : 0);
+            $v += $hd === '33 % a 64 %' ? $Mi['disc33'] : ($hd === '65 % o más' ? $Mi['disc65'] : 0);
+            $v += $hd === '65 % o más' || ($hd === '33 % a 64 %' && ! empty($h['mov'])) ? $Mi['asistencia'] : 0;
             $minimo += ($h['entero'] ?? true) === false ? $v / 2 : $v;
         }
         foreach ($asc as $a) {
             $e = $anio - (int) $a['anio'];
             $ad = $a['disc'] ?? 'No';
-            $v = ($e >= 65 || $ad !== 'No') ? 1150 : 0;
+            $v = ($e >= 65 || $ad !== 'No') ? $Mi['asc65'] : 0;
             if ($e >= 75) {
-                $v += 1400;
+                $v += $Mi['asc75'];
             }
-            $v += $ad === '33 % a 64 %' ? 3000 : ($ad === '65 % o más' ? 9000 : 0);
+            $v += $ad === '33 % a 64 %' ? $Mi['disc33'] : ($ad === '65 % o más' ? $Mi['disc65'] : 0);
+            $v += $ad === '65 % o más' || ($ad === '33 % a 64 %' && ! empty($a['mov'])) ? $Mi['asistencia'] : 0;
             $conv = (int) ($a['conv'] ?? 1) ?: 1;
             $minimo += $conv > 1 ? $v / $conv : $v;
         }
         $cuota = max(0, self::escala($base, $I['escala']) - self::escala($minimo, $I['escala']));
-        $cuota = min($cuota, 0.43 * ($RT - $lim));
-        if (! empty($M['vivienda']) && $RT < 33007.2) {
-            $cuota = max(0, $cuota - $RT * 0.02);
+        // Límite del 43 % del exceso sobre el límite excluyente (art. 85.3 RIRPF), solo hasta la retribución que fija el algoritmo
+        if ($RT <= $I['limite43']['hasta']) {
+            $cuota = min($cuota, $I['limite43']['pct'] / 100 * ($RT - $lim));
+        }
+        if (! empty($M['vivienda']) && $RT < $I['vivienda']['limite']) {
+            $cuota = max(0, $cuota - $RT * $I['vivienda']['pct'] / 100);
         }
         $tipo = floor($cuota / $RT * 10000) / 100;
         if ($temporal && $tipo < $tmin) {

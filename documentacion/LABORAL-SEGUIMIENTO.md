@@ -160,7 +160,12 @@ Batería completa: 183 pruebas, 2.120 comprobaciones, todas correctas. Cada caso
 
 Pruebas: `tests/Feature/NormativaTest.php` (3).
 
-Sin soportar todavía: cotización adicional de los contratos de duración determinada inferiores a 30 días (art. 151 LGSS), tipos de AT y EP por CNAE (se indica el tipo de la empresa a mano) y mínimos personales y familiares del IRPF como parámetro (siguen en el código con los importes de la LIRPF, arts. 57 a 61).
+Ampliación (migración `2026_11_22_000300`):
+- **Contratos de duración determinada inferiores a 30 días**: cotización adicional de **33,62 €** a cargo de la empresa al terminar el contrato (art. 28 de la Orden PJC/297/2026; art. 151 LGSS), en la nómina del mes en que termina. No se aplica a sustitución (410, 510), formación en alternancia (421), Sistema Especial Agrario ni empleados de hogar.
+- **Tipo de AT y EP por la tarifa de primas** (DA 61.ª LGSS, CNAE-2025): primero la ocupación del trabajador (cuadro II, campo «Ocupación a efectos de AT y EP» de la ficha), después el CNAE de su CCC o de la actividad principal de la empresa (código exacto y, si no está, su grupo o división) y, si no está en la tarifa, el tipo indicado a mano, con aviso. La tarifa se carga pegando las filas del BOE en Parámetros normativos (comprueba que IT + IMS sume el total; las filas que no entiende las dice y no guarda nada). **Está vacía**: no se ha podido descargar del BOE desde el entorno de desarrollo y no se inventan cifras.
+- **IRPF**: mínimos personales y familiares, gastos deducibles, límite del 43 % (solo hasta 35.200 € de retribución) y préstamo de vivienda pasan a la tabla y **se cotejan con el algoritmo oficial de la AEAT para 2026** (descargado de su sede): el bloque de IRPF queda **«Verificado en la fuente oficial»**. Corregido: faltaba el mínimo por **asistencia (3.000 €)** de descendientes y ascendientes con discapacidad del 65 % o más (o del 33 % al 64 % con movilidad reducida), y la movilidad reducida del trabajador (gastos de 7.750 € y asistencia). La ficha › IRPF tiene las casillas nuevas.
+
+Pruebas: `NormativaTest` (6).
 
 ## 7. Alcance no soportado (hoy)
 

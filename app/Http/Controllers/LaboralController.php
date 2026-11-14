@@ -184,9 +184,10 @@ class LaboralController extends Controller
             'movil' => ! empty($m['movil']), 'vivienda' => ! empty($m['vivienda']), 'pension' => mb_substr((string) ($m['pension'] ?? ''), 0, 20), 'alimentos' => mb_substr((string) ($m['alimentos'] ?? ''), 0, 20),
             'fecha' => (string) ($m['fecha'] ?? ''),
             'hijos' => collect((array) ($m['hijos'] ?? []))->filter(fn ($h) => is_array($h) && trim((string) ($h['anio'] ?? '')) !== '')
-                ->map(fn ($h) => ['anio' => substr(preg_replace('/\D/', '', (string) $h['anio']), 0, 4), 'entero' => ! empty($h['entero']), 'disc' => in_array($h['disc'] ?? 'No', $disc, true) ? $h['disc'] : 'No'])->values()->all(),
+                ->map(fn ($h) => ['anio' => substr(preg_replace('/\D/', '', (string) $h['anio']), 0, 4), 'entero' => ! empty($h['entero']), 'disc' => in_array($h['disc'] ?? 'No', $disc, true) ? $h['disc'] : 'No', 'mov' => ! empty($h['mov'])])->values()->all(),
             'asc' => collect((array) ($m['asc'] ?? []))->filter(fn ($h) => is_array($h) && trim((string) ($h['anio'] ?? '')) !== '')
-                ->map(fn ($h) => ['anio' => substr(preg_replace('/\D/', '', (string) $h['anio']), 0, 4), 'conv' => max(1, (int) ($h['conv'] ?? 1)), 'disc' => in_array($h['disc'] ?? 'No', $disc, true) ? $h['disc'] : 'No'])->values()->all()];
+                ->map(fn ($h) => ['anio' => substr(preg_replace('/\D/', '', (string) $h['anio']), 0, 4), 'conv' => max(1, (int) ($h['conv'] ?? 1)), 'disc' => in_array($h['disc'] ?? 'No', $disc, true) ? $h['disc'] : 'No', 'mov' => ! empty($h['mov'])])->values()->all(),
+            'movRed' => ! empty($m['movRed'])];
 
         return $o;
     }

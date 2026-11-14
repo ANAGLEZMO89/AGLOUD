@@ -12,9 +12,9 @@ class ParametroNormativo extends Model
 
     protected $guarded = ['id'];
 
-    public const CLAVES = ['cotizacion' => 'Bases y tipos de cotización', 'smi' => 'Salario mínimo interprofesional', 'irpf' => 'Retenciones de IRPF', 'it' => 'Prestación de incapacidad temporal'];
+    public const CLAVES = ['cotizacion' => 'Bases y tipos de cotización', 'smi' => 'Salario mínimo interprofesional', 'irpf' => 'Retenciones de IRPF', 'it' => 'Prestación de incapacidad temporal', 'atep' => 'Tarifa de accidentes de trabajo y enfermedades profesionales'];
 
-    public const ESTADOS = ['pendiente' => 'Pendiente de verificar', 'resumen' => 'Contrastado con resúmenes', 'verificado' => 'Verificado en el BOE'];
+    public const ESTADOS = ['pendiente' => 'Pendiente de verificar', 'resumen' => 'Contrastado con resúmenes', 'verificado' => 'Verificado en la fuente oficial'];
 
     protected function casts(): array
     {

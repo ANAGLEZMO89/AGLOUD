@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AlmacenDocumentos;
 use App\Services\Calendario;
 use App\Services\Nomina;
+use App\Services\Normativa;
 use App\Support\Parametros;
 use App\Support\Plazos;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -25,6 +26,8 @@ abstract class TestCase extends BaseTestCase
         Nomina::olvidarGuardadas();
         Nomina::olvidarReglas();
         Calendario::olvidar();
+        Normativa::olvidar();
+        Nomina::olvidarAT();
         $this->docsDir = sys_get_temp_dir().'/agcloud-test-'.getmypid().'-'.uniqid();
         config(['agcloud.docs_path' => $this->docsDir]);
         Parametros::limpiar();
