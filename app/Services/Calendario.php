@@ -147,9 +147,15 @@ class Calendario
      * Fracción del salario mensual que paga la empresa: mes completo = 1; si no, días / 30 (mes comercial),
      * descontando a razón de 1/30 por cada día de IT o de ausencia no retribuida. Devuelve [fracción, días que se pagan de 30].
      */
-    public static function fraccionPagada(array $cal): array
+    public static function fraccionPagada(array $cal, ?int $n30 = null): array
     {
         $desc = $cal['noRetrib'] + $cal['it'];
+        if ($n30 !== null) {
+            // Tramo de un mes con cambio de condiciones: sus treintavos (el último tramo completa el mes comercial de 30 días)
+            $n = max(0, $n30 - $desc);
+
+            return [$n / 30, $n];
+        }
         $base = $cal['alta'] >= $cal['diasMes'] ? 30 : $cal['alta'];
         if (! $desc) {
             return [$cal['alta'] >= $cal['diasMes'] ? 1.0 : max(0, min(1, $cal['alta'] / 30)), $base];

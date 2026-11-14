@@ -102,9 +102,11 @@ class LaboralTest extends TestCase
         // Anual: 365 días + 2 pagas de 30 días
         $this->assertEqualsWithDelta(50.25 * 365 + 2 * 50.25 * 30, Nomina::anual($t->datos), 0.01);
         $w = Nomina::rellenar(['id' => 9, 'contrato' => Nomina::CONTRATOS[0], 'grupo' => 10, 'salTipo' => 'Diario', 'salDia' => 50.25, 'pagas' => 14, 'jor' => 100, 'alta' => '2026-01-01'], $this->a);
-        // Febrero de 2026: 28 días; junio (30 días) con paga extra de 30 días
+        // Febrero de 2026: 28 días; junio (30 días) con paga extra de 30 días, proporcional a lo devengado
+        // (alta el 01/01/2026: 181 de los 365 días del devengo, del 01/07/2025 al 30/06/2026); diciembre, entera
         $this->assertEqualsWithDelta(28 * 50.25, Nomina::calcular($w, 2, [], 0)['dev'], 0.001);
-        $this->assertEqualsWithDelta(30 * 50.25 + 30 * 50.25, Nomina::calcular($w, 6, [], 0)['dev'], 0.001);
+        $this->assertEqualsWithDelta(30 * 50.25 + round(30 * 50.25 * 181 / 365, 2), Nomina::calcular($w, 6, [], 0)['dev'], 0.001);
+        $this->assertEqualsWithDelta(31 * 50.25 + 30 * 50.25, Nomina::calcular($w, 12, [], 0)['dev'], 0.001);
         // Base mínima diaria del grupo 10 por los días del mes
         $bajo = array_merge($w, ['salDia' => 30]);
         $this->assertEqualsWithDelta(47.48 * 31, Nomina::calcular($bajo, 3, [], 0)['base'], 0.001);
@@ -120,7 +122,9 @@ class LaboralTest extends TestCase
         $this->assertEqualsWithDelta(150, $n['irpf'], 0.001);
         $this->assertEqualsWithDelta(1500 - $n['ssT'] - 150, $n['liq'], 0.001);
         // Paga extra en junio y diciembre; base mínima del grupo
-        $this->assertEqualsWithDelta(3000, Nomina::calcular($w, 6, [], 0)['dev'], 0.001);
+        // (la de verano, proporcional a 181 de 365 días por el alta del 01/01/2026; la de Navidad, entera)
+        $this->assertEqualsWithDelta(1500 + round(1500 * 181 / 365, 2), Nomina::calcular($w, 6, [], 0)['dev'], 0.001);
+        $this->assertEqualsWithDelta(3000, Nomina::calcular($w, 12, [], 0)['dev'], 0.001);
         $w2 = array_merge($w, ['salBase' => 900, 'grupo' => 1]);
         $this->assertEqualsWithDelta(1989.30, Nomina::calcular($w2, 3, [], 0)['base'], 0.001);
         // Temporal: desempleo 1,60 % y mínimo de retención del 2 %
@@ -350,8 +354,13 @@ class LaboralTest extends TestCase
         $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', $base + ['accion' => 'emitir'])->assertRedirect();
         $this->assertSame('Emitida', $g->fresh()->estado);
         $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', $base + ['accion' => 'guardar'])->assertSessionHasErrors('ficha');
-        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'reabrir'])->assertRedirect();
+        // Reabrir exige motivo y deja la versión emitida en el historial
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'reabrir'])->assertSessionHasErrors('ficha');
+        $this->assertSame('Emitida', $g->fresh()->estado);
+        $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'reabrir', 'motivo' => 'Error en el plus festivo'])->assertRedirect();
         $this->assertSame('Borrador', $g->fresh()->estado);
+        $this->assertSame('Error en el plus festivo', $g->fresh()->datos['historial'][0]['motivo']);
+        $this->en()->get($url)->assertOk()->assertSee('Historial de rectificaciones (1)');
         $this->en()->post('/laboral/nominas/'.$t->id.'/guardar', ['anio' => 2026, 'mes' => 11, 'accion' => 'recalcular'])->assertRedirect();
         $this->assertSame(0, NominaMes::count());
         $this->en()->get($url)->assertOk()->assertSee('Calculada con la ficha y la tabla del convenio');

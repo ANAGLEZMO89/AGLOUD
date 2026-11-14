@@ -57,7 +57,7 @@
       <button class="btn" type="submit" name="accion" value="guardar">Guardar</button>
       <button class="btn lime" type="submit" name="accion" value="emitir" @if($nAv) data-confirm-btn="Este recibo tiene {{ $nAv }} {{ $nAv === 1 ? 'concepto que no es' : 'conceptos que no son' }} por convenio. ¿Emitirlo igualmente?" @endif>Emitir {{ $rq === 'Nómina' ? 'nómina' : 'recibo' }}</button>
     @endunless
-    @if($emitida && ! $asiento)<button class="btn white" type="submit" name="accion" value="reabrir">Reabrir</button>@endif
+    @if($emitida && ! $asiento)<input class="inp" name="motivo" required minlength="5" maxlength="255" placeholder="Motivo de la rectificación" aria-label="Motivo de la rectificación" style="max-width:260px"><button class="btn white" type="submit" name="accion" value="reabrir">Reabrir para rectificar</button>@endif
     <a class="btn white" href="{{ route('laboral.recibo', [$w['id']] + $q + ($rq !== 'Nómina' ? ['recibo' => $rq] : []) + ['imprimir' => 1]) }}" target="_blank" rel="noopener">Vista previa / PDF</a>
     <a class="btn white" href="{{ route('laboral.ficha', [$w['id'], 'sec' => 'irpf']) }}">IRPF y mod. 145</a>
     @if($g && ! $bloq)<button class="btn soft" type="submit" name="accion" value="recalcular" data-confirm-btn="Se descartan los cambios de este recibo y se vuelve a calcular desde el convenio y la ficha. ¿Seguir?">Recalcular desde convenio</button>@endif
@@ -225,6 +225,34 @@
     <div><span>Total (A + C)</span><b>{{ $E($n['dev'] + $n['ssE']) }}</b></div>
   </div>
   @if($n['esp'] > 0)<span style="font-size:12px;color:#6A6A65">La retribución en especie ({{ Formato::eur($n['esp']) }}) cotiza y tributa, pero no se cobra: se descuenta del líquido.</span>@endif
+  @if(! empty($ed['prev']))
+    @php
+      $pv = $ed['prev']['n'];
+      $limpia = fn ($c) => trim(preg_replace(['/ \(del \d+ al \d+\)$/', '/ \(\d+ días\)/'], '', $c));
+      $porC = fn ($ls) => collect($ls)->groupBy(fn ($l) => $limpia($l['concepto']))->map(fn ($g) => round($g->sum(fn ($l) => (float) $l['importe']), 2));
+      $a1 = $porC($pv['lineas'] ?? []); $a2 = $porC($n['lineas'] ?? []);
+      $difC = $a1->keys()->merge($a2->keys())->unique()->map(fn ($k) => [$k, $a1[$k] ?? 0, $a2[$k] ?? 0])->filter(fn ($x) => abs($x[2] - $x[1]) >= 0.01)->values();
+    @endphp
+    <details class="ne-expl" style="font-size:12.5px;color:#3C3C3C;padding:6px 2px"><summary style="cursor:pointer;font-weight:600">Diferencias con {{ $ed['prev']['txt'] }}</summary>
+      <div style="display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:4px 12px;margin-top:6px">
+        <b>Concepto</b><b class="r">{{ $ed['prev']['txt'] }}</b><b class="r">Este mes</b><b class="r">Diferencia</b>
+        @foreach([['Total devengado', $pv['dev'], $n['dev']], ['Base de cotización', $pv['base'], $n['base']], ['SS trabajador', $pv['ssT'], $n['ssT']], ['IRPF', $pv['irpf'], $n['irpf']], ['Líquido', $pv['liq'], $n['liq']]] as [$l, $x, $y])
+          <span style="font-weight:600">{{ $l }}</span><span class="mono12" style="text-align:right">{{ $E($x) }}</span><span class="mono12" style="text-align:right">{{ $E($y) }}</span><span class="mono12" style="text-align:right;color:{{ $y - $x < -0.005 ? '#8A1C1C' : ($y - $x > 0.005 ? '#2E3A00' : '#6A6A65') }}">{{ $y - $x > 0.005 ? '+' : '' }}{{ $E($y - $x) }}</span>
+        @endforeach
+        @foreach($difC as [$k, $x, $y])
+          <span>{{ $k }}</span><span class="mono12" style="text-align:right">{{ $E($x) }}</span><span class="mono12" style="text-align:right">{{ $E($y) }}</span><span class="mono12" style="text-align:right">{{ $y - $x > 0.005 ? '+' : '' }}{{ $E($y - $x) }}</span>
+        @endforeach
+      </div>
+      @if($difC->isEmpty())<span>Mismos conceptos e importes que {{ $ed['prev']['txt'] }}.</span>@endif
+    </details>
+  @endif
+  @if(! empty($doc['historial']))
+    <details class="ne-expl" style="font-size:12.5px;color:#3C3C3C;padding:6px 2px" open><summary style="cursor:pointer;font-weight:600">Historial de rectificaciones ({{ count($doc['historial']) }})</summary>
+      @foreach(array_reverse($doc['historial']) as $h)
+        <span style="display:block;padding:4px 0;border-top:1px solid #F1F1EC">Emitida {{ $h['emitida_at'] ? Formato::fechaHora(\Illuminate\Support\Carbon::parse($h['emitida_at'])) : '' }} · reabierta {{ Formato::fechaHora(\Illuminate\Support\Carbon::parse($h['reabierta_at'])) }} por {{ $h['usuario'] }}: «{{ $h['motivo'] }}» · devengado {{ Formato::eur((float) $h['dev']) }} · líquido {{ Formato::eur((float) $h['liq']) }}</span>
+      @endforeach
+    </details>
+  @endif
   @unless($g)<span style="font-size:12px;color:#6A6A65">{{ $rq === 'Nómina' ? 'Nómina calculada automáticamente desde el convenio, la ficha y las variables del mes.' : 'Conceptos propuestos para este recibo.' }} Si cambias algo y pulsas «Guardar», queda como borrador propio de este mes.</span>@endunless
 </form>
 <iframe class="lb-recibo" title="Recibo" src="{{ route('laboral.recibo', [$w['id']] + $q + ($rq !== 'Nómina' ? ['recibo' => $rq] : [])) }}"></iframe>

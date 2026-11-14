@@ -170,6 +170,21 @@
             {{ $fb('diasExtra', 'Días de salario por paga extra', 'num', false, 'Lo que diga el convenio (habitual: 30)', Nomina::diario($d) ? ['data-lb-dia' => '1'] : ['data-lb-dia' => '1', 'hidden' => 'hidden']) }}
             {{ $fb('plus', 'Complementos salariales mensuales (€)', 'num') }}{{ $fb('pagas', 'Número de pagas', ['14', '12']) }}{{ $fb('prorr', 'Prorratear las pagas extraordinarias', 'bool') }}
           </div></div>
+          @if(! empty($d['concFijos']))
+          <div class="card" style="gap:6px">
+            <input type="hidden" name="_fijos" value="1">
+            <span style="font-size:15px;font-weight:700">Conceptos fijos de todos los meses</span>
+            <span style="font-size:12.5px;color:#6A6A65">Se marcan como «Fijo» en el borrador de la nómina. Aquí puedes limitar desde y hasta qué mes se aplican o quitarlos.</span>
+            @foreach($d['concFijos'] as $i => $f)
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding-top:6px;border-top:1px solid #F1F1EC">
+                <span style="flex:1 1 220px;font-size:13.5px"><b>{{ $f['concepto'] }}</b> · {{ Formato::eur((float) $f['importe']) }}</span>
+                <label class="lbl-s">Desde (mes)<input class="inp" type="month" name="fijos[{{ $i }}][desde]" value="{{ $f['desde'] ?? '' }}"></label>
+                <label class="lbl-s">Hasta (mes)<input class="inp" type="month" name="fijos[{{ $i }}][hasta]" value="{{ $f['hasta'] ?? '' }}"></label>
+                <label class="chk"><input type="checkbox" name="fijos[{{ $i }}][quitar]" value="1"> Quitar</label>
+              </div>
+            @endforeach
+          </div>
+          @endif
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
             <div style="background:#0B0B0B;color:#F4F4F0;border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:#BDBDB7">Bruto anual</span><span style="font:700 26px/1.1 var(--mono);color:#C8F031" data-lb-anual>{{ Formato::eur($anual) }}</span><span style="font-size:12.5px">{{ $d['pagas'] }} pagas{{ $d['prorr'] ? ' · extras prorrateadas' : '' }}{{ $catC ? ' · convenio: '.Formato::eur((float) $catC['base']).' de salario base' : '' }}</span></div>
             <div class="card" style="gap:6px;padding:16px 18px"><span style="font-size:13px;color:#6A6A65">Devengo mensual ordinario</span><span style="font:600 24px/1.1 var(--mono)" data-lb-mensual>{{ Formato::eur((Nomina::diario($d) ? Nomina::n($d['salDia']) * 30 : Nomina::n($d['salBase'])) + Nomina::n($d['plus']) + ($d['prorr'] && (int) $d['pagas'] === 14 ? Nomina::pagaExtra($d) * 2 / 12 : 0)) }}</span><span style="font-size:12.5px;color:#3C3C3C">Salario base y complementos{{ Nomina::diario($d) ? ' (mes de 30 días)' : '' }}</span></div>

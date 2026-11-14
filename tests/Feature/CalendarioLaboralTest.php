@@ -219,11 +219,14 @@ class CalendarioLaboralTest extends TestCase
         Calendario::olvidar();
         $this->assertSame(1500.0, collect($this->doc($t, 11)['lineas'])->firstWhere('id', 'sb')['importe']);
         $this->assertSame(1800.0, collect($this->doc($t, 12)['lineas'])->firstWhere('id', 'sb')['importe']);
-        // Un cambio a mitad de mes se avisa
+        // Un cambio a mitad de mes: dos tramos, cada uno con sus condiciones (mes de 30 días: 14 + 16)
         TrabajadorCondicion::create(['cliente_id' => $this->a->id, 'trabajador_id' => $t->id, 'efectos_desde' => '2026-10-15', 'datos' => ['salTipo' => 'Mensual', 'salBase' => 1600, 'jor' => 100]]);
         $d = $this->doc($t, 10);
-        $this->assertSame(1500.0, collect($d['lineas'])->firstWhere('id', 'sb')['importe']);
-        $this->assertTrue(collect($d['avisosCal'])->contains(fn ($x) => str_contains($x[1], '15/10/2026')));
+        $sb = collect($d['lineas'])->where('id', 'sb')->values();
+        $this->assertSame(['Salario base (14 días) (del 1 al 14)', 'Salario base (16 días) (del 15 al 31)'], $sb->pluck('concepto')->all());
+        $this->assertSame([700.0, 853.33], $sb->pluck('importe')->all());
+        $this->assertSame(2, $d['tramos']);
+        $this->assertStringContainsString('2 tramos', $d['avisosCal'][0][1]);
     }
 
     public function test_propuesta_de_horas_desde_los_fichajes_con_revision(): void

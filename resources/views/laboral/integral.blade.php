@@ -28,7 +28,11 @@
         <div class="no-print" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
           @if($asiento)
             <span class="btn" style="background:#E6F6A8;color:#2E3A00">✓ Nóminas contabilizadas · asiento {{ $asiento->numero }}</span>
-          @elseif($noms)
+          @endif
+          @if(! $asiento && $noms)
+            <form method="POST" action="{{ route('laboral.emitir.mes') }}" data-un-envio>@csrf<input type="hidden" name="anio" value="{{ $anio }}"><input type="hidden" name="mes" value="{{ $mes }}"><button class="btn lime" type="submit" data-confirm-btn="Se emitirán las nóminas de {{ mb_strtolower(Nomina::MESES[$mes - 1]) }} que no estén emitidas (las que tengan errores se quedan sin emitir). ¿Seguir?">Emitir las nóminas del mes</button></form>
+          @endif
+          @if(! $asiento && $noms)
             <form method="POST" action="{{ route('laboral.contabilizar') }}">@csrf<input type="hidden" name="anio" value="{{ $anio }}"><input type="hidden" name="mes" value="{{ $mes }}"><button class="btn" type="submit">Contabilizar nóminas de {{ mb_strtolower(Nomina::MESES[$mes - 1]) }}</button></form>
           @endif
           <a class="btn white" href="{{ route('fiscal.modelo', ['codigo' => 111, 'anio' => $anio, 'per' => (int) ceil($mes / 3).'T']) }}">Ver modelo 111 del trimestre →</a>
@@ -39,7 +43,7 @@
             <div class="lb-grid lb-nom lb-head"><span>Trabajador</span><span class="r">Devengado</span><span class="r">Base CC</span><span class="r">SS trabajador</span><span class="r">IRPF</span><span class="r">Líquido</span><span class="r">SS empresa</span></div>
             @foreach($noms as $x)
               <a class="lb-grid lb-nom lb-row" href="{{ route('laboral.integral', $q + ['t' => $x['w']['id']]) }}">
-                <span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="font-weight:600">{{ $x['w']['nombre'] }}</span><span style="font-size:12px;color:#6A6A65">{{ $x['w']['cat'] }}</span></span>
+                <span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="font-weight:600">{{ $x['w']['nombre'] }}</span><span style="font-size:12px;color:#6A6A65">{{ $x['w']['cat'] }} · {{ ($x['t']['estado'] ?? null) === 'Emitida' ? 'emitida' : (($x['t']['estado'] ?? null) ? 'borrador' : 'sin guardar') }}</span></span>
                 <span class="r m">{{ $E($x['t']['dev']) }}</span><span class="r m">{{ $E($x['t']['base']) }}</span><span class="r m">{{ $E($x['t']['ssT']) }}</span><span class="r m">{{ $E($x['t']['irpf']) }}</span><span class="r m" style="font-weight:700">{{ $E($x['t']['liq']) }}</span><span class="r m">{{ $E($x['t']['ssE']) }}</span>
               </a>
             @endforeach

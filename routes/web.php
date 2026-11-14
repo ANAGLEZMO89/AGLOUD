@@ -183,6 +183,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/trabajador/{trabajador}/documento/{tipo}', [LaboralController::class, 'documento'])->whereNumber('trabajador')->name('documento');
             Route::get('/nominas', [LaboralController::class, 'integral'])->name('integral');
             Route::post('/nominas/contabilizar', [LaboralController::class, 'contabilizar'])->name('contabilizar');
+            Route::post('/nominas/emitir-mes', [LaboralController::class, 'emitirMes'])->name('emitir.mes');
             Route::post('/nominas/{trabajador}/variables', [LaboralController::class, 'incidencias'])->whereNumber('trabajador')->name('incidencias');
             Route::post('/nominas/{trabajador}/guardar', [LaboralController::class, 'guardarNomina'])->whereNumber('trabajador')->name('nomina.guardar');
             Route::post('/nominas/{trabajador}/ausencia', [LaboralCalendarioController::class, 'ausencia'])->whereNumber('trabajador')->name('cal.ausencia');

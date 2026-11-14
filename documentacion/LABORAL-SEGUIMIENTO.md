@@ -84,8 +84,23 @@ Pruebas: `tests/Feature/CalendarioLaboralTest.php` (10). Casos de la lista cubie
 
 Pendiente de verificar en fuente oficial: porcentajes y tramos de la prestación de IT (generales del Régimen General) y tratamiento de cotización de permisos no retribuidos.
 
+## 4 quater. Fase 6 · Cálculo y emisión protegida (hecha)
+
+- **Tramos dentro del mes**: si las condiciones cambian a mitad de mes, cada tramo se calcula con las suyas (salario, plus, antigüedad, pluses del convenio, IT, horas) y las líneas llevan «(del 1 al 14)». Mes comercial de 30 días: con el mes completo, el último tramo completa hasta 30 (14 + 16 en octubre). Pagas en su mes, variables, fijos y deducciones, una sola vez. Si cambian el grupo o la jornada, la base mínima usa los del último tramo y se avisa.
+- **Pagas extra por periodo de devengo** (anual: los 12 meses que terminan en su mes de cobro; semestral: los 6; otro: del mes inicial al final del convenio). En su mes se paga lo devengado: días en alta sin IT ni ausencias no retribuidas / días del periodo, con la explicación. Un alta a mitad de año ya no cobra la paga entera. Las prorrateadas siguen igual (1/12 al mes).
+- **Atrasos**: el recibo «Atrasos» recalcula cada mes anterior del año con la nómina emitida, con el convenio y las condiciones vigentes hoy para ese mes (revisión retroactiva), y paga la diferencia neta por mes con el detalle por concepto. Si saliera menos, avisa y no descuenta. Recuerda que cotizan en liquidación complementaria.
+- **Finiquito**: partes proporcionales con el periodo de devengo de cada paga hasta la baja, **menos lo ya pagado** de ese periodo en nóminas o recibos de paga extra emitidos. Si se cobró de más, avisa (no descuenta solo).
+- **Rectificación**: reabrir una nómina emitida exige motivo y guarda la versión emitida (fecha, usuario, motivo, importes y líneas) en un historial visible en el editor.
+- **Sin dobles emisiones**: el servidor bloquea la fila en una transacción y comprueba de nuevo (índice único por trabajador, mes y recibo); el navegador desactiva los botones al enviar.
+- **Diferencias con el mes anterior** en el borrador (totales y conceptos que cambian).
+- **Emisión del mes en bloque** desde el resumen: emite las nóminas no emitidas (borrador guardado o automática), salta las que tienen errores y lo dice.
+- **Conceptos fijos con mes de inicio y fin** (ficha › Retribución): limitar o quitar; al guardar un mes no se pierden los fijos que no aplican a ese mes.
+
+Pruebas: `tests/Feature/EmisionNominaTest.php` (6), más casos en `CalendarioLaboralTest` (tramos) y `LaboralTest` (pagas proporcionales, reabrir con motivo). Casos de la lista cubiertos: 1, 4, 6, 7, 12, 13, 15, 16.
+
+Pendiente de criterio jurídico (avisado en la nómina): devengo de las pagas durante la IT (por defecto no generan paga a cargo de la empresa salvo que el convenio diga otra cosa).
+
 ## 5. Plan por fases (pendiente)
-6. **Cálculo y emisión protegida**: tramos dentro del mes, extras con periodo de devengo, atrasos, finiquito con lo ya abonado, rectificación, motivo y usuario, sin dobles emisiones.
 7. **PDF e IA con revisión previa**: ya hay propuesta y aprobación (fase 1). Falta: guardar el PDF como documento del convenio, detectar PDF escaneado (OCR), artículo y página por dato, comparación campo a campo y edición de la propuesta antes de aprobarla.
 8. **Procesos posteriores**: CRA, cotización, 111/190 y asiento coherentes con rectificaciones.
 9. **Verificación** completa con los 18 casos de prueba pedidos.

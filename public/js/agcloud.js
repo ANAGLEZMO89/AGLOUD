@@ -787,6 +787,19 @@
     });
   }
 
+  // ---------- Nóminas: un solo envío (evita emisiones duplicadas por doble clic) ----------
+  $$('form[data-ne], form[data-un-envio]').forEach(function (f) {
+    var btn = null;
+    $$('button[type="submit"]', f).forEach(function (b) { on(b, 'click', function () { btn = b; }); });
+    on(f, 'submit', function (e) {
+      if (e.defaultPrevented) return;
+      if (f.getAttribute('data-enviando')) { e.preventDefault(); return; }
+      f.setAttribute('data-enviando', '1');
+      if (btn && btn.name) { var h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value; f.appendChild(h); }
+      setTimeout(function () { $$('button[type="submit"]', f).forEach(function (b) { b.disabled = true; }); if (btn) btn.textContent = 'Procesando…'; }, 0);
+    });
+  });
+
   // ---------- 2FA: código de recuperación ----------
   on($('[data-2fa-switch]'), 'click', function () {
     var c = $('[data-2fa-code]'), r = $('[data-2fa-rec]'), t = $('[data-2fa-txt]');

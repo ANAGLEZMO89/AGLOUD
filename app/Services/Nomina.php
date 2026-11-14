@@ -284,7 +284,7 @@ class Nomina
         }
         $conv = $w['_conv']['extras'] ?? [];
         if (! $conv) {
-            return array_map(fn ($x) => [$x[0], $x[1], $x[2], $x[3], self::pagaExtra($w)], self::PAGAS_EXTRA);
+            return array_map(fn ($x) => [$x[0], $x[1], $x[2], $x[3], self::pagaExtra($w), ['tipo' => 'anual'], ''], self::PAGAS_EXTRA);
         }
         $mes = self::salMes($w);
         $dia = self::diario($w) ? self::n($w['salDia'] ?? 0) : round($mes / 30, 4);
@@ -297,10 +297,63 @@ class Nomina
                 'dias' => $dia * (float) ($x['dias'] ?? 30) + (! empty($x['plus']) ? $pl / 30 * (float) ($x['dias'] ?? 30) : 0) + (! empty($x['antig']) ? $ant / 30 * (float) ($x['dias'] ?? 30) : 0),
                 default => $mes + (! empty($x['plus']) ? $pl : 0) + (! empty($x['antig']) ? $ant : 0),
             };
-            $out[] = [$i === 0 ? 'pv' : ($i === 1 ? 'pn' : 'px'.$i), (string) (90 + $i), (string) $x['nombre'], (int) $x['mes'], round($imp, 2)];
+            $out[] = [$i === 0 ? 'pv' : ($i === 1 ? 'pn' : 'px'.$i), (string) (90 + $i), (string) $x['nombre'], (int) $x['mes'], round($imp, 2), $x['devengo'] ?? ['tipo' => 'anual'], (string) ($x['art'] ?? '')];
         }
 
         return $out;
+    }
+
+    /**
+     * Periodo de devengo de una paga que se cobra en el mes $mc del año $anio: anual (los 12 meses que terminan en su mes de cobro),
+     * semestral (los 6) u otro (del mes inicial al final que fije el convenio). [inicio, fin]
+     */
+    public static function periodoDevengo(array $dev, int $anio, int $mc): array
+    {
+        $tipo = $dev['tipo'] ?? 'anual';
+        if ($tipo === 'otro' && ! empty($dev['desde']) && ! empty($dev['hasta'])) {
+            $h = (int) $dev['hasta'];
+            $fin = Carbon::create($h <= $mc ? $anio : $anio - 1, $h, 1)->endOfMonth()->startOfDay();
+            $meses = ((int) $dev['hasta'] - (int) $dev['desde'] + 12) % 12 + 1;
+        } else {
+            $fin = Carbon::create($anio, $mc, 1)->endOfMonth()->startOfDay();
+            $meses = $tipo === 'semestral' ? 6 : 12;
+        }
+
+        return [$fin->copy()->startOfMonth()->subMonthsNoOverflow($meses - 1), $fin];
+    }
+
+    /**
+     * Días que generan la paga dentro de su periodo de devengo: en alta (hasta la baja o el corte) y sin IT ni ausencias no retribuidas.
+     * [días del periodo, días que cuentan, días descontados por ausencias]
+     */
+    public static function diasDevengo(array $w, Carbon $ini, Carbon $fin, ?Carbon $corte = null): array
+    {
+        $total = (int) $ini->diffInDays($fin) + 1;
+        $d = $ini->copy();
+        $alta = preg_match('/^\d{4}-\d{2}-\d{2}/', (string) ($w['alta'] ?? '')) ? Carbon::parse(substr($w['alta'], 0, 10)) : $ini->copy();
+        $d = $alta->greaterThan($d) ? $alta : $d;
+        $h = $fin->copy();
+        foreach ([$w['baja'] ?? null, $corte?->toDateString()] as $x) {
+            if (is_string($x) && preg_match('/^\d{4}-\d{2}-\d{2}/', $x) && Carbon::parse(substr($x, 0, 10))->lessThan($h)) {
+                $h = Carbon::parse(substr($x, 0, 10));
+            }
+        }
+        if ($h->lessThan($d)) {
+            return [$total, 0, 0];
+        }
+        $desc = 0;
+        if (! empty($w['id'])) {
+            foreach (Calendario::ausencias((int) $w['id'], $d->toDateString(), $h->toDateString()) as $a) {
+                $t = Calendario::AUSENCIAS[$a->tipo] ?? ['retrib' => true];
+                if (! empty($t['it']) || ! ($t['retrib'] ?? true)) {
+                    $x = $a->desde->greaterThan($d) ? $a->desde : $d;
+                    $y = $a->hasta->lessThan($h) ? $a->hasta : $h;
+                    $desc += $y->greaterThanOrEqualTo($x) ? (int) $x->diffInDays($y) + 1 : 0;
+                }
+            }
+        }
+
+        return [$total, max(0, (int) $d->diffInDays($h) + 1 - $desc), $desc];
     }
 
     /** Variables de las fórmulas para un trabajador y un mes (ver Formula::VARIABLES) */
@@ -330,7 +383,7 @@ class Nomina
         $coef = (self::n($w['jor'] ?? 100) ?: 100) / 100;
         [$pd, $ph, $pdias, $pmes] = self::periodo($w, $anio, $m);
         $cal = $w['_cal'] ?? Calendario::mes($w, $anio ?: (int) now()->year, $m);
-        [$fr, $nP] = Calendario::fraccionPagada($cal);
+        [$fr, $nP] = Calendario::fraccionPagada($cal, $w['_n30'] ?? null);
         $ctx = self::contextoFormula($w, $anio, $m);
         $cat = $w['convCat'] ?? '';
         $ver = $w['_conv']['version'] ?? null;
@@ -583,6 +636,9 @@ class Nomina
     public static function conceptos(array $w, int $m, array $inc, ?array $P = null, ?int $anio = null, bool $sinPagas = false): array
     {
         $w = self::paraPeriodo($w, $anio, $m);
+        if (! empty($w['_cambiosMes']) && empty($w['_tramo'])) {
+            return self::conceptosTramos($w, $m, $inc, $P, $anio ?: (int) now()->year, $sinPagas);
+        }
         $pagas = (int) ($w['pagas'] ?? 14) ?: 14;
         $pro = ! empty($w['prorr']) && $pagas === 14;
         $coef = (self::n($w['jor'] ?? 100) ?: 100) / 100;
@@ -595,7 +651,7 @@ class Nomina
         $cal = Calendario::mes($w, $Y, $m);
         $w['_cal'] = $cal;
         $desc = $cal['noRetrib'] + $cal['it'];
-        [$fr, $nP] = Calendario::fraccionPagada($cal);
+        [$fr, $nP] = Calendario::fraccionPagada($cal, $w['_n30'] ?? null);
         $descTxt = $desc ? ' (descontados '.$desc.' '.($desc === 1 ? 'día' : 'días').' de IT o ausencia no retribuida)' : '';
         $frTxt = $fr < 1 ? ' × '.$nP.' / 30 días'.$descTxt : '';
         // Origen real del importe: la tabla del convenio solo cuenta si el trabajador tiene una categoría que existe en ella
@@ -632,20 +688,30 @@ class Nomina
             $L[] = $x;
         }
         $pro = ! empty($w['prorr']) && $pagas !== 12;
-        foreach (self::extras($w, $anio, $m) as [$id, $cod, $nom, $mesCobro, $imp]) {
+        foreach (self::extras($w, $anio, $m) as [$id, $cod, $nom, $mesCobro, $imp, $dev, $art]) {
             if ($pro) {
                 $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp / 12 * $fr, 2), 'clase' => 'extra', 'cobro' => 'prorrateada', 'origen' => 'convenio', 'conv' => null,
                     'expl' => $N($imp).' € / 12 meses'.$frTxt.' (prorrateada)', 'regla' => 'Convenio: pagas extraordinarias'];
             } elseif ($m === $mesCobro && ! $sinPagas) {
-                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => round($imp, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => null,
-                    'expl' => 'Paga completa de su mes de cobro', 'regla' => 'Convenio: pagas extraordinarias'];
+                // Se cobra lo devengado en su periodo: días en alta sin IT ni ausencias no retribuidas / días del periodo
+                [$di, $df] = self::periodoDevengo($dev, $Y, $mesCobro);
+                [$tot, $cuenta, $dsc] = self::diasDevengo($w, $di, $df);
+                $impP = $cuenta >= $tot ? round($imp, 2) : round($imp * $cuenta / $tot, 2);
+                $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'cant' => $cuenta < $tot ? $cuenta : null, 'precio' => $cuenta < $tot ? round($imp / $tot, 4) : null, 'importe' => $impP,
+                    'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'convenio', 'conv' => null,
+                    'expl' => ($cuenta >= $tot ? 'Paga completa: '.$N($imp).' €, devengada entera' : $N($imp).' € × '.$cuenta.' / '.$tot.' días devengados'.($dsc ? ' (descontados '.$dsc.' de IT o ausencia no retribuida)' : ''))
+                        .' · devengo del '.Formato::fecha($di->toDateString()).' al '.Formato::fecha($df->toDateString()),
+                    'regla' => 'Convenio: pagas extraordinarias'.($art !== '' ? ' · '.$art : '')];
+                if ($dsc && collect(Calendario::ausencias((int) ($w['id'] ?? 0), $di->toDateString(), $df->toDateString()))->contains(fn ($a) => $a->tipo === 'Incapacidad temporal')) {
+                    $tramosAv[] = ['info', $nom.': los días de IT no generan la paga a cargo de la empresa (la prestación ya incluye su prorrata), salvo que el convenio diga otra cosa. Revísalo con el convenio.'];
+                }
             }
         }
         // Incapacidad temporal (prestación y mejora del convenio por separado) y horas del calendario
         [$itL, $itCot, $avCal] = Calendario::it($w, $cal, $Y, $m);
         [$hL, $hAv] = Calendario::horas($w, $cal, self::contextoFormula($w, $Y, $m), $Y, $m);
         array_push($L, ...$itL, ...$hL);
-        $avCal = array_merge($avCal, $hAv, self::avisosCalendario($w, $cal));
+        $avCal = array_merge($avCal, $hAv, self::avisosCalendario($w, $cal), $tramosAv ?? []);
         $g = fn ($k) => round(self::n($inc[$k] ?? 0), 2);
         foreach ([['hx', '10', 'Horas extraordinarias', 'hx'], ['otr', '20', 'Otros devengos salariales', 'salarial'], ['die', '30', 'Dietas', 'no_salarial'], ['km', '31', 'Plus de distancia y kilometraje', 'no_salarial']] as [$id, $cod, $nom, $cl]) {
             $v = $g(['hx' => 'hx', 'otr' => 'otros', 'die' => 'dietas', 'km' => 'km'][$id]);
@@ -661,10 +727,15 @@ class Nomina
             }
         }
         // Conceptos fijos del trabajador (guardados desde el Integral con «Todos los meses»)
+        $ym = sprintf('%04d-%02d', $Y, $m);
         foreach ($w['concFijos'] ?? [] as $i => $x) {
+            if ((($x['desde'] ?? '') !== '' && $x['desde'] > $ym) || (($x['hasta'] ?? '') !== '' && $x['hasta'] < $ym)) {
+                continue;
+            }
             $L[] = ['id' => 'f'.$i, 'cod' => (string) ($x['cod'] ?? ''), 'concepto' => $x['concepto'], 'importe' => round((float) $x['importe'], 2),
                 'cant' => $x['cant'] ?? null, 'precio' => $x['precio'] ?? null,
-                'clase' => array_key_exists($x['clase'] ?? '', self::CLASES) ? $x['clase'] : 'salarial', 'origen' => 'fijo', 'fijo' => true, 'conv' => null];
+                'clase' => array_key_exists($x['clase'] ?? '', self::CLASES) ? $x['clase'] : 'salarial', 'origen' => 'fijo', 'fijo' => true, 'conv' => null,
+                'expl' => 'Concepto fijo del trabajador'.(($x['desde'] ?? '') !== '' ? ' desde '.$x['desde'] : '').(($x['hasta'] ?? '') !== '' ? ' hasta '.$x['hasta'] : ' sin fecha de fin'), 'regla' => 'Ficha del trabajador'];
         }
         $D = [];
         foreach ([['ant', 'Anticipos', 'anticipo'], ['emb', 'Embargo', 'embargo']] as [$id, $nom, $k]) {
@@ -683,6 +754,73 @@ class Nomina
             'itCot' => $itCot, 'avisosCal' => $avCal,
             'calendario' => ['laborables' => $cal['laborables'], 'trabajados' => $cal['trabajados'], 'efectivos' => $cal['efectivos'], 'noRetrib' => $cal['noRetrib'], 'it' => $cal['it'], 'pagados' => $cal['pagados']],
             'convenio' => ['version_id' => $w['_conv']['version_id'] ?? null, 'version' => $w['_conv']['version'] ?? null, 'categoria' => $cat['cat'] ?? null]];
+    }
+
+    /**
+     * Mes con cambio de condiciones: se calcula por tramos (cada uno con las condiciones vigentes en él) y se juntan.
+     * Mes comercial de 30 días: con el mes completo, el último tramo completa hasta 30. Pagas en su mes, variables, fijos y deducciones
+     * solo una vez (en el último tramo). La base mínima de cotización se aplica con el grupo y la jornada del último tramo.
+     */
+    private static function conceptosTramos(array $w, int $m, array $inc, ?array $P, int $Y, bool $sinPagas): array
+    {
+        [$pd, $ph, $dias, $dm] = self::periodo($w, $Y, $m);
+        $cortes = array_values(array_unique(array_filter($w['_cambiosMes'], fn ($f) => $f > $pd && $f <= $ph)));
+        sort($cortes);
+        $w['_cambiosMes'] = [];
+        if (! $cortes) {
+            return self::conceptos($w + ['_tramo' => true], $m, $inc, $P, $Y, $sinPagas);
+        }
+        $ini = array_merge([$pd], $cortes);
+        $base = $w;
+        $base['fAntig'] = ($w['fAntig'] ?? '') ?: ($w['alta'] ?? '');
+        $L = $D = $av = [];
+        $itCot = 0.0;
+        $calSum = ['laborables' => 0, 'trabajados' => 0, 'efectivos' => 0, 'noRetrib' => 0, 'it' => 0, 'pagados' => 0];
+        $acum = 0;
+        $ult = count($ini) - 1;
+        $grupos = [];
+        foreach ($ini as $k => $d0) {
+            $d1 = $k < $ult ? Carbon::parse($ini[$k + 1])->subDay()->toDateString() : $ph;
+            $nd = (int) Carbon::parse($d0)->diffInDays(Carbon::parse($d1)) + 1;
+            $n30 = $dias >= $dm && $k === $ult ? max(0, 30 - $acum) : $nd;
+            $acum += $nd;
+            $wt = array_merge($base, ['alta' => $d0, 'baja' => $d1, '_tramo' => true, '_n30' => $n30]);
+            unset($wt['_cal']);
+            $doc = self::conceptos($wt, $m, $k === $ult ? $inc : [], $P, $Y, $k === $ult ? $sinPagas : true);
+            $wq = self::paraPeriodo($wt, $Y, $m);
+            $grupos[] = (int) $wq['grupo'].'|'.self::n($wq['jor'] ?? 100);
+            $suf = ' (del '.(int) substr($d0, 8, 2).' al '.(int) substr($d1, 8, 2).')';
+            foreach ($doc['lineas'] as $l) {
+                $porTramo = in_array($l['origen'] ?? '', ['convenio', 'ficha', 'calendario'], true) && ! (($l['clase'] ?? '') === 'extra' && ($l['cobro'] ?? '') === 'en_su_mes');
+                if ($porTramo) {
+                    $l['concepto'] .= $suf;
+                    $l['regla'] = trim(($l['regla'] ?? '').' · condiciones vigentes desde el '.Formato::fecha($d0), ' ·');
+                    $L[] = $l;
+                } elseif ($k === $ult) {
+                    $L[] = $l;
+                }
+            }
+            if ($k === $ult) {
+                $D = $doc['deducciones'];
+                $conv = $doc['convenio'];
+            }
+            $itCot += (float) $doc['itCot'];
+            foreach ($doc['avisosCal'] as $x) {
+                if (! in_array($x, $av, true)) {
+                    $av[] = $x;
+                }
+            }
+            foreach ($calSum as $c => $v) {
+                $calSum[$c] = $v + $doc['calendario'][$c];
+            }
+        }
+        array_unshift($av, ['info', 'Mes calculado en '.count($ini).' tramos por el cambio de condiciones del '.implode(', ', array_map(fn ($f) => Formato::fecha($f), $cortes)).': cada tramo con sus condiciones (mes de 30 días).']);
+        if (count(array_unique($grupos)) > 1) {
+            $av[] = ['aviso', 'Cambian el grupo de cotización o la jornada dentro del mes: la base mínima se aplica con los del último tramo. Revísala.'];
+        }
+
+        return ['lineas' => $L, 'deducciones' => $D, 'tipos' => [], 'dias' => $dias, 'diasMes' => $dm, 'desde' => $pd, 'hasta' => $ph, 'itCot' => round($itCot, 2),
+            'avisosCal' => $av, 'calendario' => $calSum, 'convenio' => $conv ?? [], 'tramos' => count($ini)];
     }
 
     /** Calcula la nómina (o el recibo) a partir de sus conceptos, automáticos o editados en el Integral de nóminas */
@@ -852,14 +990,56 @@ class Nomina
                 $L[] = ['id' => $id, 'cod' => $cod, 'concepto' => $nom, 'importe' => $m === $mc ? round($imp, 2) : 0, 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
             }
         } elseif ($recibo === 'Atrasos') {
-            $L[] = ['id' => 'atr', 'cod' => '23', 'concepto' => 'Atrasos de convenio', 'importe' => 0, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
+            [$L, $av] = self::atrasos($w, $anio, $m);
         } elseif ($recibo === 'Sal. tramitación') {
             $L[] = ['id' => 'stm', 'cod' => '24', 'concepto' => 'Salarios de tramitación', 'importe' => 0, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
         } elseif ($recibo === 'Finiquito') {
-            $L = self::finiquito($w, $anio, $m, $P, $sb, $pl, $pagas, $pro);
+            [$L, $av] = self::finiquito($w, $anio, $m, $P, $sb, $pl, $pagas, $pro);
         }
 
-        return ['lineas' => $L, 'deducciones' => [], 'tipos' => [], 'recibo' => $recibo];
+        return ['lineas' => $L, 'deducciones' => [], 'tipos' => [], 'recibo' => $recibo, 'avisosCal' => $av ?? []];
+    }
+
+    /**
+     * Atrasos: para cada mes anterior del año con la nómina emitida, se recalculan sus conceptos automáticos con el convenio y las condiciones
+     * que rigen hoy para ese mes (revisión salarial con efectos retroactivos) y se paga la diferencia frente a lo emitido. [lineas, avisos]
+     */
+    private static function atrasos(array $w, int $anio, int $m): array
+    {
+        $L = [];
+        $av = [['info', 'Los atrasos cotizan en una liquidación complementaria de los meses a los que corresponden, no en la del mes de pago.']];
+        $auto = fn ($l) => in_array($l['origen'] ?? '', ['convenio', 'ficha', 'calendario'], true) || in_array($l['id'] ?? '', ['sb', 'pl', 'ant'], true);
+        $porConcepto = fn ($ls) => collect($ls)->filter($auto)->groupBy(fn ($l) => preg_replace('/ \(del \d+ al \d+\)$/', '', $l['concepto']))->map(fn ($g) => round($g->sum(fn ($l) => (float) $l['importe']), 2));
+        for ($mes = 1; $mes < $m; $mes++) {
+            $g = ! empty($w['id']) ? self::guardada((int) $w['id'], $anio, $mes) : null;
+            if (! $g?->emitida()) {
+                continue;
+            }
+            $antes = $porConcepto($g->datos['calc']['lineas'] ?? $g->datos['lineas'] ?? []);
+            $inc = ! empty($w['_cid']) ? (LaboralMes::where('cliente_id', $w['_cid'])->where('anio', $anio)->where('mes', $mes)->first()?->incidencias[$w['id']] ?? []) : [];
+            $ahora = $porConcepto(self::conceptos($w, $mes, $inc, null, $anio)['lineas']);
+            $cambios = [];
+            $neto = 0.0;
+            foreach ($antes->keys()->merge($ahora->keys())->unique() as $c) {
+                $d = round(($ahora[$c] ?? 0) - ($antes[$c] ?? 0), 2);
+                if (abs($d) >= 0.01) {
+                    $cambios[] = $c.': '.Formato::num($antes[$c] ?? 0).' → '.Formato::num($ahora[$c] ?? 0).' ('.($d > 0 ? '+' : '').Formato::num($d).')';
+                    $neto += $d;
+                }
+            }
+            $neto = round($neto, 2);
+            if ($neto > 0) {
+                $L[] = ['id' => 'atr'.$mes, 'cod' => '23', 'concepto' => 'Atrasos de '.mb_strtolower(self::MESES[$mes - 1]).' de '.$anio, 'importe' => $neto, 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null,
+                    'expl' => implode(' · ', $cambios), 'regla' => 'Diferencia entre la nómina emitida y el cálculo con el convenio y las condiciones vigentes para ese mes'];
+            } elseif ($neto < 0) {
+                $av[] = ['aviso', mb_strtolower(self::MESES[$mes - 1]).': con las condiciones de hoy saldría '.Formato::eur(-$neto).' menos de lo pagado. No se descuenta solo: revísalo.'];
+            }
+        }
+        if (! $L) {
+            $av[] = ['info', 'No hay diferencias a favor del trabajador en las nóminas emitidas de este año anteriores a este mes.'];
+        }
+
+        return [$L, $av];
     }
 
     /** Finiquito: vacaciones no disfrutadas, partes proporcionales de las pagas y la indemnización que fija el ET según la causa de la baja */
@@ -884,13 +1064,35 @@ class Nomina
         $pend = round(max(0, $devengadas - $disfrutadas), 2);
         $L[] = ['id' => 'vac', 'cod' => '22', 'concepto' => 'Vacaciones no disfrutadas', 'cant' => $pend, 'precio' => $diario, 'importe' => round($pend * $diario, 2), 'clase' => 'salarial', 'origen' => 'calculo', 'conv' => null];
         // Partes proporcionales de las pagas que no se cobran prorrateadas (devengo anual hasta su mes de cobro)
+        $av = [];
         if (empty($w['prorr'])) {
-            foreach (self::extras($w, $fin->year, $fin->month) as [$id, $cod, $nom, $mc, $sb]) {
-                $desde = Carbon::create($fin->month > $mc ? $fin->year : $fin->year - 1, $mc, 1)->addMonthNoOverflow()->startOfMonth();
-                $desde = $alta->greaterThan($desde) ? $alta->copy() : $desde;
-                $dias = $fin->greaterThanOrEqualTo($desde) ? $desde->diffInDays($fin) + 1 : 0;
-                $L[] = ['id' => 'pp'.$id, 'cod' => $cod, 'concepto' => 'Parte proporcional '.mb_strtolower($nom), 'cant' => $dias, 'precio' => round($sb / 365, 4),
-                    'importe' => round($sb * $dias / 365, 2), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null];
+            foreach (self::extras($w, $fin->year, $fin->month) as [$id, $cod, $nom, $mc, $imp, $dev]) {
+                // Periodo de devengo en curso a la fecha de baja (el de la próxima paga) y lo ya pagado de ese periodo
+                $cy = $fin->month <= $mc ? $fin->year : $fin->year + 1;
+                [$di, $df] = self::periodoDevengo($dev, $cy, $mc);
+                if ($di->greaterThan($fin)) {
+                    [$di, $df] = self::periodoDevengo($dev, $cy - 1, $mc);
+                }
+                [$tot, $cuenta, $dsc] = self::diasDevengo($w, $di, $df, $fin);
+                $deveng = round($imp * $cuenta / $tot, 2);
+                $pagado = 0.0;
+                if (! empty($w['id'])) {
+                    foreach (NominaMes::where('trabajador_id', $w['id'])->where('estado', 'Emitida')->whereIn('recibo', ['Nómina', 'Extra'])->get() as $g) {
+                        $f = Carbon::create($g->anio, $g->mes, 1);
+                        if ($f->between($di->copy()->startOfMonth(), $df)) {
+                            $pagado += collect($g->datos['calc']['lineas'] ?? $g->datos['lineas'] ?? [])->where('id', $id)->sum(fn ($l) => (float) $l['importe']);
+                        }
+                    }
+                }
+                $pend = round($deveng - $pagado, 2);
+                if ($pend < 0) {
+                    $av[] = ['aviso', $nom.': ya se pagó '.Formato::eur($pagado).' y solo se han devengado '.Formato::eur($deveng).' hasta la baja: hay '.Formato::eur(-$pend).' cobrados de más. No se descuenta solo.'];
+                }
+                $L[] = ['id' => 'pp'.$id, 'cod' => $cod, 'concepto' => 'Parte proporcional '.mb_strtolower($nom), 'cant' => $cuenta, 'precio' => round($imp / $tot, 4),
+                    'importe' => max(0.0, $pend), 'clase' => 'extra', 'cobro' => 'en_su_mes', 'origen' => 'calculo', 'conv' => null,
+                    'expl' => Formato::num($imp).' € × '.$cuenta.' / '.$tot.' días devengados del '.Formato::fecha($di->toDateString()).' al '.Formato::fecha($fin->toDateString())
+                        .($dsc ? ' (descontados '.$dsc.' de IT o ausencia no retribuida)' : '').' = '.Formato::num($deveng).' €'.($pagado ? ' − '.Formato::num($pagado).' € ya pagados en nóminas emitidas' : ''),
+                    'regla' => 'Convenio: pagas extraordinarias, periodo de devengo'];
             }
         }
         // Indemnización legal según la causa de la baja (art. 49.1.c, 53.1.b y 56 ET)
@@ -906,15 +1108,15 @@ class Nomina
                 'importe' => $imp, 'clase' => 'exento', 'origen' => 'calculo', 'conv' => null];
         }
 
-        return $L;
+        return [$L, $av];
     }
 
     /** Avisos del calendario del mes: cambios de condiciones dentro del mes, propuestas sin revisar y ausencias que afectan a la cotización */
     private static function avisosCalendario(array $w, array $cal): array
     {
         $av = [];
-        foreach ($w['_cambiosMes'] ?? [] as $f) {
-            $av[] = ['aviso', 'Las condiciones del contrato cambian el '.Formato::fecha($f).': este mes se calcula con las vigentes al inicio del periodo. Ajusta a mano la parte desde el cambio (el cálculo por tramos llega en la fase 6).'];
+        foreach (! empty($w['_tramo']) ? [] : ($w['_cambiosMes'] ?? []) as $f) {
+            $av[] = ['aviso', 'Las condiciones del contrato cambian el '.Formato::fecha($f).'.'];
         }
         if ($cal['pendientes']) {
             $av[] = ['aviso', $cal['pendientes'].' '.($cal['pendientes'] === 1 ? 'ausencia del control horario está pendiente' : 'ausencias del control horario están pendientes').' de revisar: no cuentan en esta nómina hasta que las confirmes en la pestaña Calendario.'];
